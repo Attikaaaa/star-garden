@@ -1,50 +1,75 @@
 'use strict';
-// Game state, room flow, the fixed-step loop and rendering.
+// Game state, room flow, the Arena, the fixed-step loop and rendering.
 
 const G = {
-  state: 'title', back: 'title', time: 0, floor: null, room: null, player: null,
-  enemies: [], hazards: [], markers: [],
+  state: 'title', back: 'title', time: 0, floor: null, room: null, player: null, players: [],
+  enemies: [], hazards: [], markers: [], turrets: [],
   shake: 0, hitstop: 0, slowmo: 0, trans: null, banner: null, floorBanner: null, boss: null, reward: null,
-  cine: null, hurtT: 0, hud: { coinT: 0, heartT: 0, readyT: 0 },
-  combo: { n: 0, t: 0 }, comboPop: null, fall: null, warp: null, corpse: null, flashT: 0, run: { stars: 0 },
+  cine: null, hurtT: 0, hud: { coinT: 0, heartT: 0, readyT: 0, beltT: 0, vaultT: 0 },
+  combo: { n: 0, t: 0 }, comboPop: null, fall: null, warp: null, corpse: null, flashT: 0, run: { vault: 0, keep: 0 },
   stats: null, menuSel: 0, menuHover: -1, won: false, bestBefore: 0, record: false,
+  mode: 'adv', diff: 1, coins: 0, arena: null, eid: 0, propsN: 0, overT: 0,
 };
 function saveBest() {
   const st = Save.stats;
-  st.bestDepth = Math.max(st.bestDepth, G.floor.depth + 1);
+  if (G.mode === 'arena') {
+    if (G.arena.wave - 1 > st.bestWave) { st.bestWave = G.arena.wave - 1; st.bestWaveKills = G.stats.kills; }
+  } else st.bestDepth = Math.max(st.bestDepth, G.floor.depth + 1);
   Save.write();
 }
 
 function setState(s) {
-  if (s === 'title' && G.state !== 'collection' && G.state !== 'settings' && G.state !== 'kert') resetAmbient('meadow');
+  if (s === 'title' && !MENU_STATES.has(G.state)) resetAmbient('meadow');
   G.state = s; G.menuSel = 0; G.menuHover = -1;
 }
+const MENU_STATES = new Set(['title', 'collection', 'settings', 'kert', 'prep', 'coop', 'entry', 'lobby']);
 function toast(msg) { G.toast = { msg, t: 1.6 }; }
 
 // Forget every in-flight effect of a previous run or floor.
 function resetRunFx() {
   G.combo = { n: 0, t: 0 }; G.comboPop = null; G.fall = null; G.warp = null; G.corpse = null;
-  G.flashT = 0; G.boss = null; G.reward = null; G.cine = null; G.banner = null;
+  G.flashT = 0; G.boss = null; G.reward = null; G.cine = null; G.banner = null; G.overT = 0;
+  G.turrets.length = 0; BOLTS.length = 0;
 }
-function startGame() {
-  clearRun();
-  G.player = newPlayer();
-  applyUpgrades(G.player);
+
+// The heroes of a run. roster: [{ pid, wand, up, remote }] (one entry when playing alone).
+function makePlayers(roster) {
+  G.players = roster.map(r => {
+    const p = newPlayer(r.pid);
+    applyWand(p, r.wand);
+    applyUpgrades(p, r.up);
+    p.remote = !!r.remote;
+    if (r.name) p.name = r.name;
+    if (r.skin !== undefined) p.skin = r.skin;
+    return p;
+  });
+  G.player = G.players.find(p => !p.remote);
+}
+const soloRoster = () => [{ pid: 0, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin }];
+
+// Start a run. mode: 'adv' (the lands) or 'arena' (endless waves).
+function startRun(mode, roster) {
+  if (mode === 'adv' && !NET.role) clearRun();
+  G.mode = mode;
+  makePlayers(roster || soloRoster());
   G.stats = { kills: 0, coins: 0, items: 0, time: 0 };
-  G.run = { stars: 0 };
-  G.won = false; G.record = false;
+  G.run = { vault: 0, keep: 0 };
+  G.coins = mode === 'arena' ? 5 : 0;
+  G.won = false; G.record = false; G.arena = null;
   resetRunFx();
-  G.bestBefore = Save.stats.bestDepth;
+  G.bestBefore = mode === 'arena' ? Save.stats.bestWave : Save.stats.bestDepth;
   Save.stats.runs++; Save.write();
-  loadFloor(0);
+  if (NET.role === 'host') netStartRun();
+  if (mode === 'arena') startArena(); else loadFloor(0);
   setState('play');
 }
 
 function loadFloor(depth) {
   G.floor = genFloor(depth);
   resetRunFx();
+  netFloor();
   enterRoom(G.floor.start, null);
-  G.player.x = 192; G.player.y = 128;
+  placeHeroes(192, 128, 'u');
   saveRun();
   const loop = Math.floor(depth / LANDS.length);
   G.floorBanner = { t: 2.8, text: THEMES[G.floor.theme].name + (loop ? ' ' + '+'.repeat(Math.min(loop, 5)) : ''), small: 'LAND ' + (depth + 1) };
@@ -52,6 +77,7 @@ function loadFloor(depth) {
 }
 
 function nextFloor() {
+  if (G.nextLock) return;
   Audio_.sfx('portal');
   saveBest();
   if (G.floor.depth === LANDS.length - 1 && !G.won) {
@@ -63,26 +89,42 @@ function nextFloor() {
     G.warp = null;
     Audio_.stop(); Audio_.sfx('win');
     setState('win');
+    if (NET.role === 'host') netState('win');
     return;
   }
-  wipe(() => loadFloor(G.floor.depth + 1));
+  G.nextLock = true;
+  wipe(() => { G.nextLock = false; loadFloor(G.floor.depth + 1); });
+  if (NET.role === 'host') netState('wipe');
+}
+
+// Put every hero near (x, y), side by side across the way they came in.
+function placeHeroes(x, y, from) {
+  const side = from === 'l' || from === 'r';
+  let k = 0;
+  for (const p of G.players) {
+    const off = [0, -16, 16, -32][k++];
+    p.x = x + (side ? 0 : off); p.y = y + (side ? off : 0);
+    unstick(G.room, p, 'player');
+    p.dashT = 0; p.tpN++;
+  }
 }
 
 function enterRoom(room, from) {
-  const p = G.player;
   G.room = room;
   room.visited = true; room.seen = true;
   for (const d in room.doors) room.doors[d].seen = true;
   SHOTS.length = 0; clearEBullets();
-  G.enemies.length = 0; G.hazards.length = 0; G.markers.length = 0;
+  G.enemies.length = 0; G.hazards.length = 0; G.markers.length = 0; G.turrets.length = 0; BOLTS.length = 0;
   for (const q of PARTS) q.life = 0;
   resetAmbient(G.floor.theme);
   flowKey = -1;
-  if (from) { p.x = ENTRY[from][0]; p.y = ENTRY[from][1]; }
-  if (p.shield) p.shieldUp = true;
+  if (from) placeHeroes(ENTRY[from][0], ENTRY[from][1], from);
+  for (const p of G.players) if (p.shield) p.shieldUp = true;
   if (room.dirty) renderRoomStatic(room, G.floor.theme);
   if (!room.stocked) stockRoom(room);
   room.doorT = room.cleared ? 1 : 1.25; // uncleared rooms slam their doors shut just after you step in
+  if (NET.role === 'host') netRoom(from);
+  if (room.type === 'arena') return;
   if (room.cleared) saveRun();
   else {
     if (room.type === 'challenge') {
@@ -90,42 +132,53 @@ function enterRoom(room, from) {
       spawnRoomEnemies(room, 1);
       G.banner = { title: 'CHALLENGE!', sub: 'TWO WAVES, TREASURE AT THE END', t: 2.4, icon: null };
     } else if (room.type === 'boss') {
-      const b = G.floor.land.boss;
-      G.boss = spawnEnemy(b, 192, b === 'king' ? 110 : 100);
-      G.cine = { t: 0 };
-      Audio_.play('boss'); Audio_.sfx('roar');
+      startBoss(G.floor.land.boss);
     } else {
       room.waves = room.dist >= 2 && Math.random() < 0.22 ? 1 : 0;
       spawnRoomEnemies(room, 0);
     }
   }
 }
+function startBoss(b) {
+  G.boss = spawnEnemy(b, 192, b === 'king' ? 110 : 100);
+  G.cine = { t: 0 };
+  Audio_.play('boss'); Audio_.sfx('roar'); hapticAll('roar');
+}
 
 function stockRoom(room) {
   room.stocked = true;
-  if (room.type === 'item') itemPool(3).forEach((id, i) => { addPedestal(room, 144 + i * 48, 128, id); room.props[room.props.length - 1].group = 'item'; });
+  const n = G.players.length;
+  if (room.type === 'item') {
+    // co-op: one extra choice per extra hero, everyone takes one
+    const ids = itemPool(Math.min(5, 2 + n)), w = 48;
+    ids.forEach((id, i) => { addPedestal(room, 192 + (i - (ids.length - 1) / 2) * w, 128, id); room.props[room.props.length - 1].group = 'item'; });
+  }
   if (room.type === 'shop') {
     room.props.push({ kind: 'rug', x: 192, y: 132, t: 0 });
     room.props.push({ kind: 'frog', x: 192, y: 78, t: 0 });
     const ids = itemPool(2);
-    addPedestal(room, 132, 138, 'hp', 4);
-    ids.forEach((id, i) => addPedestal(room, 192 + i * 60, 138, id, 15));
+    addPedestal(room, 117, 138, 'hp', 4);
+    addPedestal(room, 167, 138, pick(POTION_IDS), 0);
+    const pot = room.props[room.props.length - 1];
+    pot.price = POTIONS[pot.item].price;
+    ids.forEach((id, i) => addPedestal(room, 217 + i * 50, 138, id, 15));
   }
 }
 
 // bonus: extra enemies (challenge rooms, later waves). Elites and a rare golden slime spice rooms up.
 function spawnRoomEnemies(room, bonus) {
-  const p = G.player, land = G.floor.land, depth = G.floor.depth;
-  const slots = room.slots.filter(s => Math.hypot(s[0] - p.x, s[1] - p.y) > 72);
+  const land = G.floor.land, depth = G.floor.depth, crew = G.players.length, D = DIFF();
+  const slots = room.slots.filter(s => G.players.every(p => Math.hypot(s[0] - p.x, s[1] - p.y) > 72));
   for (let i = slots.length - 1; i > 0; i--) { const j = rndi(0, i); [slots[i], slots[j]] = [slots[j], slots[i]]; }
-  const n = Math.min(slots.length, 3 + Math.min(depth, 5) + rndi(0, 1) + (room.dist >= 3 ? 1 : 0) + bonus * 2);
-  const eliteP = Math.min(0.25, 0.06 + depth * 0.03) + (room.type === 'challenge' ? 0.15 : 0);
+  const want = 3 + Math.min(depth, 5) + rndi(0, 1) + (room.dist >= 3 ? 1 : 0) + bonus * 2 + D.count + (crew - 1);
+  const n = Math.max(2, Math.min(slots.length, want, 12));
+  const eliteP = Math.min(0.3, 0.06 + depth * 0.03) + (room.type === 'challenge' ? 0.15 : 0) + D.elite + 0.04 * (crew - 1);
   let still = 0, elites = 0;
   for (let i = 0; i < n; i++) {
     let type = pickWeighted(land.pool);
     for (let k = 0; k < 6 && EDEF[type].still && still >= 2; k++) type = pickWeighted(land.pool);
     if (EDEF[type].still) still++;
-    const elite = elites < 2 && Math.random() < eliteP;
+    const elite = elites < 1 + crew && Math.random() < eliteP;
     if (elite) elites++;
     spawnEnemy(type, slots[i][0], slots[i][1], { elite });
   }
@@ -141,6 +194,8 @@ function freeSpot(room) {
   for (let k = 0; k < 30 && boxSolid(room, x, y, 8, 6, 'enemy'); k++) { x = rnd(60, 324); y = rnd(70, 180); }
   return [x, y];
 }
+// Everyone who went down gets back up when the fight is over.
+function reviveAll() { for (const p of G.players) if (p.down) revivePlayer(p, 2); }
 function roomCleared(room) {
   if (room.waves > 0) {
     room.waves--;
@@ -151,16 +206,17 @@ function roomCleared(room) {
   }
   room.cleared = true;
   Audio_.sfx('door'); Audio_.sfx('clear');
-  earnStars(1);
+  reviveAll();
+  earnVault(2);
   const [x, y] = freeSpot(room);
   if (room.type === 'challenge') {
-    const id = itemPool(1)[0];
-    if (id) addPedestal(room, 192, 128, id);
+    const ids = itemPool(G.players.length);
+    ids.forEach((id, i) => { addPedestal(room, 192 + (i - (ids.length - 1) / 2) * 48, 128, id); room.props[room.props.length - 1].group = 'chal'; });
     for (let i = 0; i < 4; i++) spawnPickup('coin', 192, 118);
-    earnStars(3);
-    toast('CHALLENGE COMPLETE: +3 STARS');
+    earnVault(6);
+    toast('CHALLENGE COMPLETE!');
   } else if (room.type === 'normal') {
-    const r = Math.random(), luck = G.player.luck;
+    const r = Math.random(), luck = teamLuck();
     if (r < 0.14 + luck * 0.05) room.props.push({ kind: 'chest', x, y, t: 0, open: false });
     else if (r < 0.55 + luck * 0.1) dropLoot(x, y);
   }
@@ -169,14 +225,14 @@ function roomCleared(room) {
 
 function bossDefeated(e) {
   const room = G.room;
-  Audio_.stop(); Audio_.sfx('bossdie');
+  Audio_.stop(); Audio_.sfx('bossdie'); hapticAll('bossdie');
   G.shake = 4; G.boss = null;
   for (const o of G.enemies) if (!o.dead && o !== e) { o.dead = true; poof(o.x, o.y - o.h / 2); }
   clearEBullets(); G.markers.length = 0;
-  room.cleared = true; room.doorT = 0;
-  buzz(250);
+  if (room.type !== 'arena') { room.cleared = true; room.doorT = 0; }
   G.corpse = { s: enemySprite(e), x: e.x, y: e.y, w: e.sw, h: e.h, flip: e.flip, colors: enemyColors(e), t: 0, n: 0 };
-  earnStars(8);
+  earnVault(16);
+  reviveAll();
   saveBest();
 }
 // Chain of blasts over the defeated boss, then a white flash and the reward.
@@ -206,15 +262,157 @@ function drawCorpse(ox, oy) {
   shadow(ox + c.x, oy + c.y, c.w);
   drawFeet(c.s, ox + c.x + jx, oy + c.y + 1, (c.flip ? 1 : 0) + (Math.floor(c.t * 16) % 2 ? 2 : 0));
 }
+function bossItems(room, y) {
+  const ids = itemPool(Math.min(5, 2 + G.players.length));
+  ids.forEach((id, i) => { addPedestal(room, 192 + (i - (ids.length - 1) / 2) * 48, y, id); room.props[room.props.length - 1].group = 'boss'; });
+}
 function giveBossReward() {
   const room = G.room;
-  itemPool(3).forEach((id, i) => { addPedestal(room, 144 + i * 48, 150, id); room.props[room.props.length - 1].group = 'boss'; });
+  if (room.type === 'arena') { arenaBossReward(); return; }
+  bossItems(room, 150);
   room.props.push({ kind: 'portal', x: 192, y: 92, t: 0 });
   spawnPickup('heart', 192, 120);
+  spawnPotion(192, 120);
   for (let i = 0; i < 4; i++) spawnPickup('coin', 192 + rnd(-10, 10), 120);
   Audio_.sfx('portal');
   Audio_.play(G.floor.land.song);
   saveRun();
+}
+
+// ---------- Arena: endless waves in one room ----------
+// Waves pour in through the four gates. Every 5th wave hands out a free item, every 10th
+// is a boss, and the land changes every 5 waves. Between waves the heroes shop.
+const ARENA_BREAK = 9;
+function arenaFloor(tier) {
+  const land = LANDS[tier % LANDS.length];
+  const room = newRoom(4, 4);
+  room.type = 'arena';
+  for (const d in DIRS) room.doors[d] = { type: 'challenge' }; // gates: they never open
+  buildRoom(room);
+  room.stocked = true;
+  return { depth: tier, land, theme: land.theme, rooms: [room], start: room };
+}
+function startArena() {
+  G.arena = { wave: 0, phase: 'break', t: 3.5, hold: 0, left: 0, cap: 0, gap: 1, spawnT: 0, killed: 0 };
+  arenaLand(0);
+  G.floorBanner = { t: 2.8, text: 'THE ARENA', small: 'HOLD OUT AS LONG AS YOU CAN' };
+}
+function arenaLand(tier) {
+  G.floor = arenaFloor(tier);
+  netFloor();
+  enterRoom(G.floor.start, null);
+  placeHeroes(192, 128, 'u');
+  Audio_.play(G.floor.land.song);
+}
+function arenaSpot() {
+  // mostly at the gates, never on top of a hero
+  const gates = [[192, 58], [192, 186], [30, 124], [354, 124]];
+  for (let k = 0; k < 20; k++) {
+    const [x, y] = k < 10 ? pick(gates) : [rnd(40, 344), rnd(64, 184)];
+    const xx = x + rnd(-10, 10), yy = y + rnd(-6, 6);
+    if (G.players.every(p => Math.hypot(p.x - xx, p.y - yy) > 70) && !boxSolid(G.room, xx, yy, 7, 5, 'enemy')) return [xx, yy];
+  }
+  return pick(gates);
+}
+function startWave() {
+  const A = G.arena, crew = G.players.length, D = DIFF();
+  for (let i = G.room.props.length - 1; i >= 0; i--) { const o = G.room.props[i]; if (o.kind === 'ped') { poof(o.x, o.y - 14); G.room.props.splice(i, 1); } }
+  A.wave++;
+  hapticAll('wave');
+  if (A.wave % 10 === 0) {
+    A.phase = 'boss';
+    startBoss(G.floor.land.boss);
+    return;
+  }
+  A.phase = 'fight';
+  A.left = Math.round((6 + A.wave * 1.6) * (1 + 0.45 * (crew - 1))) + D.count * 2;
+  A.cap = Math.min(14, 4 + Math.floor(A.wave / 3) + (crew - 1) * 2 + D.count);
+  A.gap = Math.max(0.3, 1.05 - A.wave * 0.03);
+  A.spawnT = 0.6;
+  A.gold = Math.random() < 0.3;
+  G.banner = { title: 'WAVE ' + A.wave, sub: A.wave % 5 === 0 ? 'A TREASURE WAVE!' : A.left + ' FOES ARE COMING', t: 1.8, icon: null };
+  Audio_.sfx('roar');
+}
+function arenaPool() {
+  // later tiers mix in foes from every land
+  const tier = G.floor.depth;
+  return tier < 3 ? G.floor.land.pool : [].concat(...LANDS.map(l => l.pool));
+}
+function updateArena(dt) {
+  const A = G.arena;
+  if (A.phase === 'break') {
+    A.hold += dt;
+    const waiting = G.room.props.some(o => o.group) && A.hold < 30;
+    A.t -= dt;
+    if (waiting) A.t = Math.max(A.t, 3);
+    if (A.t <= 0) startWave();
+  } else if (A.phase === 'fight') {
+    const live = G.enemies.filter(e => !e.dead && !e.passive);
+    if (A.left > 0 && live.length < A.cap && (A.spawnT -= dt) <= 0) {
+      const D = DIFF(), crew = G.players.length;
+      let type = pickWeighted(arenaPool());
+      for (let k = 0; k < 6 && EDEF[type].still && live.filter(e => e.still).length >= 2; k++) type = pickWeighted(arenaPool());
+      const [x, y] = arenaSpot();
+      const elite = Math.random() < Math.min(0.35, 0.03 + A.wave * 0.012) + D.elite + 0.04 * (crew - 1);
+      spawnEnemy(type, x, y, { elite });
+      A.left--; A.spawnT = A.gap * rnd(0.7, 1.3);
+      if (A.gold && A.left === 3) { const [gx, gy] = arenaSpot(); spawnEnemy('gold', gx, gy); toast('A GOLDEN SLIME! CATCH IT!'); A.gold = false; }
+    }
+    if (A.left <= 0 && !live.length) arenaWaveCleared();
+  }
+}
+function arenaWaveCleared() {
+  const A = G.arena;
+  A.phase = 'break'; A.t = ARENA_BREAK; A.hold = 0;
+  Audio_.sfx('clear');
+  reviveAll();
+  earnVault(2 + Math.floor(A.wave / 3));
+  G.banner = { title: 'WAVE ' + A.wave + ' CLEARED!', sub: 'SHOP, HEAL UP, GET READY', t: 2, icon: null };
+  saveBest();
+  if (A.wave % 5 === 0) {
+    const ids = itemPool(Math.min(5, 2 + G.players.length));
+    ids.forEach((id, i) => { addPedestal(G.room, 192 + (i - (ids.length - 1) / 2) * 48, 150, id); G.room.props[G.room.props.length - 1].group = 'free'; });
+  }
+  arenaShop();
+  // a new land every 5 waves (after the boss or the treasure wave)
+  if (A.wave % 5 === 0) {
+    const tier = A.wave / 5;
+    const props = G.room.props, loot = G.room.pickups;
+    wipe(() => {
+      arenaLand(tier);
+      G.room.props.push(...props); G.room.pickups.push(...loot);
+      G.floorBanner = { t: 2.8, text: THEMES[G.floor.theme].name, small: 'THE ARENA MOVES ON' };
+    });
+    if (NET.role === 'host') netState('wipe');
+  }
+}
+function arenaShop() {
+  const room = G.room, w = G.arena.wave, up = Math.floor(w / 4);
+  addPedestal(room, 132, 104, 'hp', 3 + Math.floor(w / 3));
+  const a = pick(POTION_IDS);
+  let b = pick(POTION_IDS);
+  if (b === a) b = POTION_IDS[(POTION_IDS.indexOf(a) + 1) % POTION_IDS.length];
+  addPedestal(room, 192, 104, a, POTIONS[a].price + up);
+  addPedestal(room, 252, 104, b, POTIONS[b].price + up);
+  G.propsN++;
+}
+function arenaBossReward() {
+  const A = G.arena;
+  spawnPickup('heart', 192, 120);
+  for (let i = 0; i < 6; i++) spawnPickup('coin', 192 + rnd(-10, 10), 120);
+  Audio_.play(G.floor.land.song);
+  arenaWaveCleared();
+  A.t = ARENA_BREAK + 3;
+}
+
+// A run ends: the end screen, records, and (solo) the saved run is gone.
+function endRun() {
+  saveBest();
+  if (G.mode === 'adv') clearRun();
+  Save.write();
+  G.record = G.mode === 'arena' ? G.arena.wave - 1 > G.bestBefore : G.floor.depth + 1 > G.bestBefore;
+  setState('over');
+  if (NET.role === 'host') netState('over');
 }
 
 // ---------- Transitions between rooms ----------
@@ -222,12 +420,13 @@ const TRANS_T = 0.42;
 function startTransition(dir) {
   const to = G.room.doors[dir];
   if (to.dirty) renderRoomStatic(to, G.floor.theme);
-  G.trans = { dir, t: 0, from: G.room, to, px: G.player.x, py: G.player.y };
+  G.trans = { dir, t: 0, from: G.room, to, ps: G.players.map(p => [p.x, p.y]) };
+  if (NET.role === 'host') netTrans(dir);
 }
 function updateTransition(dt) {
-  const tr = G.trans, p = G.player;
+  const tr = G.trans;
   tr.t += dt;
-  p.walkT += dt; p.moving = true;
+  for (const p of G.players) { p.walkT += dt; p.moving = true; }
   if (tr.t >= TRANS_T) {
     G.trans = null;
     enterRoom(tr.to, OPP[tr.dir]);
@@ -235,6 +434,7 @@ function updateTransition(dt) {
 }
 
 // ---------- Update ----------
+function titleReturn(id) { setState('title'); G.menuSel = Math.max(0, titleItems().indexOf(id)); }
 function update(dt) {
   G.time += dt;
   pollPad();
@@ -242,109 +442,156 @@ function update(dt) {
   if (pressed('KeyM')) { Audio_.toggleMute(); toast(Save.settings.muted ? 'SOUND OFF (M)' : 'SOUND ON'); }
   if (pressed('KeyF')) toggleFullscreen();
   if (G.toast && (G.toast.t -= dt) <= 0) G.toast = null;
+  netPoll();
   if (updateWipe(dt)) return;
-  const onTitle = G.state === 'title' || G.state === 'collection' || G.state === 'kert' || (G.state === 'settings' && G.back === 'title');
+  const onTitle = MENU_STATES.has(G.state) && (G.state !== 'settings' || G.back === 'title');
   if (onTitle) { updateAmbient(dt, 'meadow'); Audio_.play('meadow'); }
+  const mp = !!NET.role;
   switch (G.state) {
     case 'title': {
-      const items = titleItems(), c = menu(items, 120, 12), id = items[c];
+      const items = titleItems(), c = menu(items, TITLE_Y, TITLE_GAP), id = items[c];
       if (id === 'CONTINUE') { Audio_.sfx('confirm'); wipe(() => { if (!loadRun()) toast('THE SAVE COULD NOT BE LOADED'); }); }
-      else if (id === 'NEW GAME' || id === 'START GAME') { Audio_.sfx('confirm'); wipe(startGame); }
-      else if (id === 'THE GARDEN') { Audio_.sfx('confirm'); setState('kert'); }
+      else if (id === 'ADVENTURE' || id === 'NEW ADVENTURE' || id === 'ARENA') { Audio_.sfx('confirm'); G.prep = { mode: id === 'ARENA' ? 'arena' : 'adv' }; setState('prep'); }
+      else if (id === 'CO-OP') { Audio_.sfx('confirm'); setState('coop'); }
+      else if (id === 'THE GARDEN') { Audio_.sfx('confirm'); G.gTab = 0; setState('kert'); }
       else if (id === 'COLLECTION') { Audio_.sfx('confirm'); setState('collection'); }
       else if (id === 'SETTINGS') { Audio_.sfx('confirm'); G.back = 'title'; setState('settings'); }
       return;
     }
+    case 'prep': {
+      const r = updatePrep();
+      if (r === 'back') { Audio_.sfx('select'); titleReturn(G.prep.mode === 'arena' ? 'ARENA' : hasRun() ? 'NEW ADVENTURE' : 'ADVENTURE'); }
+      else if (r === 'start') { Audio_.sfx('confirm'); wipe(() => startRun(G.prep.mode)); }
+      return;
+    }
+    case 'coop': updateCoop(); return;
+    case 'entry': updateEntry(); return;
+    case 'lobby': updateLobby(); return;
     case 'kert':
-      if (updateKert()) { Audio_.sfx('select'); setState('title'); G.menuSel = titleItems().indexOf('THE GARDEN'); }
+      if (updateKert()) { Audio_.sfx('select'); titleReturn('THE GARDEN'); }
       return;
     case 'collection':
-      if (updateCollection()) { Audio_.sfx('select'); setState('title'); G.menuSel = titleItems().indexOf('COLLECTION'); }
+      if (updateCollection()) { Audio_.sfx('select'); titleReturn('COLLECTION'); }
       return;
     case 'settings':
-      if (updateSettings()) { setState(G.back); G.menuSel = G.back === 'title' ? titleItems().indexOf('SETTINGS') : 1; }
-      return;
+      if (updateSettings()) {
+        if (G.back === 'title') titleReturn('SETTINGS');
+        else { setState(G.back); G.menuSel = 1; }
+      }
+      break;
     case 'pause': {
-      const c = menu(PAUSE_ITEMS, 118);
-      if (pressed('Escape', 'KeyP', 'PadStart', 'PadB') || c === 0) { setState('play'); Audio_.sfx('select'); }
-      else if (c === 1) { Audio_.sfx('confirm'); G.back = 'pause'; setState('settings'); }
-      else if (c === 2) { saveBest(); saveRun(); Save.write(); wipe(() => { setState('title'); toast(hasRun() ? 'SAVED. CONTINUE FROM THE MENU' : 'SEE YOU SOON!'); }); }
-      return;
+      const items = pauseItems(), c = menu(items, 118), id = items[c];
+      if (pressed('Escape', 'KeyP', 'PadStart', 'PadB') || id === 'CONTINUE') { setState('play'); Audio_.sfx('select'); }
+      else if (id === 'SETTINGS') { Audio_.sfx('confirm'); G.back = 'pause'; setState('settings'); }
+      else if (id === 'SAVE AND QUIT') { saveBest(); saveRun(); Save.write(); wipe(() => { setState('title'); toast(hasRun() ? 'SAVED. CONTINUE FROM THE MENU' : 'SEE YOU SOON!'); }); }
+      else if (id === 'QUIT') { saveBest(); Save.write(); wipe(() => setState('title')); }
+      else if (id === 'LEAVE GAME' || id === 'END GAME') { Audio_.sfx('confirm'); netLeave(); }
+      break;
     }
-    case 'over': {
-      const c = menu(OVER_ITEMS, 152);
-      if (c === 0) { Audio_.sfx('confirm'); wipe(startGame); } else if (c === 1) wipe(() => setState('title'));
-      return;
-    }
-    case 'win': {
-      const c = menu(WIN_ITEMS, 152);
-      if (c === 0) { Audio_.sfx('confirm'); wipe(() => { setState('play'); loadFloor(G.floor.depth + 1); }); }
-      else if (c === 1) { clearRun(); Save.write(); wipe(() => setState('title')); }
+    case 'over': case 'win': {
+      const items = endItems(), c = menu(items, 152), id = items[c];
+      if (id === 'AGAIN!') { Audio_.sfx('confirm'); wipe(() => startRun(G.mode, mp ? netRoster() : null)); }
+      else if (id === 'KEEP GOING: ENDLESS MODE') { Audio_.sfx('confirm'); wipe(() => { setState('play'); loadFloor(G.floor.depth + 1); if (mp) netState('play'); }); }
+      else if (id === 'LOBBY') { Audio_.sfx('confirm'); netState('lobby'); wipe(() => { setState('lobby'); netLobbySync(); }); }
+      else if (id === 'MENU') { if (G.mode === 'adv') clearRun(); Save.write(); if (mp) netLeave(); else wipe(() => setState('title')); }
+      else if (id === 'LEAVE') netLeave();
       return;
     }
   }
-  // --- play ---
-  const p = G.player, room = G.room;
+  // --- play (the host keeps the world running for everyone while its pause menu is up) ---
+  if (G.state !== 'play' && !(mp && (G.state === 'pause' || G.state === 'settings'))) return;
+  if (NET.role === 'client') { clientPlay(dt); return; }
+  const room = G.room, me = G.player;
   const portrait = IS_TOUCH && window.innerHeight > window.innerWidth;
-  if ((pressed('Escape', 'KeyP', 'PadStart', 'TouchPause') || portrait) && !p.dead && !G.warp) { setState('pause'); Audio_.sfx('select'); return; }
-  if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
-  if (G.floorBanner && (G.floorBanner.t -= dt) <= 0) G.floorBanner = null;
-  G.shake = Math.max(0, G.shake - dt * 18);
-  G.hurtT = Math.max(0, G.hurtT - dt);
-  G.hud.coinT = Math.max(0, G.hud.coinT - dt); G.hud.heartT = Math.max(0, G.hud.heartT - dt); G.hud.readyT = Math.max(0, G.hud.readyT - dt);
-  G.flashT = Math.max(0, G.flashT - dt);
+  if (G.state === 'play' && (pressed('Escape', 'KeyP', 'PadStart', 'TouchPause') || portrait) && !me.dead && !G.warp) {
+    setState('pause'); Audio_.sfx('select');
+    if (!mp) return;
+  }
+  tickHud(dt);
   updateAmbient(dt, G.floor.theme);
-  if (G.trans) { updateTransition(dt); return; }
+  if (G.trans) { updateTransition(dt); netHostTick(dt); return; }
   if (G.warp) { updateWarp(dt); updateParts(dt); return; }
-  if (G.hitstop > 0) { G.hitstop -= dt; return; }
+  if (G.hitstop > 0) { G.hitstop -= dt; netHostTick(dt); return; }
   if (G.slowmo > 0) { G.slowmo -= dt; dt *= 0.35; }
   G.stats.time += dt;
   const was = room.doorT;
   room.doorT = room.cleared ? Math.min(1, room.doorT + dt * 5) : Math.max(0, room.doorT - dt * 6);
-  if (was > 0 && room.doorT === 0 && Object.keys(room.doors).length) { Audio_.sfx('door'); G.shake = Math.max(G.shake, 1.5); }
+  if (was > 0 && room.doorT === 0 && Object.keys(room.doors).length) { Audio_.sfx('door'); G.shake = Math.max(G.shake, 1.5); hapticAll('door'); }
   if (G.cine && (G.cine.t += dt) > CINE_T) G.cine = null;
-  if (p.hp <= 2 && p.maxHp > 2 && !p.dead && (G.beatT = (G.beatT || 0) - dt) <= 0) { G.beatT = 1.1; Audio_.sfx('beat'); }
+  heartbeat(dt);
 
-  if (!G.cine) updatePlayer(p, dt); else { p.moving = false; p.inv = Math.max(0, p.inv - dt); }
-  if (p.dead && p.deadT > 1.8) { saveBest(); clearRun(); Save.write(); G.record = G.floor.depth + 1 > G.bestBefore; setState('over'); return; }
-  updateFlow(room, p.x, p.y);
+  readLocalInput(me);
+  for (const p of G.players) {
+    if (!G.cine) updatePlayer(p, dt);
+    else { p.moving = false; p.inv = Math.max(0, p.inv - dt); }
+  }
+  if (!mp && me.dead && me.deadT > 1.8) { endRun(); return; }
+  if (mp && teamDown() && (G.overT += dt) > 2) { endRun(); return; }
+  updateFlow(room, G.players);
   updateEnemies(dt);
   updateShots(dt);
   updateEBullets(dt);
   updateHazards(dt);
   updateMarkers(dt);
+  updateTurrets(dt);
+  updateBolts(dt);
   updatePickups(dt);
   updateParts(dt);
-  updateProps(room, p, dt);
+  updateProps(room, dt);
   updateCombo(dt);
   updateStarfall(dt);
   if (G.corpse) updateCorpse(dt);
   if (G.reward && (G.reward.t -= dt) <= 0) { G.reward = null; giveBossReward(); }
-  if (!room.cleared && room.type !== 'boss' && !G.enemies.some(e => !e.passive)) roomCleared(room);
+  if (G.mode === 'arena') { if (!G.corpse && !G.reward && !G.boss) updateArena(dt); }
+  else if (!room.cleared && room.type !== 'boss' && !G.enemies.some(e => !e.passive)) roomCleared(room);
 
-  if (!p.dead && pressed('KeyE', 'Enter', 'PadX', 'PadY', 'TouchUse')) { const o = nearestProp(); if (o) interact(o); }
-  if (G.state !== 'play') return;
-  if (room.cleared && !p.dead && !G.reward && !G.corpse && Wipe.t < 0) {
-    let dir = null;
-    if (p.y < 30 && room.doors.u) dir = 'u';
-    else if (p.y > 211 && room.doors.d) dir = 'd';
-    else if (p.x < 7 && room.doors.l) dir = 'l';
-    else if (p.x > 377 && room.doors.r) dir = 'r';
-    if (dir) startTransition(dir);
+  for (const p of G.players) if (p.in.use) { const o = nearestProp(p); if (o) interact(o, p); }
+  if (G.state === 'play' || G.state === 'pause' || G.state === 'settings') {
+    if (room.cleared && !G.reward && !G.corpse && Wipe.t < 0) {
+      for (const p of G.players) {
+        if (!alive(p)) continue;
+        let dir = null;
+        if (p.y < 30 && room.doors.u) dir = 'u';
+        else if (p.y > 211 && room.doors.d) dir = 'd';
+        else if (p.x < 7 && room.doors.l) dir = 'l';
+        else if (p.x > 377 && room.doors.r) dir = 'r';
+        if (dir) { startTransition(dir); break; }
+      }
+    }
   }
+  if (mp) netClearPresses();
+  netHostTick(dt);
+}
+// HUD timers (shared by the host and the clients).
+function tickHud(dt) {
+  if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
+  if (G.floorBanner && (G.floorBanner.t -= dt) <= 0) G.floorBanner = null;
+  G.shake = Math.max(0, G.shake - dt * 18);
+  G.hurtT = Math.max(0, G.hurtT - dt);
+  for (const k in G.hud) G.hud[k] = Math.max(0, G.hud[k] - dt);
+  G.flashT = Math.max(0, G.flashT - dt);
+}
+// A soft heartbeat when our own hero is on their last heart.
+function heartbeat(dt) {
+  const p = G.player;
+  if (p.hp <= 2 && p.maxHp > 2 && alive(p) && (G.beatT = (G.beatT || 0) - dt) <= 0) { G.beatT = 1.1; Audio_.sfx('beat'); }
 }
 
-function updateProps(room, p, dt) {
+function updateProps(room, dt) {
   for (const o of room.props) {
     o.t += dt;
     if (o.kind === 'portal' && Math.random() < 0.3) part(o.x + rnd(-12, 12), o.y - rnd(0, 6), 0, -rnd(20, 40), 0.7, null, { spr: 'sparkle', drag: 1 });
-    if (o.kind === 'chest' && !o.open && !p.dead && Math.hypot(p.x - o.x, (p.y - o.y) * 1.5) < 13) openChest(o);
-    if (o.kind === 'ped' || o.kind === 'frog' || o.kind === 'chest') {
-      // pedestals, chests and the merchant are solid: push the player out
-      const dx = p.x - o.x, dy = (p.y - o.y) * 1.6, d = Math.hypot(dx, dy), min = 9;
-      if (d < min && d > 0.01) { const nx = o.x + dx / d * min, ny = o.y + dy / 1.6 / d * min; if (!boxSolid(room, nx, ny, p.hw, p.hh, 'player')) { p.x = nx; p.y = ny; } }
+    for (const p of G.players) {
+      if (!alive(p)) continue;
+      if (o.kind === 'chest' && !o.open && Math.hypot(p.x - o.x, (p.y - o.y) * 1.5) < 13) openChest(o);
+      if (o.kind === 'ped' || o.kind === 'frog' || o.kind === 'chest') pushOut(room, p, o);
     }
   }
+}
+// Pedestals, chests and the merchant are solid: push a hero out of them.
+function pushOut(room, p, o) {
+  const dx = p.x - o.x, dy = (p.y - o.y) * 1.6, d = Math.hypot(dx, dy), min = 9;
+  if (d < min && d > 0.01) { const nx = o.x + dx / d * min, ny = o.y + dy / 1.6 / d * min; if (!boxSolid(room, nx, ny, p.hw, p.hh, 'player')) { p.x = nx; p.y = ny; } }
 }
 
 // ---------- Render ----------
@@ -365,7 +612,7 @@ function sortDL() {
 }
 
 function renderWorld(ox, oy) {
-  const room = G.room, p = G.player, theme = G.floor.theme;
+  const room = G.room, theme = G.floor.theme;
   if (room.dirty) renderRoomStatic(room, theme);
   ctx.drawImage(room.canvas, ox, oy);
   drawPitLife(room, theme, ox, oy);
@@ -380,7 +627,8 @@ function renderWorld(ox, oy) {
   for (const o of room.props) if (o.kind === 'ped' || o.kind === 'frog' || o.kind === 'chest') dl(o.y, 1, o);
   for (const e of G.enemies) dl(e.y, 2, e);
   if (G.corpse) dl(G.corpse.y, 4, G.corpse);
-  dl(p.y, 3, p);
+  for (const t of G.turrets) dl(t.y, 5, t);
+  for (const p of G.players) dl(p.y, 3, p);
   sortDL();
   for (let i = 0; i < dlN; i++) {
     const d = DL[i];
@@ -388,14 +636,17 @@ function renderWorld(ox, oy) {
     else if (d.kind === 1) drawProp(d.o, ox, oy);
     else if (d.kind === 2) drawEnemy(d.o, ox, oy);
     else if (d.kind === 4) drawCorpse(ox, oy);
+    else if (d.kind === 5) drawTurret(d.o, ox, oy);
     else drawPlayer(d.o, ox, oy);
   }
-  if (p.orbitals && !p.dead) drawOrbitals(p, ox, oy);
+  for (const p of G.players) if (p.orbitals && alive(p)) drawOrbitals(p, ox, oy);
   drawAmbient(ox, oy);
   drawShots(ox, oy);
+  drawBolts(ox, oy);
   drawEBullets(ox, oy);
   drawStarfall(ox, oy);
   drawParts(ox, oy);
+  drawTags(ox, oy);
   drawAimReticle(ox, oy);
 }
 
@@ -413,11 +664,11 @@ function drawEmblems(room, ox, oy) {
 
 function drawTutorial(ox, oy) {
   const how = Input.lastAim;
-  const rows = how === 'pad' ? [['LEFT STICK', 'MOVE'], ['RIGHT STICK', 'SHOOT'], ['A', 'ROLL'], ['RB', 'STARFALL']]
-    : how === 'touch' ? [['LEFT SIDE', 'MOVE'], ['RIGHT SIDE', 'SHOOT'], ['BOOT BUTTON', 'ROLL'], ['STAR BUTTON', 'STARFALL']]
-    : [['WASD', 'MOVE'], ['MOUSE / ARROWS', 'SHOOT'], ['SPACE', 'ROLL'], ['Q', 'STARFALL']];
+  const rows = how === 'pad' ? [['LEFT STICK', 'MOVE'], ['RIGHT STICK', 'SHOOT'], ['A', 'ROLL'], ['RB', 'STARFALL'], ['Y', 'POTION']]
+    : how === 'touch' ? [['LEFT SIDE', 'MOVE'], ['RIGHT SIDE', 'SHOOT'], ['BOOT BUTTON', 'ROLL'], ['STAR BUTTON', 'STARFALL'], ['BOTTLE BUTTON', 'POTION']]
+    : [['WASD', 'MOVE'], ['MOUSE / ARROWS', 'SHOOT'], ['SPACE', 'ROLL'], ['Q', 'STARFALL'], ['R', 'POTION']];
   rows.forEach(([k, v], i) => {
-    const y = oy + 144 + i * 11;
+    const y = oy + 140 + i * 11;
     text(k, ox + 190, y, 'Y', 2, 2);
     text(v, ox + 196, y, 'w', 2);
   });
@@ -456,12 +707,14 @@ function renderGame() {
     ctx.drawImage(tr.to.canvas, dx * VW - cx, dy * VH - cy);
     drawDoors(tr.to, dx * VW - cx, dy * VH - cy, true);
     const [ex, ey] = ENTRY[OPP[tr.dir]];
-    const p = G.player;
-    const px = tr.px + (ex + dx * VW - tr.px) * e, py = tr.py + (ey + dy * VH - tr.py) * e;
-    const sx = p.x, sy = p.y;
-    p.x = px; p.y = py;
-    drawPlayer(p, -cx, -cy);
-    p.x = sx; p.y = sy;
+    G.players.forEach((p, i) => {
+      if (p.dead) return;
+      const [x0, y0] = tr.ps[i] || [p.x, p.y];
+      const sx = p.x, sy = p.y;
+      p.x = x0 + (ex + dx * VW - x0) * e; p.y = y0 + (ey + dy * VH - y0) * e;
+      drawPlayer(p, -cx, -cy);
+      p.x = sx; p.y = sy;
+    });
   } else renderWorld(ox, oy);
   drawHurt();
   if (G.flashT > 0 && Save.settings.shake) fillScreen(PAL.w);
@@ -477,6 +730,10 @@ function render() {
   if (s === 'title') drawTitle();
   else if (s === 'collection') drawCollection();
   else if (s === 'kert') drawKert();
+  else if (s === 'prep') drawPrep();
+  else if (s === 'coop') drawCoop();
+  else if (s === 'entry') drawEntry();
+  else if (s === 'lobby') drawLobby();
   else if (s === 'settings' && G.back === 'title') drawSettings();
   else {
     renderGame();
@@ -485,7 +742,7 @@ function render() {
     else if (s === 'over') drawOver();
     else if (s === 'win') drawWin();
   }
-  if (Input.lastAim === 'touch' && (s === 'play') && !G.trans) drawTouch();
+  if (Input.lastAim === 'touch' && s === 'play' && !G.trans) drawTouch();
   drawWipe();
   if ((IS_TOUCH || Input.lastAim === 'touch') && window.innerHeight > window.innerWidth) drawRotate();
   if (G.toast) { const w = textW(G.toast.msg) + 12, y = SCR.h - SCR.oy - 16; panel((VW - w) / 2, y, w, 15); text(G.toast.msg, VW / 2, y + 4, 'w', 0, 1); }
@@ -528,7 +785,7 @@ function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
   else goFullscreen();
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play' && !G.player.dead) setState('pause'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play' && !NET.role && !G.player.dead) setState('pause'); });
 
 // ---------- Loop ----------
 const STEP = 1 / 60;

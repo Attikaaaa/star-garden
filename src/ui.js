@@ -12,11 +12,23 @@ function panel(x, y, w, h) {
 function dim(a) { fillScreen('rgba(43,26,71,' + a + ')'); }
 
 // ---------- HUD ----------
+// Where the belt slots sit, in screen-corner coordinates (also used to tap them).
+function beltLayout() {
+  const p = G.player, cy = Math.ceil(p.maxHp / 2) > 10 ? 22 : 14;
+  return { x: 4, y: cy + 20, n: p.beltMax };
+}
+function beltSlotAt(x, y) {
+  if (!G.player) return -1;
+  const L = beltLayout(), hx = x + SCR.ox, hy = y + SCR.oy;
+  for (let i = 0; i < L.n; i++) if (hx >= L.x + i * 15 - 2 && hx < L.x + i * 15 + 16 && hy >= L.y - 2 && hy < L.y + 18) return i;
+  return -1;
+}
+const BUFF_IDS = ['regen', 'haste', 'power', 'guard'];
 function drawHUD() {
   const p = G.player;
-  ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins and the Starfall meter hug the screen corner
+  ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins, meter and belt hug the screen corner
   const hearts = Math.ceil(p.maxHp / 2);
-  const low = p.hp <= 2 && p.maxHp > 2 && !p.dead, beat = low && (G.beatT || 0) > 0.95;
+  const low = p.hp <= 2 && p.maxHp > 2 && alive(p), beat = low && (G.beatT || 0) > 0.95;
   const flash = G.hud.heartT > 0 && Math.floor(G.hud.heartT * 20) % 2 ? 2 : 0;
   for (let i = 0; i < hearts; i++) {
     const v = p.hp - i * 2;
@@ -27,17 +39,40 @@ function drawHUD() {
   }
   const cy = hearts > 10 ? 22 : 14, bump = G.hud.coinT > 0.1 ? 1 : 0;
   drawS(S('coin_0'), 5, cy - bump);
-  text(String(p.coins), 16, cy + 1 - bump, G.hud.coinT > 0 ? 'w' : 'Y', 2);
-  if (p.shieldUp) drawS(S('icon_shield'), 20 + textW(String(p.coins)), cy - 4);
+  const cs = String(G.coins);
+  text(cs, 16, cy + 1 - bump, G.hud.coinT > 0 ? 'w' : 'Y', 2);
+  let ix = 20 + textW(cs);
+  if (p.shieldUp) { drawS(S('icon_shield'), ix, cy - 4); ix += 18; }
+  if (G.hud.vaultT > 0) text('VAULT +' + G.run.vault, ix + 2, cy + 1, 'c', 2);
   // Starfall meter
   const my = cy + 11, full = p.charge >= 1, blink = full && Math.floor(G.time * 4) % 2;
   drawS(S(full ? 'shot_' + (Math.floor(G.time * 8) % 2) : 'shot_0'), 5, my - 1);
   rect(14, my, 26, 5, '0');
   rect(15, my + 1, Math.round(24 * p.charge), 3, full ? (blink ? 'w' : 'Y') : 'c');
   if (full) text(Input.lastAim === 'pad' ? 'RB' : Input.lastAim === 'touch' ? '' : 'Q', 44, my - 1, 'Y', 2);
+  // Belt: potions and turret kits, then the running potion effects
+  const L = beltLayout();
+  for (let i = 0; i < L.n; i++) {
+    const x = L.x + i * 15, it = p.belt[i], pop = i === p.belt.length - 1 && G.hud.beltT > 0;
+    rect(x, L.y, 14, 16, '0');
+    rect(x + 1, L.y + 1, 12, 14, pop ? '3' : it ? '2' : '1');
+    if (it) drawS(S('pot_' + it), x + 2, L.y + 2 - (pop ? 1 : 0));
+  }
+  let bx = L.x + L.n * 15 + 2;
+  if (p.belt.length && Input.lastAim !== 'touch') { text(Input.lastAim === 'pad' ? 'Y' : 'R', bx, L.y + 5, 'Y', 2); bx += 10; }
+  for (const k of BUFF_IDS) {
+    const t = p.buff[k];
+    if (t <= 0) continue;
+    if (t > 1.5 || Math.floor(G.time * 8) % 2) drawS(S('pot_' + k), bx, L.y + 1);
+    rect(bx, L.y + 15, 11, 2, '0');
+    rect(bx, L.y + 15, Math.ceil(11 * t / POTIONS[k].t), 1, 'Y');
+    bx += 14;
+  }
+  if (G.players.length > 1) drawTeam(L.y + 22);
   ctx.translate(SCR.ox, SCR.oy);
   drawCombo();
-  drawMinimap();
+  const right = G.mode === 'arena' ? drawWave() : drawMinimap();
+  drawKills(right);
   if (G.boss && !G.boss.dead && G.boss.state !== 'intro') {
     const b = G.boss, w = 120, x = (VW - w) / 2, y = 15;
     rect(x - 1, y - 1, w + 2, 6, '0');
@@ -49,7 +84,7 @@ function drawHUD() {
   }
   G.tipRect = null;
   if (G.state !== 'play') return;
-  const o = nearestProp();
+  const o = nearestProp(p);
   if (o && !G.trans && !G.warp) drawPropTip(o);
   if (G.banner) drawBanner();
   if (G.floorBanner) {
@@ -63,6 +98,41 @@ function drawHUD() {
       rect(VW / 2 - w / 2 + 4, y + 14, w - 8, 1, 'o');
     }
   }
+}
+// Co-op: every teammate's name and health under our belt.
+function drawTeam(y) {
+  for (const q of G.players) {
+    if (q === G.player) continue;
+    text(q.name, 5, y, TAG_COL[q.skin], 2);
+    const bx = 9 + textW(q.name);
+    if (q.down || q.dead) { if (Math.floor(G.time * 3) % 2) text('DOWN!', bx, y, 'R', 2); }
+    else {
+      const w = q.maxHp * 3;
+      rect(bx, y + 1, w + 2, 5, '0');
+      rect(bx + 1, y + 2, q.hp * 3, 3, 'R');
+      rect(bx + 1, y + 2, q.hp * 3, 1, 'q');
+    }
+    y += 10;
+  }
+}
+// Arena: wave number in the top-right corner, and the countdown between waves.
+function drawWave() {
+  const A = G.arena, r = SCR.w - SCR.ox - 5, t = 4 - SCR.oy;
+  text('WAVE ' + Math.max(1, A.wave), r, t + 1, 'Y', 2, 2);
+  if (A.phase === 'fight') {
+    const left = A.left + G.enemies.filter(e => !e.dead && !e.passive).length;
+    text(left + ' LEFT', r, t + 12, 'c', 2, 2);
+  } else if (A.phase === 'break' && G.state === 'play' && !G.floorBanner) {
+    const n = Math.ceil(A.t), y = G.banner ? 64 : 30;
+    text(A.wave ? 'NEXT WAVE IN' : 'GET READY', VW / 2, y, 'w', 2, 1);
+    text(String(n), VW / 2, y + 11, n <= 3 && Math.floor(A.t * 4) % 2 ? 'w' : 'Y', 2, 1);
+  }
+  return t + (A.phase === 'fight' ? 23 : 12);
+}
+function drawKills(y) {
+  const r = SCR.w - SCR.ox - 5, n = String(G.stats.kills);
+  text(n, r, y + 2, 'w', 2, 2);
+  drawS(S('slime_green_mini'), r - textW(n) - 13, y);
 }
 
 function drawCombo() {
@@ -96,6 +166,7 @@ function drawMinimap() {
     const ic = MM_ICON[r.type];
     if (ic && !(r.type === 'item' && r.visited && !r.props.length)) drawS(S(ic), x + 1, y);
   }
+  return y0 + H + 4;
 }
 
 // On-screen sticks and buttons for touch play.
@@ -117,6 +188,7 @@ function drawTouch() {
   drawS(S('icon_speed'), b.dash[0] - 8, b.dash[1] - 8, p.dashCool > 0 ? 4 : 0);
   tCircle(b.star[0], b.star[1], b.star[2], T_BTN);
   drawS(S(p.charge >= 1 && Math.floor(G.time * 4) % 2 ? 'shotbig_1' : 'shotbig_0'), b.star[0] - 4, b.star[1] - 4, p.charge >= 1 ? 0 : 4);
+  if (p.belt.length) { tCircle(b.belt[0], b.belt[1], b.belt[2], T_BTN); drawS(S('pot_' + p.belt[0]), b.belt[0] - 5, b.belt[1] - 7); }
   tCircle(b.pause[0], b.pause[1], b.pause[2], T_BTN);
   rect(b.pause[0] - 3, b.pause[1] - 3, 2, 7, 'w'); rect(b.pause[0] + 1, b.pause[1] - 3, 2, 7, 'w');
 }
@@ -125,7 +197,11 @@ function drawPropTip(o) {
   let title, sub, act;
   if (o.kind === 'portal') { title = 'STAR GATE'; sub = 'ON TO THE NEXT LAND'; act = 'ENTER'; }
   else if (o.item === 'hp') { title = 'LITTLE HEART'; sub = 'RESTORES TWO HEARTS'; act = 'BUY'; }
-  else { title = ITEMS[o.item].name; sub = ITEMS[o.item].desc; act = o.price ? 'BUY' : 'TAKE'; }
+  else {
+    const it = POTIONS[o.item] || ITEMS[o.item];
+    title = it.name; sub = it.desc; act = o.price ? 'BUY' : 'TAKE';
+    if (o.group && G.players.length > 1) sub += '  (ONE EACH)';
+  }
   if (Input.lastAim === 'touch') act = 'TAP HERE TO ' + act;
   const w = Math.max(textW(title), textW(sub), textW(act) + 14) + 16, h = 40;
   const x = Math.round((VW - w) / 2), y = 150;
@@ -135,7 +211,7 @@ function drawPropTip(o) {
   text(sub, VW / 2, y + 16, 'w', 1, 1);
   const aw = textW(act) + 12;
   keyCap(VW / 2 - aw / 2, y + 26);
-  text(act, VW / 2 - aw / 2 + 12, y + 28, o.price && G.player.coins < priceOf(o) ? 'R' : 'h', 1);
+  text(act, VW / 2 - aw / 2 + 12, y + 28, o.price && G.coins < priceOf(o) ? 'R' : 'h', 1);
 }
 
 function drawBanner() {
@@ -186,10 +262,11 @@ function menu(items, y, gap) {
   return chosen;
 }
 function pointer(x, y) { text('>', x - (Math.floor(G.time * 4) % 2), y, 'Y', 2); }
-function drawMenu(items, y, gap) {
+function drawMenu(items, y, gap, cur) {
   gap = gap || 14;
+  if (cur === undefined) cur = G.menuSel;
   items.forEach((it, i) => {
-    const sel = i === G.menuSel;
+    const sel = i === cur;
     text(it, VW / 2, y + i * gap, sel ? 'Y' : 'l', 2, 1);
     if (sel) {
       const w = textW(it), bob = Math.floor(G.time * 4) % 2;
@@ -206,8 +283,9 @@ function keyCap(x, y) {
 }
 
 // ---------- Title ----------
+const TITLE_Y = 116, TITLE_GAP = 11;
 function titleItems() {
-  return hasRun() ? ['CONTINUE', 'NEW GAME', 'THE GARDEN', 'COLLECTION', 'SETTINGS'] : ['START GAME', 'THE GARDEN', 'COLLECTION', 'SETTINGS'];
+  return (hasRun() ? ['CONTINUE', 'NEW ADVENTURE'] : ['ADVENTURE']).concat(['ARENA', 'CO-OP', 'THE GARDEN', 'COLLECTION', 'SETTINGS']);
 }
 function drawTitleBg() {
   const t = G.time;
@@ -234,7 +312,7 @@ function drawTitle() {
   text('THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', VW / 2, 52, 'Y', 2, 1);
   const hx = VW / 2, hy = 110;
   shadow(hx, hy, 12);
-  drawFeet(S('hero_d' + HERO_WALK[Math.floor(t / 0.14) % 4]), hx, hy + 1);
+  drawFeet(S('hero_d' + HERO_WALK[Math.floor(t / 0.14) % 4] + SKIN[Save.skin]), hx, hy + 1);
   const sx = hx - 44, sy = 108;
   const sj = Math.max(0, Math.sin(t * 5)) * 6;
   shadow(sx, sy, 14);
@@ -243,35 +321,36 @@ function drawTitle() {
   shadow(bx, 108, 10);
   drawFeet(S('bee_' + Math.floor(t * 16) % 2), bx, by, 1);
   const items = titleItems();
-  drawMenu(items, 120, 12);
-  if (Save.stars) {
-    const i = items.indexOf('THE GARDEN'), x = VW / 2 + textW('THE GARDEN') / 2 + 16 + (G.menuSel === i ? 6 : 0);
-    drawS(S('shot_0'), x, 120 + i * 12);
-    text(String(Save.stars), x + 9, 121 + i * 12, 'c', 2);
+  drawMenu(items, TITLE_Y, TITLE_GAP);
+  const gi = items.indexOf('THE GARDEN'), vs = String(Save.vault);
+  if (Save.vault) {
+    const x = VW / 2 + textW('THE GARDEN') / 2 + 16 + (G.menuSel === gi ? 6 : 0), y = TITLE_Y + gi * TITLE_GAP;
+    drawS(S('coin_0'), x, y - 1);
+    text(vs, x + 11, y, 'Y', 2);
   }
-  if (G.toast) { /* the notice sits where the control hints are */ } else if (Input.lastAim === 'pad') {
-    text('LEFT STICK: MOVE   RIGHT STICK: SHOOT   A: ROLL', VW / 2, 184, 'w', 2, 1);
-    text('RB: STARFALL   X: TAKE   START: PAUSE', VW / 2, 195, 'w', 2, 1);
-  } else if (Input.lastAim === 'touch') {
-    text('LEFT SIDE: MOVE   RIGHT SIDE: SHOOT', VW / 2, 184, 'w', 2, 1);
-    text('BUTTONS: ROLL AND STARFALL', VW / 2, 195, 'w', 2, 1);
-  } else {
-    text('WASD: MOVE   MOUSE / ARROWS: SHOOT   SPACE: ROLL', VW / 2, 184, 'w', 2, 1);
-    text('Q / RIGHT CLICK: STARFALL   E: TAKE   ESC: PAUSE', VW / 2, 195, 'w', 2, 1);
+  const how = Input.lastAim;
+  if (!G.toast) {
+    text(how === 'pad' ? 'L STICK MOVE   R STICK SHOOT   A ROLL   RB STARFALL   Y POTION'
+      : how === 'touch' ? 'LEFT SIDE: MOVE   RIGHT SIDE: SHOOT   BUTTONS: ROLL, STARFALL, POTION'
+      : 'WASD MOVE   MOUSE SHOOT   SPACE ROLL   Q STARFALL   R POTION', VW / 2, 196, 'w', 2, 1);
+    const st = Save.stats, best = [];
+    if (st.bestDepth) best.push('LAND ' + st.bestDepth);
+    if (st.bestWave) best.push('WAVE ' + st.bestWave);
+    if (st.wins) best.push('WINS ' + st.wins);
+    if (IS_IOS && !navigator.standalone) text('TIP: SHARE > ADD TO HOME SCREEN FOR FULLSCREEN', VW / 2, 207, 'c', 2, 1);
+    else if (best.length) text('BEST: ' + best.join('   '), VW / 2, 207, 'c', 2, 1);
   }
-  const st = Save.stats;
-  if (IS_IOS && !navigator.standalone && !G.toast) text('TIP: SHARE > ADD TO HOME SCREEN FOR FULLSCREEN', VW / 2, 207, 'c', 2, 1);
-  else if (st.bestDepth > 0 && !G.toast) text('BEST: LAND ' + st.bestDepth + (st.wins ? '   WINS: ' + st.wins : ''), VW / 2, 207, 'c', 2, 1);
 }
 
 // ---------- Settings ----------
-const SET_X = VW / 2 - 84, SET_Y = 70, BAR_X = SET_X + 98;
-// Rows carry ids so a row can be hidden (no fullscreen on iPhone) without breaking the logic.
+const SET_X = VW / 2 - 84, SET_Y = 64, BAR_X = SET_X + 98, VIBE = ['OFF', 'LOW', 'FULL'];
+// Rows carry ids so a row can be hidden (no fullscreen or vibration on iPhone) without breaking the logic.
 function settingsRows() {
   const s = Save.settings, rows = [
     ['music', 'MUSIC', 'bar', s.music], ['sfx', 'EFFECTS', 'bar', s.sfx],
-    ['shake', IS_TOUCH ? 'SHAKE/VIBRATE' : 'SCREEN SHAKE', s.shake ? 'ON' : 'OFF'],
+    ['shake', 'SCREEN SHAKE', s.shake ? 'ON' : 'OFF'],
   ];
+  if (!IS_IOS) rows.push(['vibe', IS_TOUCH ? 'VIBRATION' : 'RUMBLE', VIBE[s.vibe]]);
   if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
   rows.push(['back', 'BACK', null]);
   return rows;
@@ -289,16 +368,18 @@ function updateSettings() {
     else if (dir) s[id] = Math.max(0, Math.min(10, s[id] + dir));
     else s[id] = (s[id] + 1) % 11;
     Audio_.applySettings(); Audio_.sfx('select'); Save.write();
-  } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); buzz(40); }
+  } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
+  else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
   return false;
 }
 function drawSettings() {
   if (G.back === 'title') drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 104, 46, 208, 124);
-  text('SETTINGS', VW / 2, 54, 'Y', 2, 1);
-  settingsRows().forEach(([, label, val, v], i) => {
+  const rows = settingsRows(), h = rows.length * 16 + 36;
+  panel(VW / 2 - 104, 40, 208, h + 10);
+  text('SETTINGS', VW / 2, 48, 'Y', 2, 1);
+  rows.forEach(([, label, val, v], i) => {
     const y = SET_Y + i * 16, sel = i === G.menuSel;
     if (sel) pointer(SET_X - 10, y);
     text(label, SET_X, y, sel ? 'Y' : 'l', 1);
@@ -307,10 +388,11 @@ function drawSettings() {
       for (let k = 0; k < 10; k++) rect(BAR_X + k * 7, y, 6, 7, k < v ? (sel ? 'Y' : 'w') : '2');
     } else if (val) text(val, BAR_X + 69, y, sel ? 'Y' : 'w', 1, 2);
   });
-  const fi = settingsRows().findIndex(r => r[0] === 'full');
+  const fi = rows.findIndex(r => r[0] === 'full');
   G.tapFull = fi < 0 ? null : [SET_Y + fi * 16 - 4, SET_Y + fi * 16 + 11];
-  rect(VW / 2 - 92, 149, 184, 1, '2');
-  text(Input.lastAim === 'pad' ? 'LEFT / RIGHT: ADJUST    B: BACK' : 'LEFT / RIGHT: ADJUST    ESC: BACK', VW / 2, 155, 'c', 1, 1);
+  const ly = SET_Y + rows.length * 16 - 2;
+  rect(VW / 2 - 92, ly, 184, 1, '2');
+  text(Input.lastAim === 'pad' ? 'LEFT / RIGHT: ADJUST    B: BACK' : 'LEFT / RIGHT: ADJUST    ESC: BACK', VW / 2, ly + 6, 'c', 1, 1);
 }
 
 // ---------- Collection ----------
@@ -348,8 +430,8 @@ function drawCollection() {
   panel(180, 34, 184, 130);
   text('STATISTICS', 272, 41, 'Y', 1, 1);
   [['RUNS', st.runs], ['WINS', st.wins], ['ENEMIES DEFEATED', st.kills], ['BEST LAND', st.bestDepth || '-'],
-    ['FASTEST WIN', st.bestTime ? fmtTime(st.bestTime) : '-']].forEach(([k, v], i) => {
-    text(k, 190, 58 + i * 14, 'l', 1); text(String(v), 354, 58 + i * 14, 'w', 1, 2);
+    ['BEST ARENA WAVE', st.bestWave || '-'], ['FASTEST WIN', st.bestTime ? fmtTime(st.bestTime) : '-'], ['VAULT', Save.vault]].forEach(([k, v], i) => {
+    text(k, 190, 56 + i * 14, 'l', 1); text(String(v), 354, 56 + i * 14, 'w', 1, 2);
   });
   const sel = ids[G.menuSel];
   panel(20, 168, 344, 28);
@@ -364,10 +446,13 @@ function drawCollection() {
 }
 
 // ---------- Pause / game over / win ----------
-const PAUSE_ITEMS = ['CONTINUE', 'SETTINGS', 'SAVE AND QUIT'];
+function pauseItems() {
+  if (NET.role) return ['CONTINUE', 'SETTINGS', NET.role === 'host' ? 'END GAME' : 'LEAVE GAME'];
+  return ['CONTINUE', 'SETTINGS', G.mode === 'arena' ? 'QUIT' : 'SAVE AND QUIT'];
+}
 function drawPause() {
   dim(0.6);
-  text('PAUSED', VW / 2, 30, 'Y', 2, 1);
+  text(NET.role ? 'MENU (THE GAME GOES ON)' : 'PAUSED', VW / 2, 30, 'Y', 2, 1);
   const p = G.player, items = p.items;
   let tip = null;
   if (items.length) {
@@ -385,7 +470,7 @@ function drawPause() {
     text(ITEMS[tip].name, VW / 2, sy, 'Y', 2, 1);
     text(ITEMS[tip].desc, VW / 2, sy + 11, 'w', 2, 1);
   } else {
-    const shots = p.shots + (p.backshot ? 1 : 0);
+    const shots = p.shots + (p.backshot ? 1 : 0) + (p.wand === 'scatter' ? WANDS.scatter.fan : 0);
     const cols = [['DAMAGE', p.dmg.toFixed(1)], ['SHOTS/SEC', (1 / p.fireDelay).toFixed(1) + (shots > 1 ? ' X' + shots : '')],
       ['RANGE', String(Math.round(p.range))], ['SPEED', String(Math.round(p.speed))]];
     cols.forEach(([k, v], i) => {
@@ -393,33 +478,43 @@ function drawPause() {
       text(k, x, y, 'l', 2); text(v, x + 96, y, 'Y', 2, 2);
     });
   }
-  drawMenu(PAUSE_ITEMS, 118);
-  text('LAND ' + (G.floor.depth + 1) + '   ' + fmtTime(G.stats.time), VW / 2, 190, 'c', 2, 1);
+  drawMenu(pauseItems(), 118);
+  const where = G.mode === 'arena' ? 'WAVE ' + Math.max(1, G.arena.wave) : 'LAND ' + (G.floor.depth + 1);
+  text(where + '   ' + DIFFS[G.diff].name + '   ' + fmtTime(G.stats.time), VW / 2, 190, 'c', 2, 1);
+  if (NET.role === 'host') text('CODE: ' + NET.code, VW / 2, 202, 'l', 2, 1);
 }
 function fmtTime(s) { s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function drawStats(y) {
-  const s = G.stats;
-  const rows = [['LAND', String(G.floor.depth + 1)], ['DEFEATED', String(s.kills)], ['COINS', String(s.coins)], ['MAGIC ITEMS', String(s.items)], ['TIME', fmtTime(s.time)], ['STARS', '+' + G.run.stars]];
-  rows.forEach(([k, v], i) => { text(k, VW / 2 - 64, y + i * 11, 'l', 1); text(v, VW / 2 + 64, y + i * 11, 'Y', 1, 2); });
+  const s = G.stats, arena = G.mode === 'arena';
+  const rows = [arena ? ['WAVE', String(Math.max(1, G.arena.wave))] : ['LAND', String(G.floor.depth + 1)], ['DEFEATED', String(s.kills)], ['COINS', String(s.coins)]];
+  if (G.players.length > 1) rows.push(['DEFEATED BY', G.players.map(p => p.name.slice(0, 5) + ' ' + p.kills).join(' ')]);
+  else rows.push(['MAGIC ITEMS', String(s.items)]);
+  rows.push(['TIME', fmtTime(s.time)], ['VAULT', '+' + G.run.vault]);
+  rows.forEach(([k, v], i) => { text(k, VW / 2 - 76, y + i * 11, 'l', 1); text(v, VW / 2 + 76, y + i * 11, i === 5 ? 'c' : 'Y', 1, 2); });
+}
+function endItems() {
+  if (NET.role === 'client') return ['LEAVE'];
+  const mid = NET.role === 'host' ? ['LOBBY'] : [];
+  return (G.state === 'win' ? ['KEEP GOING: ENDLESS MODE'] : ['AGAIN!']).concat(mid, ['MENU']);
 }
 // Shared layout for the end screens: big panel, title, line, stats, menu.
-function endScreen(title, col, sub, items) {
+function endScreen(title, col, sub) {
   dim(0.55);
   const x = VW / 2 - 92, y = 22, w = 184, h = 172;
   panel(x, y, w, h);
   const bob = Math.round(Math.sin(G.time * 3) * 1.5);
   text(title, VW / 2, y + 9 + bob, col, 2, 1);
-  if (G.record) text('NEW RECORD: LAND ' + (G.floor.depth + 1) + '!', VW / 2, y + 25, 'c', 1, 1);
+  if (G.record) text(G.mode === 'arena' ? 'NEW RECORD: WAVE ' + (G.arena.wave - 1) + '!' : 'NEW RECORD: LAND ' + (G.floor.depth + 1) + '!', VW / 2, y + 25, 'c', 1, 1);
   else text(sub, VW / 2, y + 25, 'w', 1, 1);
   rect(x + 12, y + 38, w - 24, 1, '2');
   drawStats(y + 44);
   rect(x + 12, y + 115, w - 24, 1, '2');
-  drawMenu(items, y + 126);
+  drawMenu(endItems(), y + 126);
+  if (NET.role === 'client') text('WAITING FOR THE HOST...', VW / 2, y + 156, 'c', 1, 1);
 }
-const OVER_ITEMS = ['AGAIN!', 'MENU'], WIN_ITEMS = ['KEEP GOING: ENDLESS MODE', 'MENU'];
-function drawOver() { endScreen('OOPS!', 'P', 'YOU RAN OUT OF HEARTS...', OVER_ITEMS); }
+function drawOver() { endScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }
 function drawWin() {
-  endScreen('VICTORY!', 'Y', 'THE STAR GARDEN SHINES AGAIN!', WIN_ITEMS);
+  endScreen('VICTORY!', 'Y', 'THE STAR GARDEN SHINES AGAIN!');
   for (let i = 0; i < 10; i++) {
     const a = G.time * 0.7 + i * 0.63;
     drawS(S(i % 2 ? 'sparkle_0' : 'sparkle_1'), VW / 2 + Math.cos(a) * 116 - 1, 108 + Math.sin(a) * 92 - 1);

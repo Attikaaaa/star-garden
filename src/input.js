@@ -8,13 +8,48 @@ const Input = {
   hit: Object.create(null),    // pressed this frame
   mx: VW / 2, my: VH / 2, mouseDown: false, mouseHit: false, mouseSeen: false,
   lastAim: IS_TOUCH ? 'touch' : 'mouse', // 'mouse' | 'keys' | 'pad' | 'touch'
+  touchSlot: -1,  // belt slot tapped in the HUD
 };
 // no pinch-zoom or double-tap zoom on iOS
 for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
 
-// Short vibration for big moments (Android; tied to the screen-shake setting).
-function buzz(ms) {
-  if (navigator.vibrate && Input.lastAim === 'touch' && Save.settings.shake) navigator.vibrate(ms);
+// ---------- Haptics: phone vibration (Android) and controller rumble ----------
+// Every event has its own feel. Small ones are rate limited and skipped on LOW, so it
+// never turns into a constant buzz. [vibrate pattern ms, rumble ms, strong, weak, min gap s, minor]
+const HAPTIC = {
+  kill: [[9], 45, 0, 0.35, 0.07, true],
+  elite: [[22], 90, 0.3, 0.6, 0.1],
+  hit: [[6], 30, 0, 0.2, 0.12, true],
+  dash: [[7], 40, 0, 0.25, 0.2, true],
+  blast: [[14], 70, 0.25, 0.4, 0.12, true],
+  hurt: [[45, 30, 70], 200, 0.8, 0.6, 0.3],
+  starfall: [[30, 40, 30, 40, 90], 450, 0.6, 0.8, 0.5],
+  slam: [[80], 220, 1, 0.5, 0.25],
+  roar: [[40, 60, 140], 500, 0.7, 0.4, 1],
+  bossdie: [[90, 50, 90, 50, 260], 900, 1, 1, 1],
+  item: [[15, 50, 25], 160, 0.2, 0.6, 0.3],
+  potion: [[12, 40, 12], 140, 0.1, 0.5, 0.3],
+  wave: [[20, 70, 20], 200, 0.4, 0.4, 0.5],
+  door: [[25], 100, 0.4, 0.2, 0.3, true],
+  death: [[300], 600, 1, 1, 1],
+  tick: [[10], 40, 0, 0.3, 0.05],
+};
+// Big shared moments (boss slams, waves) rumble for every player in a co-op game.
+function hapticAll(kind) { haptic(kind); netFx('hap', kind); }
+const _hapLast = Object.create(null);
+function haptic(kind) {
+  const lv = Save.settings.vibe, h = HAPTIC[kind];
+  if (!lv || !h || (lv === 1 && h[5])) return;
+  const now = performance.now() / 1000;
+  if (_hapLast[kind] && now - _hapLast[kind] < h[4]) return;
+  _hapLast[kind] = now;
+  const k = lv === 1 ? 0.6 : 1;
+  if (Input.lastAim === 'touch' && navigator.vibrate) navigator.vibrate(h[0].map((ms, i) => (i % 2 ? ms : Math.round(ms * k))));
+  else if (Input.lastAim === 'pad') {
+    const gp = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(g => g && g.connected);
+    const act = gp && gp.vibrationActuator;
+    if (act && act.playEffect) act.playEffect('dual-rumble', { duration: h[1], strongMagnitude: h[2] * k, weakMagnitude: h[3] * k }).catch(() => {});
+  }
 }
 // Fullscreen + landscape lock. Browsers only allow it from inside a user gesture.
 function goFullscreen() {
@@ -26,7 +61,7 @@ function goFullscreen() {
 }
 
 const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  'Space', 'ShiftLeft', 'ShiftRight', 'KeyE', 'Enter', 'Escape', 'KeyP', 'KeyM']);
+  'Space', 'ShiftLeft', 'ShiftRight', 'KeyE', 'Enter', 'Escape', 'KeyP', 'KeyM', 'KeyR', 'Tab']);
 
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
@@ -63,7 +98,7 @@ function endInputFrame() {
 
 // ---------- Gamepad (standard mapping) ----------
 // Left stick / d-pad: move and navigate. Right stick: aim and shoot. A/LB/LT: roll.
-// X/Y: interact. Start: pause. In menus A confirms, B goes back.
+// X: interact. Y: drink / use the first belt item. Start: pause. In menus A confirms, B goes back.
 const PAD_BTN = { 0: 'PadA', 1: 'PadB', 2: 'PadX', 3: 'PadY', 4: 'PadLB', 5: 'PadRB', 6: 'PadLT', 7: 'PadRT', 9: 'PadStart', 12: 'PadUp', 13: 'PadDown', 14: 'PadLeft', 15: 'PadRight' };
 Input.pad = { mx: 0, my: 0, ax: 0, ay: 0, prev: [], navY: 0, navX: 0 };
 function pollPad() {
@@ -94,12 +129,12 @@ function pollPad() {
 
 // ---------- Touch: floating twin sticks + buttons ----------
 // Left half: move stick. Right half: aim stick (shoots while held). Round buttons: roll,
-// Starfall, pause. Tapping the item tooltip uses it. Outside play, a tap is a click.
+// Starfall, the first belt item, pause. Belt slots in the HUD can be tapped too. Tapping the item tooltip uses it. Outside play, a tap is a click.
 // Screen edges in play-view coordinates; buttons hug the edges (in the side margins on phones).
 function screenEdges() { return { l: -SCR.ox, t: -SCR.oy, r: SCR.w - SCR.ox, b: SCR.h - SCR.oy }; }
 function touchBtns() {
   const e = screenEdges();
-  return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], pause: [e.l + 15, e.t + 49, 11] };
+  return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], belt: [e.r - 72, e.b - 98, 12], pause: [e.l + 15, e.t + 106, 11] };
 }
 const STICK_R = 18;
 Input.touch = { move: null, aim: null, mx: 0, my: 0, ax: 0, ay: 0 };
@@ -122,6 +157,9 @@ cv.addEventListener('pointerdown', e => {
   if (_inBtn(B.pause, x, y)) { Input.hit.TouchPause = true; return; }
   if (_inBtn(B.dash, x, y)) { Input.hit.TouchDash = true; return; }
   if (_inBtn(B.star, x, y)) { Input.hit.TouchStar = true; return; }
+  if (G.player.belt.length && _inBtn(B.belt, x, y)) { Input.hit.TouchBelt = true; return; }
+  const slot = beltSlotAt(x, y);
+  if (slot >= 0) { Input.touchSlot = slot; return; }
   const tr = G.tipRect;
   if (tr && x >= tr[0] && x < tr[0] + tr[2] && y >= tr[1] && y < tr[1] + tr[3]) { Input.hit.TouchUse = true; return; }
   const s = { id: e.pointerId, ox: x, oy: y, x, y };

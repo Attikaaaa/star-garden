@@ -64,7 +64,7 @@ const ACCENT_ROWS = {
   uml: { 5: ['.....', '.x.x.'] },
   dbl: { 5: ['..x.x', '.x.x.'] },
 };
-const FONT_COLORS = 'wY0PchRl1';
+const FONT_COLORS = 'wY0PchRl13T';
 const FONT_W = Object.create(null);
 
 (function registerFont() {

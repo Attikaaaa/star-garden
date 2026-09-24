@@ -85,6 +85,16 @@ const Audio_ = (() => {
     ult() { noise(0.5, 0.25, 3000, 'bandpass', 0, 300); [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => osc('p25', f, f, 0.14, 0.11, i * 0.04)); },
     wipe() { noise(0.3, 0.1, 400, 'bandpass', 0, 2400); },
     shield() { osc('triangle', 900, 1800, 0.2, 0.15); },
+    scatter() { noise(0.06, 0.12, 2600, 'bandpass'); osc('p25', 1100, 700, 0.06, 0.07); },
+    bubble() { const p = 1 + (Math.random() - 0.5) * 0.3; osc('triangle', 500 * p, 1100 * p, 0.05, 0.08); },
+    swish() { noise(0.16, 0.1, 1200, 'bandpass', 0, 3200); },
+    zap() { osc('square', 1600, 400, 0.07, 0.05); noise(0.05, 0.1, 5000, 'highpass'); },
+    comet() { osc('p25', 300, 700, 0.14, 0.1); noise(0.12, 0.08, 900, 'lowpass'); },
+    blast() { noise(0.25, 0.22, 700, 'lowpass', 0, 120); osc('triangle', 140, 50, 0.2, 0.2); },
+    bottle() { osc('triangle', 700, 1400, 0.06, 0.1); osc('triangle', 1050, 2100, 0.08, 0.08, 0.06); },
+    potion() { [0, 0.07, 0.14].forEach((t, i) => osc('triangle', 300 + i * 120, 600 + i * 200, 0.07, 0.12, t)); osc('p25', 784, 1568, 0.25, 0.08, 0.2); },
+    turret() { osc('square', 200, 120, 0.12, 0.12); [523, 784, 1047].forEach((f, i) => osc('p25', f, f, 0.08, 0.09, 0.1 + i * 0.05)); },
+    tshoot() { osc('p12', 1200, 1800, 0.05, 0.05); },
   };
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;

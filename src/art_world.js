@@ -592,3 +592,92 @@ def('chest_1', `
   0yNNNNNNNNNNNNy0
   0onnnnnnnnnnnno0
   .00000000000000.`);
+
+// ---------- Potions and the turret kit (belt items) ----------
+const POTION_ART = autoOutline(parseArt('potion', `
+  ...........
+  ....NNN....
+  ....nNn....
+  ....lLl....
+  ....lLl....
+  ...lLLLl...
+  ..lXXXXXl..
+  ..lXwXXxl..
+  ..lXXXXxl..
+  ..lXXXxxl..
+  ...lxxxl...
+  ....lll....
+  ...........`));
+const POTION_COL = { regen: { X: 'P', x: 'p' }, haste: { X: 'y', x: 'o' }, power: { X: 'R', x: 'r' }, guard: { X: 'c', x: 'B' } };
+for (const k in POTION_COL) def('pot_' + k, POTION_ART, { legend: POTION_COL[k] });
+def('pot_turret', autoOutline(parseArt('kit', `
+  ...........
+  .....Y.....
+  ....YwY....
+  ...YYYYy...
+  ....Yyo....
+  ...Yy.yo...
+  ...........
+  ...3344....
+  ..3322221..
+  ..3222211..
+  ..mmmmmmd..
+  ..mllmmdd..
+  ...........`)));
+
+// ---------- Star turret (placed by the hero) ----------
+(function turret() {
+  for (let f = 0; f < 2; f++) {
+    let r = sculpt(16, 20, [{ r: [3, 11, 10, 9, 2], ramp: 'dmlL', hi: false }, { e: [8, 8, 5.5, 5.5], ramp: '1234' }]);
+    r = stamp(r, 6, 6, f ? '.w.\nwYw\n.w.' : '.Y.\nYwY\n.Y.');
+    r = stamp(r, 4, 15, 'dddddddd');
+    def('turret_' + f, r, { flash: true });
+  }
+})();
+
+// ---------- Projectiles of the other wands ----------
+for (let f = 0; f < 2; f++) {
+  def('shotcomet_' + f, stamp(sculpt(9, 9, [{ e: [4.5, 4.5, 4.4, 4.4], ramp: 'oOyY' }]), f ? 2 : 3, f ? 2 : 3, f ? 'ww\nw.' : 'w'));
+}
+def('shotspark_0', autoOutline(parseArt('spark', '.......\n...Y...\n..YwY..\n...Y...\n.......')));
+def('shotspark_1', autoOutline(parseArt('spark', '.......\n..Y.Y..\n...w...\n..Y.Y..\n.......')));
+def('shotbubble_0', `
+  ..000..
+  .0CwC0.
+  0CwCCc0
+  0CCCCc0
+  0CCCcc0
+  .0ccc0.
+  ..000..`);
+def('shotbubble_1', `
+  .......
+  ..000..
+  .0CwC0.
+  0CwCCc0
+  0CCCcc0
+  .0ccc0.
+  ..000..`);
+// Moon boomerang, four spin poses from three drawings (the side pose is mirrored).
+def('shotboom_d', autoOutline(parseArt('boom', `
+  .........
+  .YY...YY.
+  .Yyy.yyo.
+  ..yyyyo..
+  ...yoo...
+  .........`)));
+def('shotboom_u', autoOutline(parseArt('boom', `
+  .........
+  ...YYy...
+  ..Yyyyo..
+  .Yyy.yoo.
+  .yo...oo.
+  .........`)));
+def('shotboom_s', autoOutline(parseArt('boom', `
+  .......
+  .YY....
+  .Yyy...
+  ..yyy..
+  ..yyo..
+  .yyo...
+  .yo....
+  .......`)), { flip: true });

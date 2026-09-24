@@ -6,8 +6,9 @@ function ebullet(x, y, ang, speed, color, big) {
   let b = null;
   for (let i = 0; i < EBULLETS.length; i++) if (EBULLETS[i].life <= 0) { b = EBULLETS[i]; break; }
   if (!b) { b = {}; EBULLETS.push(b); }
+  speed *= DIFF().bullet;
   b.x = x; b.y = y; b.vx = Math.cos(ang) * speed; b.vy = Math.sin(ang) * speed;
-  b.life = 6; b.r = big ? 3.5 : 2.5; b.spr = S((big ? 'ebb_' : 'eb_') + color); b.t = 0;
+  b.life = 6; b.r = big ? 3.5 : 2.5; b.key = (big ? 'ebb_' : 'eb_') + color; b.spr = S(b.key); b.t = 0;
 }
 function muzzle(x, y) { part(x, y, 0, 0, 0.14, null, { spr: 'sparkle', drag: 1 }); }
 function ring(x, y, n, speed, color, off, big) {
@@ -19,14 +20,15 @@ function fan(x, y, ang, n, step, speed, color, big) {
   for (let i = 0; i < n; i++) ebullet(x, y, ang + (i - (n - 1) / 2) * step, speed, color, big);
 }
 function updateEBullets(dt) {
-  const room = G.room, p = G.player;
+  const room = G.room;
   for (const b of EBULLETS) {
     if (b.life <= 0) continue;
     b.life -= dt; b.t += dt;
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) { b.life = 0; burst(b.x, b.y, 3, ['w', 'l'], 30, 0.2); continue; }
-    if (!p.dead && Math.hypot(p.x - b.x, p.y - 7 - b.y) < b.r + 3) {
-      if (p.inv <= 0) { b.life = 0; hurtPlayer(1); }
+    for (const p of G.players) {
+      if (!alive(p) || Math.hypot(p.x - b.x, p.y - 7 - b.y) >= b.r + 3) continue;
+      if (p.inv <= 0 || p.buff.guard > 0) { b.life = 0; hurtPlayer(p, 1); break; }
     }
   }
 }
@@ -59,13 +61,14 @@ const EDEF = {
 
 function spawnEnemy(type, x, y, opts) {
   const d = EDEF[type], depth = G.floor.depth;
-  const hpMul = d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2;
+  const hpMul = (d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2) * DIFF().hp * crewHp(d.boss);
   const e = {
     type, x, y, hp: d.hp * hpMul, maxHp: d.hp * hpMul, r: d.r, h: d.h, hw: d.hw, hh: d.hh, sw: d.sw,
     fly: !!d.fly, still: !!d.still, boss: !!d.boss, flash: 0, flashCd: 0, kx: 0, ky: 0, z: 0, vz: 0,
     state: 'idle', t: rnd(0.3, 1.2), anim: Math.random() * 3, spawnT: opts && opts.instant ? 0 : 0.7,
     dead: false, flip: false, vx: 0, vy: 0, n: 0, color: type === 'gold' ? 'gold' : G.floor.land.slime, ghost: false,
     passive: !!d.passive, elite: !!(opts && opts.elite), life: type === 'gold' ? 8 : 0, drops: 0,
+    id: ++G.eid, tgt: null, tgtT: 0,
   };
   if (e.elite) { e.hp *= 2; e.maxHp *= 2; }
   if (e.boss) { e.state = 'intro'; e.t = CINE_T; e.spawnT = 0; e.z = type === 'king' ? 160 : 0; }
@@ -74,10 +77,10 @@ function spawnEnemy(type, x, y, opts) {
   return e;
 }
 
-function hurtEnemy(e, dmg, fx, fy, quiet) {
+function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.dead || e.spawnT > 0) return;
   e.hp -= dmg;
-  if (e.boss) addCharge(dmg * 0.004);
+  if (e.boss) addCharge(own, dmg * 0.004 / crewHp(true));
   if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
   if (e.flashCd <= 0) { e.flash = 0.07; e.flashCd = 0.14; }
   if (!e.boss && !e.still) {
@@ -86,14 +89,16 @@ function hurtEnemy(e, dmg, fx, fy, quiet) {
   }
   if (!quiet) Audio_.sfx('hit');
   burst(fx, fy, 4, ['w', 'Y'], 60, 0.2);
-  if (e.hp <= 0) killEnemy(e);
+  if (e.hp <= 0) killEnemy(e, own);
 }
 
-function killEnemy(e) {
+function killEnemy(e, own) {
   e.dead = true;
-  const p = G.player;
-  G.stats.kills++; Save.stats.kills++;
-  if (!e.boss) onKill(e);
+  const p = own && G.players.includes(own) ? own : G.player;
+  G.stats.kills++; p.kills++;
+  if (p === G.player) Save.stats.kills++;
+  if (!e.boss) { onKill(e, p); youFx(p, e.elite ? 'elite' : 'kill'); }
+  if (G.arena) G.arena.killed++;
   const cx = e.x, cy = e.y - e.h / 2;
   poof(cx, cy);
   burst(cx, cy, e.boss ? 40 : 10, enemyColors(e), e.boss ? 160 : 90, e.boss ? 1.1 : 0.5, { g: 120 });
@@ -108,13 +113,15 @@ function killEnemy(e) {
   if (e.type === 'gold') {
     for (let i = 0; i < 6; i++) spawnPickup('coin', e.x, e.y - 4);
     spawnPickup('gem', e.x, e.y - 4);
-    earnStars(1);
-    toast('GOLDEN SLIME: +1 STAR!');
+    earnVault(10);
+    toast('GOLDEN SLIME: +10 VAULT COINS!');
     return;
   }
-  if (e.elite) { for (let i = 0; i < 3; i++) spawnPickup('coin', e.x, e.y - 2); if (Math.random() < 0.3 + p.luck * 0.05) spawnPickup('gem', e.x, e.y - 2); }
-  else if (Math.random() < 0.3 + p.luck * 0.08) dropLoot(e.x, e.y - 2, 0.5);
-  if (p.honey && ++p.honeyN >= 12) { p.honeyN = 0; if (p.hp < p.maxHp) { healPlayer(1); Audio_.sfx('heart'); } }
+  const luck = teamLuck();
+  if (e.elite) { for (let i = 0; i < 3; i++) spawnPickup('coin', e.x, e.y - 2); if (Math.random() < 0.3 + luck * 0.05) spawnPickup('gem', e.x, e.y - 2); }
+  else if (Math.random() < 0.3 + luck * 0.08) dropLoot(e.x, e.y - 2, 0.5);
+  if (Math.random() < (e.elite ? 0.08 : 0.018) + luck * 0.005) spawnPotion(e.x, e.y - 2);
+  if (p.honey && ++p.honeyN >= 12) { p.honeyN = 0; if (p.hp < p.maxHp) { healPlayer(p, 1); Audio_.sfx('heart'); } }
 }
 function enemyColors(e) {
   switch (e.type) {
@@ -132,17 +139,19 @@ function enemyColors(e) {
 }
 
 // ---------- AI ----------
+// The hero the enemy being updated is after (see updateEnemies).
+let EP = null;
 const _dir = { x: 0, y: 0 };
 function towardPlayer(e) {
-  const p = G.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const p = EP, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
   if (!e.fly && d > 20) { const f = flowDir(e.x, e.y); if (f) { _dir.x = f.x; _dir.y = f.y; return _dir; } }
   _dir.x = dx / d; _dir.y = dy / d;
   return _dir;
 }
-const aimAt = (x, y) => Math.atan2(G.player.y - 7 - y, G.player.x - x);
+const aimAt = (x, y) => Math.atan2(EP.y - 7 - y, EP.x - x);
 
 function updateEnemies(dt) {
-  const room = G.room, p = G.player;
+  const room = G.room, pace = DIFF().pace * (1 + 0.04 * (G.players.length - 1));
   for (const e of G.enemies) {
     if (e.dead) continue;
     e.anim += dt;
@@ -154,9 +163,13 @@ function updateEnemies(dt) {
       e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
       if (Math.abs(e.kx) + Math.abs(e.ky) < 5) e.kx = e.ky = 0;
     }
-    AI[e.type](e, e.elite ? dt * 1.25 : dt, room, p);
+    // pick a target (nearest standing hero), re-checked twice a second so nobody jitters between two
+    if ((e.tgtT -= dt) <= 0 || !e.tgt || !alive(e.tgt) || !G.players.includes(e.tgt)) { e.tgt = nearestHero(e.x, e.y); e.tgtT = 0.5; }
+    const p = EP = e.tgt;
+    AI[e.type](e, dt * pace * (e.elite ? 1.25 : 1), room, p);
     // contact damage
-    if (!p.dead && !e.passive && !e.ghost && e.z < 8 && Math.hypot(p.x - e.x, (p.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(1);
+    if (e.passive || e.ghost || e.z >= 8) continue;
+    for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, (q.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(q, 1);
   }
   for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
 }
@@ -327,7 +340,7 @@ const AI = {
     switch (e.state) {
       case 'intro':
         e.z = Math.max(0, e.z - 260 * dt);
-        if (e.z === 0 && !e.landed) { e.landed = true; G.shake = 6; Audio_.sfx('boom'); ring(e.x, e.y - 8, 12, 60, 'pink'); }
+        if (e.z === 0 && !e.landed) { e.landed = true; G.shake = 6; Audio_.sfx('boom'); hapticAll('slam'); ring(e.x, e.y - 8, 12, 60, 'pink'); }
         if (e.t <= 0) { e.state = 'pre'; e.t = 0.3; e.n = 0; }
         break;
       case 'pre':
@@ -362,7 +375,7 @@ const AI = {
         e.z = Math.max(0, e.z - 600 * dt);
         if (e.z === 0) {
           e.state = 'rest'; e.t = rage ? 0.6 : 0.9; e.n = 0;
-          G.shake = 7; Audio_.sfx('boom'); dust(e.x, e.y, 16, 34);
+          G.shake = 7; Audio_.sfx('boom'); hapticAll('slam'); dust(e.x, e.y, 16, 34);
           ring(e.x, e.y - 6, rage ? 20 : 16, 70, 'pink', 0, true);
           burst(e.x, e.y, 16, ['G', 'h', 'H'], 120, 0.5, { g: 200 });
           if (rage && G.enemies.length < 6) for (let i = 0; i < 2; i++) spawnEnemy('mini', e.x + (i ? 18 : -18), e.y + 4, { instant: true });
@@ -401,7 +414,7 @@ const AI = {
       case 'charge':
         if (Math.random() < 0.7) part(e.x + rnd(-12, 12), e.y - 1, 0, -10, 0.4, 'A', { size: 2 });
         if (moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy') || e.t <= 0) {
-          G.shake = 6; Audio_.sfx('boom'); dust(e.x, e.y, 12, 30);
+          G.shake = 6; Audio_.sfx('boom'); hapticAll('slam'); dust(e.x, e.y, 12, 30);
           ring(e.x, e.y - 10, rage ? 16 : 12, 64, 'cyan', Math.random());
           e.state = 'stun'; e.t = 0.9;
         }
@@ -441,7 +454,7 @@ const AI = {
       }
       case 'raise':
         if (e.t <= 0) {
-          G.shake = 7; Audio_.sfx('boom'); dust(e.x, e.y, 16, 30);
+          G.shake = 7; Audio_.sfx('boom'); hapticAll('slam'); dust(e.x, e.y, 16, 30);
           ring(e.x, e.y - 4, 18, 58, 'purple', 0, true);
           e.state = 'slam2'; e.t = 0.3;
         }
@@ -482,8 +495,7 @@ function updateMarkers(dt) {
       burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
-      const p = G.player;
-      if (Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(1);
+      for (const p of G.players) if (alive(p) && Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(p, 1);
       m[i] = m[m.length - 1]; m.pop();
     }
   }

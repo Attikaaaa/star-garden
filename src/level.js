@@ -11,6 +11,7 @@ const DOOR_CELLS = { u: [[11, 0], [12, 0], [11, 1], [12, 1]], d: [[11, 12], [12,
 const ENTRY = { u: [192, 50], d: [192, 194], l: [26, 124], r: [358, 124] };
 
 const rnd = (a, b) => a + Math.random() * (b - a);
+const alive = (p) => !p.dead && !p.down;
 const rndi = (a, b) => Math.floor(rnd(a, b + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 function pickWeighted(pool) {
@@ -79,7 +80,7 @@ function buildRoom(room) {
   for (const d in room.doors) for (const [c, r] of DOOR_CELLS[d]) t[r * COLS + c] = T_DOOR;
   let layout = null;
   if (room.type === 'normal' || room.type === 'challenge') layout = pick(LAYOUTS);
-  else if (room.type === 'boss') layout = BOSS_LAYOUT;
+  else if (room.type === 'boss' || room.type === 'arena') layout = BOSS_LAYOUT;
   if (layout) {
     const flipX = Math.random() < 0.5, flipY = Math.random() < 0.5;
     for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
@@ -94,7 +95,7 @@ function buildRoom(room) {
   room.tiles = t;
   room.pits = [];
   for (let i = 0; i < t.length; i++) if (t[i] === T_PIT) room.pits.push([(i % COLS) * 16, OY + ((i / COLS) | 0) * 16, hash(i, 3, room.seed)]);
-  room.cleared = room.type !== 'normal' && room.type !== 'boss' && room.type !== 'challenge';
+  room.cleared = room.type !== 'normal' && room.type !== 'boss' && room.type !== 'challenge' && room.type !== 'arena';
 }
 
 const tileAt = (room, c, r) => (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? T_WALL : room.tiles[r * COLS + c];
@@ -160,26 +161,34 @@ function clearLine(room, x0, y0, x1, y1) {
   return true;
 }
 
-// ---------- Flow field toward the player for walking enemies ----------
+// ---------- Flow field toward the nearest hero for walking enemies ----------
+// A multi-source BFS: every living hero is a goal, so walkers head for whoever is closest.
 const FLOW = new Int16Array(COLS * ROWS);
 let flowKey = -1;
-function updateFlow(room, px, py) {
-  const pc = Math.floor(px / 16), pr = Math.floor((py - 1 - OY) / 16);
-  const key = pr * COLS + pc;
+const _fq = [];
+function updateFlow(room, players) {
+  let key = 0;
+  for (const p of players) if (alive(p)) key = key * 331 + Math.floor((p.y - 1 - OY) / 16) * COLS + Math.floor(p.x / 16) + 1;
   if (key === flowKey) return;
   flowKey = key;
   FLOW.fill(-1);
-  if (pc < 0 || pr < 0 || pc >= COLS || pr >= ROWS) return;
-  const q = [key];
-  FLOW[key] = 0;
-  for (let h = 0; h < q.length; h++) {
-    const i = q[h], c = i % COLS, r = (i / COLS) | 0;
+  _fq.length = 0;
+  for (const p of players) {
+    if (!alive(p)) continue;
+    const pc = Math.floor(p.x / 16), pr = Math.floor((p.y - 1 - OY) / 16);
+    if (pc < 0 || pr < 0 || pc >= COLS || pr >= ROWS) continue;
+    const k = pr * COLS + pc;
+    if (FLOW[k] === 0) continue;
+    FLOW[k] = 0; _fq.push(k);
+  }
+  for (let h = 0; h < _fq.length; h++) {
+    const i = _fq[h], c = i % COLS, r = (i / COLS) | 0;
     for (const k in DIRS) {
       const nc = c + DIRS[k][0], nr = r + DIRS[k][1], ni = nr * COLS + nc;
       if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS || FLOW[ni] !== -1) continue;
       if (room.tiles[ni] !== T_FLOOR) continue;
       FLOW[ni] = FLOW[i] + 1;
-      q.push(ni);
+      _fq.push(ni);
     }
   }
 }

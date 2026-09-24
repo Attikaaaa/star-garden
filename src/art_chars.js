@@ -69,26 +69,33 @@
   };
   const idle = (up, legs) => [blank].concat(up, legs);
   const step = (up, legs) => up.concat(legs);
-  const o = { flip: true, flash: true };
-  def('hero_d0', idle(FRONT, LEGS.idle), o);
-  def('hero_d1', step(FRONT, LEGS.stepA), o);
-  def('hero_d2', step(FRONT, LEGS.stepB), o);
-  def('hero_u0', idle(BACK, LEGS.idle), o);
-  def('hero_u1', step(BACK, LEGS.stepA), o);
-  def('hero_u2', step(BACK, LEGS.stepB), o);
-  def('hero_s0', idle(SIDE, LEGS.sideIdle), o);
-  def('hero_s1', step(SIDE, LEGS.sideA), o);
-  def('hero_s2', step(SIDE, LEGS.sideB), o);
-  // blink: the upper eye pixels close
-  const shut = (rows, cols) => rows.map((r, i) => i === 10 ? r.split('').map((c, x) => cols.includes(x) ? 's' : c).join('') : r);
-  def('hero_d0b', idle(shut(FRONT, [5, 10]), LEGS.idle), o);
-  def('hero_s0b', idle(shut(SIDE, [10]), LEGS.sideIdle), o);
-  // hurt: squeezed ><-eyes and an open mouth
-  const hurtF = FRONT.slice(), hurtS = SIDE.slice();
-  hurtF[10] = '..0o0ssssss0o0..'; hurtF[12] = '..0k0ss00ss0k0..';
-  hurtS[10] = '..0oOOOss0sss0..'; hurtS[12] = '..0oookss0qs00..';
-  def('hero_d0h', idle(hurtF, LEGS.idle), o);
-  def('hero_s0h', idle(hurtS, LEGS.sideIdle), o);
+  // robe colours the player can choose (see ROBES): sprite names get '', '#1', '#2'...
+  const SKINS = [null, { c: 'q', B: 'P', b: 'p', q: 'Y', P: 'y', p: 'o' }, { c: 'H', B: 'G', b: 'g' }, { c: '4', B: '3', b: '2' },
+    { c: 'Y', B: 'y', b: 'o', q: 'C', P: 'c', p: 'B' }, { c: 'R', B: 'r', b: 'p', q: 'Y', P: 'y', p: 'o' }, { c: 'T', B: 't', b: 'g' }, { c: 'L', B: 'l', b: 'm' }];
+  for (let k = 0; k < SKINS.length; k++) {
+    const sk = k ? '#' + k : '';
+    const o = { flip: true, flash: true, legend: SKINS[k] };
+    const def = (name, rows, opts) => window.def(name + sk, rows, opts);
+    def('hero_d0', idle(FRONT, LEGS.idle), o);
+    def('hero_d1', step(FRONT, LEGS.stepA), o);
+    def('hero_d2', step(FRONT, LEGS.stepB), o);
+    def('hero_u0', idle(BACK, LEGS.idle), o);
+    def('hero_u1', step(BACK, LEGS.stepA), o);
+    def('hero_u2', step(BACK, LEGS.stepB), o);
+    def('hero_s0', idle(SIDE, LEGS.sideIdle), o);
+    def('hero_s1', step(SIDE, LEGS.sideA), o);
+    def('hero_s2', step(SIDE, LEGS.sideB), o);
+    // blink: the upper eye pixels close
+    const shut = (rows, cols) => rows.map((r, i) => i === 10 ? r.split('').map((c, x) => cols.includes(x) ? 's' : c).join('') : r);
+    def('hero_d0b', idle(shut(FRONT, [5, 10]), LEGS.idle), o);
+    def('hero_s0b', idle(shut(SIDE, [10]), LEGS.sideIdle), o);
+    // hurt: squeezed ><-eyes and an open mouth
+    const hurtF = FRONT.slice(), hurtS = SIDE.slice();
+    hurtF[10] = '..0o0ssssss0o0..'; hurtF[12] = '..0k0ss00ss0k0..';
+    hurtS[10] = '..0oOOOss0sss0..'; hurtS[12] = '..0oookss0qs00..';
+    def('hero_d0h', idle(hurtF, LEGS.idle), o);
+    def('hero_s0h', idle(hurtS, LEGS.sideIdle), o);
+  }
 })();
 
 // ---------- Enemies (authored in their base colours; variants use legends) ----------

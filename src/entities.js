@@ -50,97 +50,102 @@ function drawParts(ox, oy) {
   }
 }
 
-// ---------- Player ----------
-function newPlayer() {
+// ---------- Players ----------
+// Up to four heroes. G.player is the one this device controls; the others are driven by
+// the network (p.remote on the host). Each hero reads its controls from p.in.
+// Robes the player picks: sprite suffix, name and the colour of their name tag.
+const ROBES = ['SKY', 'ROSE', 'MINT', 'PLUM', 'SUN', 'CORAL', 'SEA', 'SNOW'];
+const SKIN = ROBES.map((r, k) => (k ? '#' + k : '')), TAG_COL = ['c', 'P', 'h', '3', 'Y', 'R', 'T', 'w'];
+const newInput = () => ({ mx: 0, my: 0, ax: 0, ay: 0, aim: false, pad: false, dash: false, star: false, belt: -1, use: false });
+function newPlayer(pid) {
   return {
-    x: 192, y: 130, hw: 5, hh: 5, face: 'd', flip: false, walkT: 0, moving: false,
+    pid: pid || 0, x: 192, y: 130, hw: 5, hh: 5, face: 'd', flip: false, walkT: 0, moving: false,
     hp: 6, maxHp: 6, speed: 88, dmg: 2, fireDelay: 0.27, shotSpeed: 210, range: 150, shots: 1,
     bounce: 0, pierce: 0, homing: 0, orbitals: 0, fireworks: 0, luck: 0,
     magnet: false, honey: false, backshot: false, stardust: false, shield: false, shieldUp: false, bigShot: false,
-    dashCd: 0.7, dashT: 0, dashCool: 0, dx: 0, dy: 1, inv: 0, cool: 0, coins: 0, items: [], honeyN: 0,
+    dashCd: 0.7, dashT: 0, dashCool: 0, dx: 0, dy: 1, inv: 0, cool: 0, items: [], honeyN: 0,
     dead: false, deadT: 0, orbitHit: new Map(), dustT: 0, charge: 0, chargeMul: 1, hurtT: 0,
+    wand: 'wand', belt: [], beltMax: 2, buff: { regen: 0, haste: 0, power: 0, guard: 0 }, regenT: 0,
+    in: newInput(), down: false, revive: 0, kills: 0, dashN: 0, tpN: 0, remote: false,
+    name: 'P' + ((pid || 0) + 1), skin: (pid || 0) % ROBES.length,
   };
 }
-
-const SHOTS = [];
-const TRAIL = { h: 'H', c: 'C', p: 'q', '': 'Y' }, TRAIL_FW = ['P', 'c', 'Y', 'h'];
-function fireShot(p, ang, dmg, opts) {
-  const sp = p.shotSpeed;
-  SHOTS.push({
-    x: p.x + Math.cos(ang) * 4, y: p.y - 8 + Math.sin(ang) * 3, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
-    life: p.range / sp, dmg, big: p.bigShot, r: p.bigShot ? 4 : 3,
-    bounce: p.bounce, pierce: p.pierce, homing: p.homing, fw: opts && opts.mini ? 0 : p.fireworks,
-    mini: !!(opts && opts.mini), hitList: null, t: Math.random(),
-    tint: p.homing ? 'h' : p.pierce ? 'c' : p.bounce ? 'p' : '', trail: !!(p.homing || p.pierce || p.bounce || p.fireworks),
-  });
+// The chosen wand scales the base stats before any item is applied.
+function applyWand(p, id) {
+  const w = WANDS[id] ? id : 'wand';
+  p.wand = w;
+  p.dmg *= WANDS[w].dmg; p.fireDelay *= WANDS[w].rate; p.shotSpeed *= WANDS[w].speed; p.range *= WANDS[w].range;
 }
-
-function playerShoot(p, ax, ay) {
-  const base = Math.atan2(ay, ax);
-  const n = p.shots, spread = 0.2;
-  for (let i = 0; i < n; i++) fireShot(p, base + (i - (n - 1) / 2) * spread, p.dmg);
-  if (p.backshot) fireShot(p, base + Math.PI, p.dmg);
-  part(p.x + Math.cos(base) * 7, p.y - 9 + Math.sin(base) * 5, 0, 0, 0.12, null, { spr: 'sparkle', drag: 1 });
-  p.cool = p.fireDelay;
-  Audio_.sfx('shoot');
-}
-
-function hurtPlayer(n) {
-  const p = G.player;
-  if (p.inv > 0 || p.dead || G.state !== 'play') return;
-  if (p.shieldUp) {
-    p.shieldUp = false; p.inv = 0.8;
-    burst(p.x, p.y - 8, 14, ['C', 'c', 'w'], 90, 0.5);
-    Audio_.sfx('shield');
-    return;
+const dmgOf = (p) => p.dmg * (p.buff.power > 0 ? 1.6 : 1);
+// Nearest standing hero (enemies aim at and chase them).
+function nearestHero(x, y) {
+  let best = G.player, bd = 1e9;
+  for (const p of G.players) {
+    if (!alive(p)) continue;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bd) { bd = d; best = p; }
   }
-  p.hp -= n; p.inv = 1.1; p.hurtT = 0.35; G.hurtT = 0.25;
-  buzz(p.hp <= 0 ? 400 : 60);
-  G.shake = Math.max(G.shake, 4); G.hitstop = 0.07;
-  burst(p.x, p.y - 8, 10, ['R', 'r', 'w'], 80, 0.5);
-  Audio_.sfx('hurt');
-  if (p.hp <= 0) { p.hp = 0; p.dead = true; p.deadT = 0; G.slowmo = 1; Audio_.stop(); Audio_.sfx('over'); }
+  return best;
 }
 
-function healPlayer(n) {
-  const p = G.player;
-  p.hp = Math.min(p.maxHp, p.hp + n);
-  G.hud.heartT = 0.4;
-  burst(p.x, p.y - 10, 8, ['R', 'q', 'w'], 50, 0.5, { g: -60 });
-}
-
-function updatePlayer(p, dt) {
-  const room = G.room;
-  p.inv = Math.max(0, p.inv - dt);
-  p.hurtT = Math.max(0, p.hurtT - dt);
-  p.cool -= dt;
-  p.dashCool -= dt;
-  if (p.dead) { p.deadT += dt; return; }
-
-  const pad = Input.pad, tch = Input.touch;
+// Controls of this device: keyboard + mouse, controller or touch sticks.
+function readLocalInput(p) {
+  const I = p.in, pad = Input.pad, tch = Input.touch;
+  if (G.state !== 'play') { Object.assign(I, newInput()); Input.touchSlot = -1; return; }
   let mx = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0) + pad.mx + tch.mx;
   let my = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0) + pad.my + tch.my;
   const ml = Math.hypot(mx, my);
   if (ml > 1) { mx /= ml; my /= ml; }
+  I.mx = mx; I.my = my;
+  I.dash = pressed('Space', 'ShiftLeft', 'ShiftRight', 'PadA', 'PadLB', 'PadLT', 'TouchDash');
+  I.star = pressed('KeyQ', 'Mouse2', 'PadRB', 'PadRT', 'TouchStar');
+  I.use = pressed('KeyE', 'Enter', 'PadX', 'TouchUse');
+  I.belt = pressed('KeyR', 'PadY', 'TouchBelt') ? 0 : -1;
+  for (let i = 0; i < p.beltMax; i++) if (pressed('Digit' + (i + 1))) I.belt = i;
+  if (Input.touchSlot >= 0) { I.belt = Input.touchSlot; Input.touchSlot = -1; }
+  // Aim: arrow keys, right stick, right touch stick or the held mouse button.
+  let ax = 0, ay = 0, aiming = false, padAim = false;
+  const kx = (key('ArrowRight') ? 1 : 0) - (key('ArrowLeft') ? 1 : 0), ky = (key('ArrowDown') ? 1 : 0) - (key('ArrowUp') ? 1 : 0);
+  if (kx || ky) { ax = kx; ay = ky; aiming = true; }
+  else if (pad.ax || pad.ay) { ax = pad.ax; ay = pad.ay; aiming = true; padAim = true; }
+  else if (tch.ax || tch.ay) { ax = tch.ax; ay = tch.ay; aiming = true; padAim = true; }
+  else if (Input.mouseDown && Input.lastAim === 'mouse') { ax = Input.mx - p.x; ay = Input.my - (p.y - 8); aiming = true; }
+  if (aiming && padAim) {
+    // gentle aim assist for sticks: snap to the enemy closest to the aimed direction
+    const a0 = Math.atan2(ay, ax);
+    let best = null, bd = 0.38;
+    for (const e of G.enemies) {
+      if (e.dead || e.spawnT > 0 || e.ghost || e.passive && e.type !== 'gold') continue;
+      const ex = e.x - p.x, ey = e.y - e.h / 2 - (p.y - 8), dist = Math.hypot(ex, ey);
+      if (dist > p.range + 20) continue;
+      let da = Math.abs(Math.atan2(ey, ex) - a0);
+      if (da > Math.PI) da = Math.PI * 2 - da;
+      if (da < bd) { bd = da; best = [ex, ey]; }
+    }
+    if (best) { ax = best[0]; ay = best[1]; }
+  }
+  I.aim = aiming && !!(ax || ay); I.pad = padAim;
+  if (I.aim) { I.ax = ax; I.ay = ay; }
+}
+
+// Movement, rolling and facing. Runs where the hero is controlled (its own device).
+function movePlayer(p, dt) {
+  const room = G.room, I = p.in;
+  const mx = I.mx, my = I.my;
   p.moving = !!(mx || my);
   if (p.moving) { const l = Math.hypot(mx, my); p.dx = mx / l; p.dy = my / l; }
-
-  if (pressed('Space', 'ShiftLeft', 'ShiftRight', 'PadA', 'PadLB', 'PadLT', 'TouchDash') && p.dashCool <= 0 && p.dashT <= 0) {
-    p.dashT = 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, 0.28);
+  if (I.dash && p.dashCool <= 0 && p.dashT <= 0) {
+    p.dashT = 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, 0.28); p.dashN++;
     dust(p.x, p.y, 6, 8);
-    Audio_.sfx('dash');
+    Audio_.sfx('dash'); haptic('dash');
   }
   let vx, vy;
   if (p.dashT > 0) {
     p.dashT -= dt;
-    const k = p.speed * 2.6;
+    const k = p.speed * 2.6 * (p.buff.haste > 0 ? 1.15 : 1);
     vx = p.dx * k; vy = p.dy * k;
     if (Math.random() < 0.6) part(p.x + rnd(-4, 4), p.y - rnd(0, 3), -vx * 0.1, -vy * 0.1, 0.3, 'w', { size: 2 });
-    if (p.stardust) {
-      p.dustT -= dt;
-      if (p.dustT <= 0) { p.dustT = 0.035; G.hazards.push({ x: p.x, y: p.y - 3, life: 1.3, tick: 0 }); }
-    }
-  } else { vx = mx * p.speed; vy = my * p.speed; }
+  } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1); vx = mx * sp; vy = my * sp; }
 
   // Door assist: pushing into a doorway slides you into its opening.
   if (room.cleared) {
@@ -157,37 +162,33 @@ function updatePlayer(p, dt) {
     if (f1 !== f0 && f1 % 2 === 0) part(p.x + rnd(-3, 3), p.y - 1, -p.dx * 10, -4, 0.35, THEMES[G.floor.theme]['3'], { size: 1 });
     p.idleT = 0;
   } else p.idleT = (p.idleT || 0) + dt;
-
-  // Aim: mouse (held) or arrow keys.
-  let ax = 0, ay = 0, aiming = false;
-  const kx = (key('ArrowRight') ? 1 : 0) - (key('ArrowLeft') ? 1 : 0), ky = (key('ArrowDown') ? 1 : 0) - (key('ArrowUp') ? 1 : 0);
-  p.padAim = false;
-  if (kx || ky) { ax = kx; ay = ky; aiming = true; }
-  else if (pad.ax || pad.ay) { ax = pad.ax; ay = pad.ay; aiming = true; p.padAim = true; }
-  else if (tch.ax || tch.ay) { ax = tch.ax; ay = tch.ay; aiming = true; p.padAim = true; }
-  else if (Input.mouseDown && Input.lastAim === 'mouse') { ax = Input.mx - p.x; ay = Input.my - (p.y - 8); aiming = true; }
-  if (aiming && p.padAim) {
-    const a0 = Math.atan2(ay, ax);
-    let best = null, bd = 0.38;
-    for (const e of G.enemies) {
-      if (e.dead || e.spawnT > 0 || e.ghost || e.passive && e.type !== 'gold') continue;
-      const ex = e.x - p.x, ey = e.y - e.h / 2 - (p.y - 8), dist = Math.hypot(ex, ey);
-      if (dist > p.range + 20) continue;
-      let da = Math.abs(Math.atan2(ey, ex) - a0);
-      if (da > Math.PI) da = Math.PI * 2 - da;
-      if (da < bd) { bd = da; best = [ex, ey]; }
-    }
-    if (best) { ax = best[0]; ay = best[1]; }
-  }
-  if (aiming) { p.ax = ax; p.ay = ay; }
-  if (aiming) {
-    if (Math.abs(ax) > Math.abs(ay) * 1.1) { p.face = 's'; p.flip = ax < 0; } else p.face = ay < 0 ? 'u' : 'd';
-    if (p.cool <= 0 && p.dashT <= 0 && (ax || ay)) playerShoot(p, ax, ay);
+  if (I.aim) {
+    if (Math.abs(I.ax) > Math.abs(I.ay) * 1.1) { p.face = 's'; p.flip = I.ax < 0; } else p.face = I.ay < 0 ? 'u' : 'd';
   } else if (p.moving) {
     if (Math.abs(mx) > Math.abs(my) * 1.1 || (mx && !my)) { p.face = 's'; p.flip = mx < 0; } else p.face = my < 0 ? 'u' : 'd';
   }
+}
 
-  if (pressed('KeyQ', 'Mouse2', 'PadRB', 'PadRT', 'TouchStar')) useStarfall();
+// Everything that decides the game: shooting, Starfall, belt, moons. Host / solo only.
+function updatePlayer(p, dt) {
+  if (p.sayT > 0) p.sayT -= dt;
+  p.inv = Math.max(0, p.inv - dt);
+  p.hurtT = Math.max(0, p.hurtT - dt);
+  p.cool -= dt;
+  p.dashCool -= dt;
+  if (p.dead) { p.deadT += dt; return; }
+  if (p.down) { updateDowned(p, dt); return; }
+  updateBuffs(p, dt);
+  if (!p.remote) movePlayer(p, dt);
+  else if (p.dashT > 0) p.dashT -= dt;
+  if (p.dashT > 0 && p.stardust) {
+    p.dustT -= dt;
+    if (p.dustT <= 0) { p.dustT = 0.035; G.hazards.push({ x: p.x, y: p.y - 3, life: 1.3, tick: 0, own: p.pid }); }
+  }
+  const I = p.in;
+  if (I.aim && p.cool <= 0 && p.dashT <= 0) playerShoot(p, I.ax, I.ay);
+  if (I.star) useStarfall(p);
+  if (I.belt >= 0) useBelt(p, I.belt);
 
   // Orbiting moons: hurt enemies, eat bullets.
   if (p.orbitals) {
@@ -196,7 +197,7 @@ function updatePlayer(p, dt) {
       const o = orbitPos(p, i);
       for (const e of G.enemies) {
         if (e.spawnT > 0 || e.dead || p.orbitHit.has(e)) continue;
-        if (Math.hypot(e.x - o.x, e.y - e.h / 2 - o.y) < e.r + 4) { hurtEnemy(e, p.dmg * 0.8, o.x, o.y); p.orbitHit.set(e, 0.3); }
+        if (Math.hypot(e.x - o.x, e.y - e.h / 2 - o.y) < e.r + 4) { hurtEnemy(e, p.dmg * 0.8, o.x, o.y, false, p); p.orbitHit.set(e, 0.3); }
       }
       for (const b of EBULLETS) if (b.life > 0 && Math.hypot(b.x - o.x, b.y - o.y) < b.r + 3) { b.life = 0; burst(b.x, b.y, 3, ['Y', 'w'], 40, 0.2); }
     }
@@ -209,33 +210,154 @@ function orbitPos(p, i) {
   return _op;
 }
 
+// ---------- Down, not out (co-op) ----------
+// A hero out of hearts waits for a teammate: stand next to them to help them up.
+const REVIVE_T = 1.6;
+function updateDowned(p, dt) {
+  let help = false;
+  for (const q of G.players) if (q !== p && alive(q) && Math.hypot(q.x - p.x, q.y - p.y) < 22) help = true;
+  p.revive = help ? p.revive + dt : Math.max(0, p.revive - dt * 0.6);
+  if (help && Math.random() < 0.3) part(p.x + rnd(-8, 8), p.y - rnd(0, 12), 0, -30, 0.5, null, { spr: 'sparkle', drag: 1 });
+  if (p.revive >= REVIVE_T) revivePlayer(p, 2);
+}
+function revivePlayer(p, hp) {
+  p.down = false; p.revive = 0; p.hp = Math.min(p.maxHp, hp); p.inv = 1.5;
+  burst(p.x, p.y - 10, 16, ['Y', 'w', 'q', 'P'], 100, 0.6, { g: -40 });
+  Audio_.sfx('heart');
+  toast(p.name + ' IS BACK!');
+}
+const teamDown = () => G.players.every(p => !alive(p));
+
+// Personal feedback for one hero: runs here for our own hero, is sent to a remote one.
+const YOU_FX = {
+  hurt() { G.hurtT = 0.25; G.shake = Math.max(G.shake, 4); haptic('hurt'); },
+  death() { G.hurtT = 0.3; haptic('death'); },
+  heart() { G.hud.heartT = 0.4; },
+  item() { haptic('item'); },
+  potion() { haptic('potion'); },
+  kill() { haptic('kill'); },
+  elite() { haptic('elite'); },
+  ready() { G.hud.readyT = 1; haptic('tick'); },
+  starfall() { haptic('starfall'); },
+  belt() { G.hud.beltT = 0.4; },
+  got(id) {
+    haptic('item');
+    G.banner = { title: ITEMS[id].name, sub: ITEMS[id].desc, t: 2.6, icon: id };
+    if (!Save.found.includes(id)) { Save.found.push(id); Save.write(); }
+  },
+};
+function youFx(p, kind, arg) {
+  if (p === G.player) YOU_FX[kind](arg);
+  else if (p.remote) netTell(p.pid, kind, arg);
+}
+// A short word over a hero's head (potion names, "NOT ENOUGH COINS").
+function say(p, msg) { p.sayMsg = msg; p.sayT = 1.1; }
+
+const WAND_SFX = { wand: 'shoot', scatter: 'scatter', bubble: 'bubble', boomer: 'swish', chain: 'zap', comet: 'comet' };
+function playerShoot(p, ax, ay) {
+  const base = Math.atan2(ay, ax), dmg = dmgOf(p), w = p.wand;
+  if (w === 'scatter') {
+    const n = p.shots + WANDS.scatter.fan;
+    for (let i = 0; i < n; i++) fireShot(p, base + (i / (n - 1) - 0.5) * 0.62 + rnd(-0.04, 0.04), dmg, rnd(0.85, 1.1));
+  } else {
+    const n = p.shots, spread = w === 'bubble' ? 0.14 : 0.2, jit = w === 'bubble' ? rnd(-0.09, 0.09) : 0;
+    for (let i = 0; i < n; i++) fireShot(p, base + jit + (i - (n - 1) / 2) * spread, dmg);
+  }
+  if (p.backshot) fireShot(p, base + Math.PI, dmg);
+  part(p.x + Math.cos(base) * 7, p.y - 9 + Math.sin(base) * 5, 0, 0, 0.12, null, { spr: 'sparkle', drag: 1 });
+  p.cool = p.fireDelay * (p.buff.haste > 0 ? 0.6 : 1);
+  Audio_.sfx(WAND_SFX[w]);
+}
+
+function hurtPlayer(p, n) {
+  if (!alive(p) || G.state === 'over' || G.state === 'win') return;
+  if (p.buff.guard > 0) { part(p.x + rnd(-6, 6), p.y - rnd(4, 14), 0, -20, 0.3, null, { spr: 'sparkle', drag: 1 }); return; }
+  if (p.inv > 0) return;
+  if (p.shieldUp) {
+    p.shieldUp = false; p.inv = 0.8;
+    burst(p.x, p.y - 8, 14, ['C', 'c', 'w'], 90, 0.5);
+    Audio_.sfx('shield');
+    return;
+  }
+  p.hp -= n; p.inv = 1.1; p.hurtT = 0.35;
+  youFx(p, p.hp <= 0 ? 'death' : 'hurt');
+  G.hitstop = Math.max(G.hitstop, G.players.length > 1 ? 0.03 : 0.07);
+  burst(p.x, p.y - 8, 10, ['R', 'r', 'w'], 80, 0.5);
+  Audio_.sfx('hurt');
+  if (p.hp > 0) return;
+  p.hp = 0;
+  if (G.players.length > 1) {
+    // co-op: the hero goes down and waits for help; the run ends when everyone is down
+    p.down = true; p.revive = 0; p.dashT = 0;
+    for (const k in p.buff) p.buff[k] = 0;
+    toast(p.name + ' IS DOWN! HELP THEM UP!');
+    Audio_.sfx('over');
+    if (teamDown()) { G.slowmo = 1; Audio_.stop(); }
+  } else { p.dead = true; p.deadT = 0; G.slowmo = 1; Audio_.stop(); Audio_.sfx('over'); }
+}
+
+function healPlayer(p, n) {
+  p.hp = Math.min(p.maxHp, p.hp + n);
+  youFx(p, 'heart');
+  burst(p.x, p.y - 10, 8, ['R', 'q', 'w'], 50, 0.5, { g: -60 });
+}
+
 const HERO_WALK = [1, 0, 2, 0];
 function drawPlayer(p, ox, oy) {
+  const sk = SKIN[p.skin];
   if (p.dead) {
     if (p.deadT < 0.9) {
       const f = ['d', 's', 'u', 's'][Math.floor(p.deadT * 12) % 4];
-      drawFeet(S('hero_' + f + '0'), ox + p.x, oy + p.y - Math.sin(Math.min(1, p.deadT / 0.9) * Math.PI) * 10, (Math.floor(p.deadT * 12) % 4 === 3 ? 1 : 0) + 2 * (Math.floor(p.deadT * 20) % 2));
+      drawFeet(S('hero_' + f + '0' + sk), ox + p.x, oy + p.y - Math.sin(Math.min(1, p.deadT / 0.9) * Math.PI) * 10, (Math.floor(p.deadT * 12) % 4 === 3 ? 1 : 0) + 2 * (Math.floor(p.deadT * 20) % 2));
     }
     return;
   }
-  if (G.warp) { drawWarp(p, ox, oy); return; }
-  if (p.hurtT <= 0 && p.inv > 0 && p.dashT <= 0 && Math.floor(p.inv * 16) % 2 === 0) return;
+  if (p.down) {
+    shadow(ox + p.x, oy + p.y, 12);
+    drawFeet(S('hero_d0h' + sk), ox + p.x, oy + p.y + 1 + (Math.floor(G.time * 3) % 2), Math.floor(G.time * 6) % 5 ? 0 : 2);
+    const w = 16, k = Math.min(1, p.revive / REVIVE_T), x = Math.round(ox + p.x - w / 2), y = Math.round(oy + p.y - 27);
+    if (k > 0) { rect(x - 1, y - 1, w + 2, 4, '0'); rect(x, y, Math.round(w * k), 2, 'Y'); }
+    else if (Math.floor(G.time * 2) % 2) text('HELP!', ox + p.x, oy + p.y - 33, TAG_COL[p.skin], 2, 1);
+    return;
+  }
+  if (G.warp && p === G.player) { drawWarp(p, ox, oy); return; }
+  if (p.hurtT <= 0 && p.inv > 0 && p.dashT <= 0 && p.buff.guard <= 0 && Math.floor(p.inv * 16) % 2 === 0) return;
   shadow(ox + p.x, oy + p.y, 12);
   const v = p.face === 's' && p.flip ? 1 : 0;
-  if (p.hurtT > 0) { drawFeet(S(p.face === 'u' ? 'hero_u0' : 'hero_' + p.face + '0h'), ox + p.x, oy + p.y + 1, v + (p.hurtT > 0.27 ? 2 : 0)); return; }
-  const frame = p.moving ? HERO_WALK[Math.floor(p.walkT / 0.11) % 4] : 0;
-  const blink = !p.moving && p.face !== 'u' && (p.idleT || 0) % 3.2 > 3.05;
-  drawFeet(S('hero_' + p.face + frame + (blink ? 'b' : '')), ox + p.x, oy + p.y + 1, v);
-  if (p.shieldUp) {
+  if (p.hurtT > 0) drawFeet(S(p.face === 'u' ? 'hero_u0' + sk : 'hero_' + p.face + '0h' + sk), ox + p.x, oy + p.y + 1, v + (p.hurtT > 0.27 ? 2 : 0));
+  else {
+    const frame = p.moving ? HERO_WALK[Math.floor(p.walkT / 0.11) % 4] : 0;
+    const blink = !p.moving && p.face !== 'u' && (p.idleT || 0) % 3.2 > 3.05;
+    drawFeet(S('hero_' + p.face + frame + (blink ? 'b' : '') + sk), ox + p.x, oy + p.y + 1, v);
+  }
+  if (p.buff.guard > 0 && (p.buff.guard > 1.2 || Math.floor(G.time * 10) % 2)) {
+    const r = ringSprite(12, Math.floor(G.time * 8) % 2 ? 'y' : 'Y');
+    ctx.drawImage(r, Math.round(ox + p.x - 12), Math.round(oy + p.y - 21));
+  } else if (p.shieldUp) {
     const r = ringSprite(11, Math.floor(G.time * 6) % 2 ? 'c' : 'C');
     ctx.drawImage(r, Math.round(ox + p.x - 11), Math.round(oy + p.y - 20));
   }
 }
+// Co-op: every hero's name over their head, in their robe colour.
+const _tags = [];
+function drawTags(ox, oy) {
+  // name tags of heroes standing close together stack instead of overlapping
+  _tags.length = 0;
+  for (const p of G.players) {
+    if (G.players.length < 2 || !alive(p)) continue;
+    const w = textW(p.name) + 4;
+    let y = p.y - 28;
+    for (const t of _tags) if (Math.abs(t.x - p.x) < (t.w + w) / 2 && Math.abs(t.y - y) < 9) y = t.y - 9;
+    _tags.push({ x: p.x, y, w });
+    text(p.name, ox + p.x, oy + y, TAG_COL[p.skin], 2, 1);
+  }
+  for (const p of G.players) if (p.sayT > 0 && !p.dead) text(p.sayMsg, ox + p.x, oy + p.y - 38 - Math.round((1.1 - p.sayT) * 6), 'Y', 2, 1);
+}
 function drawAimReticle(ox, oy) {
   const p = G.player;
-  if (!p.padAim || p.dead) return;
-  const l = Math.hypot(p.ax, p.ay) || 1;
-  drawS(S('cursor'), Math.round(ox + p.x + p.ax / l * 26) - 4, Math.round(oy + p.y - 8 + p.ay / l * 20) - 4);
+  if (!p.in.pad || !alive(p)) return;
+  const l = Math.hypot(p.in.ax, p.in.ay) || 1;
+  drawS(S('cursor'), Math.round(ox + p.x + p.in.ax / l * 26) - 4, Math.round(oy + p.y - 8 + p.in.ay / l * 20) - 4);
 }
 function drawOrbitals(p, ox, oy) {
   const m = S('moon');
@@ -243,6 +365,28 @@ function drawOrbitals(p, ox, oy) {
 }
 
 // ---------- Player shots ----------
+const SHOTS = [];
+const TRAIL = { h: 'H', c: 'C', p: 'q', '': 'Y' }, TRAIL_FW = ['P', 'c', 'Y', 'h'], TRAIL_COMET = ['O', 'y', 'o', 'P'];
+// A bare projectile; kind is the wand that fired it ('wand' for plain stars).
+function newShot(x, y, ang, sp, life, dmg, kind, own) {
+  return {
+    own: own || G.player,
+    x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life, dmg, big: false, r: kind === 'comet' ? 4 : 3,
+    bounce: 0, pierce: 0, homing: 0, fw: 0, mini: false, hitList: null, t: Math.random(),
+    tint: kind === 'chain' ? 'c' : '', trail: kind === 'comet', kind, ret: false,
+  };
+}
+function fireShot(p, ang, dmg, spMul) {
+  const sp = p.shotSpeed * (spMul || 1), k = p.wand;
+  const s = newShot(p.x + Math.cos(ang) * 4, p.y - 8 + Math.sin(ang) * 3, ang, sp, p.range / sp, dmg, k, p);
+  s.big = p.bigShot && k === 'wand'; if (s.big) s.r = 4;
+  s.bounce = k === 'boomer' ? 0 : p.bounce; s.pierce = k === 'boomer' ? 99 : p.pierce;
+  s.homing = p.homing; s.fw = p.fireworks;
+  if (k === 'wand') s.tint = p.homing ? 'h' : p.pierce ? 'c' : p.bounce ? 'p' : '';
+  s.trail = s.trail || !!(p.homing || p.pierce || p.bounce || p.fireworks);
+  SHOTS.push(s);
+}
+
 function updateShots(dt) {
   const room = G.room;
   for (let i = SHOTS.length - 1; i >= 0; i--) {
@@ -265,19 +409,27 @@ function updateShots(dt) {
         s.vx = Math.cos(cur + turn) * sp; s.vy = Math.sin(cur + turn) * sp;
       }
     }
+    if (s.kind === 'boomer' && s.ret) {
+      // on the way back: home in on the hero, over walls, and vanish in their hands
+      const p = s.own, dx = p.x - s.x, dy = p.y - 8 - s.y, d = Math.hypot(dx, dy), sp = p.shotSpeed * 1.2;
+      if (d < 9 || !alive(p)) { SHOTS[i] = SHOTS[SHOTS.length - 1]; SHOTS.pop(); continue; }
+      s.vx += (dx / d * sp - s.vx) * Math.min(1, dt * 7); s.vy += (dy / d * sp - s.vy) * Math.min(1, dt * 7);
+    }
     const px = s.x, py = s.y;
     s.x += s.vx * dt; s.y += s.vy * dt;
-    if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: 1, drag: 1 });
+    if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: s.kind === 'comet' && Math.random() < 0.4 ? 2 : 1, drag: 1 });
     // enemies first, so nothing hugging a wall is immune
     for (const e of G.enemies) {
       if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
       if (s.hitList && s.hitList.includes(e)) continue;
       if (Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y) < e.r + s.r) {
-        hurtEnemy(e, s.dmg, px, py);
+        hurtEnemy(e, s.dmg, px, py, false, s.own);
+        if (s.kind === 'chain') chainFrom(e, s.dmg * 0.6, s.own);
         if (s.fw) {
           for (let k = 0; k < 3 * s.fw; k++) {
-            const a = Math.random() * Math.PI * 2;
-            SHOTS.push({ x: s.x, y: s.y, vx: Math.cos(a) * 140, vy: Math.sin(a) * 140, life: 0.25, dmg: s.dmg * 0.4, big: false, r: 2, bounce: 0, pierce: 0, homing: 0, fw: 0, mini: true, hitList: [e], t: 0 });
+            const m = newShot(s.x, s.y, Math.random() * Math.PI * 2, 140, 0.25, s.dmg * 0.4, 'wand', s.own);
+            m.r = 2; m.mini = true; m.hitList = [e];
+            SHOTS.push(m);
           }
           burst(s.x, s.y, 8, ['y', 'O', 'P', 'w'], 90, 0.35);
         }
@@ -285,10 +437,11 @@ function updateShots(dt) {
       }
     }
     // shots fly at hand height; their ground point is a few px lower
-    if (s.life > 0 && solidPx(room, s.x, s.y + 4, 'shot')) {
+    if (s.life > 0 && !s.ret && solidPx(room, s.x, s.y + 4, 'shot')) {
       const c = Math.floor(s.x / 16), r = Math.floor((s.y + 4 - OY) / 16);
       if (tileAt(room, c, r) === T_BRK) breakTile(room, c, r);
-      if (s.bounce > 0) {
+      if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
+      else if (s.bounce > 0) {
         s.bounce--;
         const bx = solidPx(room, s.x, py + 4, 'shot'), by = solidPx(room, px, s.y + 4, 'shot');
         if (bx || !by) s.vx = -s.vx;
@@ -297,8 +450,11 @@ function updateShots(dt) {
         Audio_.sfx('pop');
       } else s.life = 0;
     }
+    if (s.life <= 0 && s.kind === 'boomer' && !s.ret) { s.ret = true; s.life = 4; s.hitList = null; }
     if (s.life <= 0) {
-      burst(s.x, s.y, s.mini ? 2 : 4, ['Y', 'w', 'y'], 50, 0.25);
+      if (s.kind === 'comet') cometBlast(s);
+      else burst(s.x, s.y, s.mini ? 2 : 4, s.kind === 'bubble' ? ['C', 'c', 'w'] : s.kind === 'chain' ? ['C', 'w', 'c'] : ['Y', 'w', 'y'], 50, 0.25);
+      if (s.kind === 'bubble') Audio_.sfx('pop');
       SHOTS[i] = SHOTS[SHOTS.length - 1]; SHOTS.pop();
     }
   }
@@ -308,9 +464,136 @@ function drawShots(ox, oy) {
   for (const s of SHOTS) {
     const f = Math.floor(s.t * 14) % 2;
     if (s.mini) { rect(ox + s.x - 1, oy + s.y - 1, 2, 2, f ? 'Y' : 'w'); continue; }
-    const sp = S((s.big ? 'shotbig' : 'shot') + s.tint + '_' + f);
-    drawS(sp, ox + s.x - (sp.w >> 1), oy + s.y - (sp.h >> 1));
+    let sp, v = 0;
+    if (s.kind === 'boomer') { const k = Math.floor(s.t * 16) % 4; sp = S(BOOM_FR[k]); v = k === 3 ? 1 : 0; }
+    else if (s.kind === 'scatter' || s.kind === 'bubble' || s.kind === 'comet') sp = S('shot' + s.kind + '_' + (s.kind === 'bubble' ? Math.floor(s.t * 6) % 2 : f));
+    else sp = S((s.big ? 'shotbig' : 'shot') + s.tint + '_' + f);
+    drawS(sp, ox + s.x - (sp.w >> 1), oy + s.y - (sp.h >> 1), v);
   }
+}
+
+const BOOM_FR = ['shotboom_d', 'shotboom_s', 'shotboom_u', 'shotboom_s'];
+
+// Comet Staff: the comet bursts and hurts everything around it.
+function cometBlast(s) {
+  const R = 26;
+  for (const e of G.enemies) {
+    if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
+    if (Math.hypot(e.x - s.x, (e.y - e.h / 2 - s.y) * 1.2) < R + e.r) hurtEnemy(e, s.dmg * 0.7, s.x, s.y, true, s.own);
+  }
+  poof(s.x, s.y);
+  burst(s.x, s.y, 14, ['O', 'y', 'Y', 'o', 'w'], 120, 0.4, { g: 60 });
+  G.shake = Math.max(G.shake, 1.8);
+  Audio_.sfx('blast'); haptic('blast');
+}
+// Lightning Rod: the hit arcs on to up to two more enemies.
+const BOLTS = [];
+function chainFrom(e0, dmg, own) {
+  let from = e0;
+  const done = [e0];
+  for (let j = 0; j < 2; j++) {
+    let best = null, bd = 72;
+    for (const e of G.enemies) {
+      if (e.dead || e.spawnT > 0 || e.ghost || e.passive || done.includes(e)) continue;
+      const d = Math.hypot(e.x - from.x, e.y - from.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) break;
+    const x0 = from.x, y0 = from.y - from.h / 2, x1 = best.x, y1 = best.y - best.h / 2;
+    BOLTS.push({ x0, y0, x1, y1, mx: (x0 + x1) / 2 + rnd(-6, 6), my: (y0 + y1) / 2 + rnd(-6, 6), t: 0.12 });
+    done.push(best);
+    hurtEnemy(best, dmg, x0, y0, true, own);
+    from = best;
+  }
+}
+function pxLine(x0, y0, x1, y1, col) {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) | 0;
+  for (let i = 0; i <= n; i++) rect(x0 + (x1 - x0) * i / (n || 1), y0 + (y1 - y0) * i / (n || 1), 1, 1, col);
+}
+function updateBolts(dt) {
+  for (let i = BOLTS.length - 1; i >= 0; i--) if ((BOLTS[i].t -= dt) <= 0) BOLTS.splice(i, 1);
+}
+function drawBolts(ox, oy) {
+  for (const b of BOLTS) {
+    const c = b.t > 0.06 ? 'w' : 'C';
+    pxLine(ox + b.x0, oy + b.y0, ox + b.mx, oy + b.my, c);
+    pxLine(ox + b.mx, oy + b.my, ox + b.x1, oy + b.y1, c);
+  }
+}
+
+// ---------- Belt: potions and turret kits ----------
+function addBelt(p, kind) {
+  if (p.belt.length >= p.beltMax) return false;
+  p.belt.push(kind);
+  youFx(p, 'belt');
+  Audio_.sfx('bottle');
+  return true;
+}
+const POT_FX = { regen: ['P', 'q', 'w'], haste: ['y', 'Y', 'w'], power: ['R', 'r', 'O'], guard: ['y', 'Y', 'c'], turret: ['3', '4', 'Y'] };
+function useBelt(p, i) {
+  const kind = p.belt[i];
+  if (!kind || !alive(p) || G.warp) { if (!kind) Audio_.sfx('deny'); return; }
+  if (kind === 'turret') { if (!placeTurret(p)) { Audio_.sfx('deny'); return; } Audio_.sfx('turret'); }
+  else {
+    p.buff[kind] = POTIONS[kind].t;
+    if (kind === 'regen') p.regenT = 0.4;
+    Audio_.sfx('potion');
+  }
+  p.belt.splice(i, 1);
+  say(p, POTIONS[kind].name + '!');
+  burst(p.x, p.y - 10, 14, POT_FX[kind], 90, 0.6, { g: -40 });
+  youFx(p, 'potion');
+}
+function updateBuffs(p, dt) {
+  const b = p.buff;
+  for (const k in b) if (b[k] > 0) b[k] = Math.max(0, b[k] - dt);
+  if (b.regen > 0 && (p.regenT -= dt) <= 0) {
+    p.regenT = 1.5;
+    if (p.hp < p.maxHp) { healPlayer(p, 1); Audio_.sfx('heart'); }
+  }
+  if (b.haste > 0 && p.moving && Math.random() < 0.3) part(p.x - p.dx * 6 + rnd(-3, 3), p.y - rnd(2, 10), -p.dx * 30, -p.dy * 30, 0.2, 'Y', { drag: 1 });
+  if (b.power > 0 && Math.random() < 0.12) part(p.x + rnd(-6, 6), p.y - rnd(4, 14), 0, -24, 0.4, pick(['R', 'O']), { drag: 1 });
+}
+
+// ---------- Star turrets ----------
+const TURRET_MAX = 2;
+// The turret goes down beside the hero (the side they face first), never on top of them.
+function placeTurret(p) {
+  const side = p.face === 's' && p.flip ? -1 : 1;
+  let spot = null;
+  for (const [dx, dy] of [[16 * side, 2], [-16 * side, 2], [0, 14], [0, -12]]) {
+    if (!boxSolid(G.room, p.x + dx, p.y + dy, 6, 4, 'enemy')) { spot = [p.x + dx, p.y + dy]; break; }
+  }
+  if (!spot) return false;
+  if (G.turrets.length >= TURRET_MAX) { const o = G.turrets.shift(); poof(o.x, o.y - 10); }
+  G.turrets.push({ x: spot[0], y: spot[1], life: POTIONS.turret.t, cool: 0.5, flash: 0, own: p });
+  poof(spot[0], spot[1] - 8); dust(spot[0], spot[1], 6, 12);
+  return true;
+}
+function updateTurrets(dt) {
+  const T = G.turrets;
+  for (let i = T.length - 1; i >= 0; i--) {
+    const tr = T[i];
+    tr.life -= dt; tr.cool -= dt; tr.flash -= dt;
+    if (tr.life <= 0) { poof(tr.x, tr.y - 10); burst(tr.x, tr.y - 10, 8, ['3', '4', 'Y'], 60, 0.4); T.splice(i, 1); continue; }
+    if (tr.cool > 0) continue;
+    let best = null, bd = 150;
+    for (const e of G.enemies) {
+      if (e.dead || e.spawnT > 0 || e.ghost || e.passive || (e.z || 0) > 12) continue;
+      const d = Math.hypot(e.x - tr.x, e.y - tr.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) continue;
+    const a = Math.atan2(best.y - best.h / 2 - (tr.y - 15), best.x - tr.x);
+    SHOTS.push(newShot(tr.x + Math.cos(a) * 5, tr.y - 15 + Math.sin(a) * 4, a, 230, 0.75, 1 + tr.own.dmg * 0.5, 'wand', tr.own));
+    tr.cool = 0.45; tr.flash = 0.08;
+    Audio_.sfx('tshoot');
+  }
+}
+function drawTurret(tr, ox, oy) {
+  if (tr.life < 3 && Math.floor(tr.life * 8) % 2) return;
+  shadow(ox + tr.x, oy + tr.y, 14);
+  drawFeet(S(tr.flash > 0 ? 'turret_1' : 'turret_0'), ox + tr.x, oy + tr.y + 1, tr.flash > 0.05 ? 2 : 0);
 }
 
 // ---------- Breakables ----------
@@ -322,7 +605,7 @@ function breakTile(room, c, r) {
   poof(x, y - 2);
   burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
-  if (Math.random() < 0.28 + G.player.luck * 0.08) dropLoot(x, y, 0.6);
+  if (Math.random() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6);
 }
 
 // ---------- Pickups ----------
@@ -330,18 +613,68 @@ function spawnPickup(type, x, y) {
   const a = Math.random() * Math.PI * 2;
   G.room.pickups.push({ type, x, y, z: 0, vz: rnd(70, 110), vx: Math.cos(a) * rnd(10, 40), vy: Math.sin(a) * rnd(8, 30), t: Math.random() * 3 });
 }
+function spawnPotion(x, y, kind) {
+  spawnPickup('pot', x, y);
+  const k = G.room.pickups[G.room.pickups.length - 1];
+  k.pot = kind || pick(POTION_IDS);
+}
 // Random drop; bias < 1 makes hearts rarer.
 function dropLoot(x, y, bias) {
-  const p = G.player, r = Math.random();
-  const heartChance = (p.hp < p.maxHp ? 0.22 : 0.08) * (bias || 1);
+  const r = Math.random(), hurt = G.players.some(p => alive(p) && p.hp < p.maxHp);
+  const heartChance = (hurt ? 0.22 : 0.08) * (bias || 1);
   if (r < heartChance) spawnPickup(Math.random() < 0.3 ? 'heart' : 'half', x, y);
-  else if (r < heartChance + 0.07 + p.luck * 0.03) spawnPickup('gem', x, y);
+  else if (r < heartChance + 0.07 + teamLuck() * 0.03) spawnPickup('gem', x, y);
   else spawnPickup('coin', x, y);
 }
 const PICK_VAL = { coin: 1, gem: 5 };
+// Floor the heroes can walk to (a BFS from where they stand, through doorways too).
+const REACH = new Uint8Array(COLS * ROWS), _rq = [];
+function markReach(room) {
+  REACH.fill(0); _rq.length = 0;
+  const open = (i) => room.tiles[i] === T_FLOOR || room.tiles[i] === T_DOOR;
+  for (const p of G.players) {
+    if (!alive(p)) continue;
+    const i = Math.floor((p.y - 1 - OY) / 16) * COLS + Math.floor(p.x / 16);
+    if (i >= 0 && i < REACH.length && !REACH[i]) { REACH[i] = 1; _rq.push(i); }
+  }
+  if (!_rq.length) { const i = 7 * COLS + 12; REACH[i] = 1; _rq.push(i); }
+  for (let h = 0; h < _rq.length; h++) {
+    const i = _rq[h], c = i % COLS, r = (i / COLS) | 0;
+    for (const k in DIRS) {
+      const nc = c + DIRS[k][0], nr = r + DIRS[k][1], ni = nr * COLS + nc;
+      if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS || REACH[ni] || !open(ni)) continue;
+      REACH[ni] = 1; _rq.push(ni);
+    }
+  }
+}
+// A pickup that lands in a rock, in the water or behind rocks hops to the nearest floor
+// a hero can reach, so nothing is ever lost.
+function settlePickup(room, k) {
+  k.ok = true;
+  markReach(room);
+  const c = Math.floor(k.x / 16), r = Math.floor((k.y - 1 - OY) / 16), i = r * COLS + c;
+  if (c >= 1 && c < COLS - 1 && r >= 2 && r < ROWS - 1 && REACH[i] && room.tiles[i] === T_FLOOR && !boxSolid(room, k.x, k.y, 3, 2, 'enemy')) return;
+  let best = -1, bd = 1e9;
+  for (let j = 0; j < REACH.length; j++) {
+    if (!REACH[j] || room.tiles[j] !== T_FLOOR) continue;
+    const x = (j % COLS) * 16 + 8, y = OY + ((j / COLS) | 0) * 16 + 10, d = Math.hypot(x - k.x, y - k.y);
+    if (d < bd) { bd = d; best = j; }
+  }
+  if (best < 0) return;
+  for (let j = 0; j < 3; j++) part(k.x + rnd(-4, 4), k.y - rnd(2, 8), 0, -20, 0.4, null, { spr: 'sparkle', drag: 1 });
+  k.x = (best % COLS) * 16 + 8 + rnd(-3, 3); k.y = OY + ((best / COLS) | 0) * 16 + 10 + rnd(-2, 2);
+  k.z = 10; k.vz = 60; k.vx = k.vy = 0;
+}
+const teamLuck = () => G.players.reduce((m, p) => Math.max(m, p.luck), 0);
+// Coins go into the team purse; a share of every coin is also kept forever (the vault).
+function gainCoins(n) {
+  G.coins = Math.min(999, G.coins + n);
+  G.stats.coins += n;
+  G.hud.coinT = 0.25;
+  keepCoins(n);
+}
 function updatePickups(dt) {
-  const p = G.player, room = G.room;
-  const list = room.pickups;
+  const room = G.room, list = room.pickups;
   for (let i = list.length - 1; i >= 0; i--) {
     const k = list[i];
     k.t += dt;
@@ -351,27 +684,32 @@ function updatePickups(dt) {
       const hx = k.x + k.vx * dt, hy = k.y + k.vy * dt;
       if (!solidPx(room, hx, hy, 'enemy')) { k.x = hx; k.y = hy; } else { k.vx = -k.vx; k.vy = -k.vy; }
       k.vx *= Math.pow(0.1, dt); k.vy *= Math.pow(0.1, dt);
+      if (!k.z && !k.vz) k.ok = false; // just landed: check that it can be reached
     }
-    if (p.dead) continue;
-    const isHeart = k.type === 'heart' || k.type === 'half';
-    const d = Math.hypot(p.x - k.x, p.y - 3 - k.y);
-    if (p.magnet && !isHeart && d < 80 && d > 1) {
-      const pull = (80 - d) * 4 * dt + 40 * dt;
-      k.x += (p.x - k.x) / d * pull; k.y += (p.y - 3 - k.y) / d * pull;
-    }
-    if (d < 9 && k.z < 6) {
-      if (isHeart) {
+    if (!k.ok && !k.z && !k.vz) settlePickup(room, k);
+    const isHeart = k.type === 'heart' || k.type === 'half', waits = isHeart || k.type === 'pot';
+    for (const p of G.players) {
+      if (!alive(p)) continue;
+      const d = Math.hypot(p.x - k.x, p.y - 3 - k.y);
+      if (p.magnet && !waits && d < 80 && d > 1) {
+        const pull = (80 - d) * 4 * dt + 40 * dt;
+        k.x += (p.x - k.x) / d * pull; k.y += (p.y - 3 - k.y) / d * pull;
+      }
+      if (d >= 9 || k.z >= 6) continue;
+      if (k.type === 'pot') {
+        if (!addBelt(p, k.pot)) continue;
+        say(p, POTIONS[k.pot].name);
+      } else if (isHeart) {
         if (p.hp >= p.maxHp) continue;
-        healPlayer(k.type === 'heart' ? 2 : 1);
+        healPlayer(p, k.type === 'heart' ? 2 : 1);
         Audio_.sfx('heart');
       } else {
-        p.coins = Math.min(999, p.coins + PICK_VAL[k.type]);
-        G.hud.coinT = 0.2;
-        G.stats.coins += PICK_VAL[k.type];
+        gainCoins(PICK_VAL[k.type]);
         Audio_.sfx('coin');
         for (let j = 0; j < 4; j++) part(k.x + rnd(-4, 4), k.y - rnd(2, 8), 0, -20, 0.4, null, { spr: 'sparkle', drag: 1 });
       }
       list[i] = list[list.length - 1]; list.pop();
+      break;
     }
   }
 }
@@ -381,58 +719,65 @@ function drawPickup(k, ox, oy) {
   shadow(ox + k.x, oy + k.y, 7);
   let s, v = 0;
   if (k.type === 'coin') { const f = Math.floor(k.t * 8) % 4; s = S(COIN_FR[f]); v = f === 3 ? 1 : 0; }
-  else s = S(k.type === 'gem' ? 'gem' : k.type === 'heart' ? 'heart' : 'heart_half');
+  else s = S(k.type === 'pot' ? 'pot_' + k.pot : k.type === 'gem' ? 'gem' : k.type === 'heart' ? 'heart' : 'heart_half');
   drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - bob + 1, v);
 }
 
 // ---------- Props: pedestals, merchant, portal ----------
 function addPedestal(room, x, y, item, price) { room.props.push({ kind: 'ped', x, y, item, price: price || 0, t: Math.random() * 6 }); }
-function nearestProp() {
-  const p = G.player;
+function nearestProp(p) {
   let best = null, bd = 18;
+  if (!alive(p)) return null;
   for (const o of G.room.props) {
     if (o.kind !== 'ped' && o.kind !== 'portal') continue;
+    if (o.group && o.took && o.took.includes(p.pid)) continue;
     const d = Math.hypot(o.x - p.x, o.y - p.y);
     if (d < bd) { bd = d; best = o; }
   }
   return best;
 }
-function priceOf(o) { return Math.max(1, Math.round(o.price * (1 - 0.15 * Math.min(3, G.player.luck)))); }
+function priceOf(o) { return Math.max(1, Math.round(o.price * (1 - 0.15 * Math.min(3, teamLuck())))); }
 
-function interact(o) {
-  const p = G.player, room = G.room;
-  if (o.kind === 'portal') { startWarp(o); return; }
+function interact(o, p) {
+  const room = G.room;
+  if (o.kind === 'portal') { if (G.players.length > 1) nextFloor(); else startWarp(o); return; }
+  const pot = POTIONS[o.item];
+  const frog = room.props.find(q => q.kind === 'frog');
+  if (pot && p.belt.length >= p.beltMax) { Audio_.sfx('deny'); if (frog) frog.say = { msg: 'YOUR BELT IS FULL!', until: frog.t + 1.3 }; else say(p, 'BELT FULL'); return; }
+  if (o.item === 'hp' && p.hp >= p.maxHp) { Audio_.sfx('deny'); return; }
   if (o.price) {
     const cost = priceOf(o);
-    const frog = room.props.find(q => q.kind === 'frog');
-    if (p.coins < cost) { Audio_.sfx('deny'); G.shake = Math.max(G.shake, 1); if (frog) frog.say = { msg: 'NOT ENOUGH COINS!', until: frog.t + 1.3 }; return; }
+    if (G.coins < cost) { Audio_.sfx('deny'); G.shake = Math.max(G.shake, 1); if (frog) frog.say = { msg: 'NOT ENOUGH COINS!', until: frog.t + 1.3 }; else say(p, 'NOT ENOUGH COINS'); return; }
     if (frog) frog.say = { msg: 'THANKS! RIBBIT!', until: frog.t + 1.6, happy: true };
-    if (o.item === 'hp' && p.hp >= p.maxHp) { Audio_.sfx('deny'); return; }
-    p.coins -= cost;
+    G.coins -= cost;
   }
-  if (o.item === 'hp') { healPlayer(4); Audio_.sfx('heart'); }
-  else giveItem(o.item);
+  if (o.item === 'hp') { healPlayer(p, 4); Audio_.sfx('heart'); }
+  else if (pot) addBelt(p, o.item);
+  else giveItem(o.item, p);
   room.props.splice(room.props.indexOf(o), 1);
   if (o.group) {
-    for (let i = room.props.length - 1; i >= 0; i--) {
-      const q = room.props[i];
-      if (q.group === o.group) { poof(q.x, q.y - 14); room.props.splice(i, 1); }
+    // co-op: every hero picks one item from a group; the rest vanish once all have chosen
+    const took = (o.took || []).concat(p.pid);
+    const rest = room.props.filter(q => q.group === o.group);
+    for (const q of rest) q.took = took;
+    if (G.players.every(q => took.includes(q.pid)) || !rest.length) {
+      for (const q of rest) { poof(q.x, q.y - 14); room.props.splice(room.props.indexOf(q), 1); }
     }
   }
+  G.propsN++;
 }
-function giveItem(id) {
-  const p = G.player;
+function giveItem(id, p) {
   ITEMS[id].apply(p);
   p.items.push(id);
   G.stats.items++;
-  if (!Save.found.includes(id)) { Save.found.push(id); Save.write(); }
-  G.banner = { title: ITEMS[id].name, sub: ITEMS[id].desc, t: 2.6, icon: id };
+  youFx(p, 'got', id);
+  if (G.players.length > 1 && p !== G.player) say(p, ITEMS[id].name);
   Audio_.sfx('item');
   burst(p.x, p.y - 10, 16, ['Y', 'y', 'w', 'P', 'c'], 110, 0.7);
 }
 // Random items the player can still get.
 function itemPool(n) {
-  const owned = new Set(G.player.items);
+  const owned = new Set([].concat(...G.players.map(p => p.items)));
   const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)));
   const out = [];
   while (out.length < n && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -444,13 +789,14 @@ function drawProp(o, ox, oy) {
     shadow(ox + o.x, oy + o.y, 16);
     drawS(S('pedestal'), ox + o.x - 8, oy + o.y - 12);
     const bob = Math.round(Math.sin(o.t * 3) * 1.5);
-    const s = o.item === 'hp' ? S('heart') : S('icon_' + o.item);
+    const s = S(o.item === 'hp' ? 'heart' : POTIONS[o.item] ? 'pot_' + o.item : 'icon_' + o.item);
+    if (o.took && o.took.includes(G.player.pid)) { drawS(s, ox + o.x - (s.w >> 1), oy + o.y - 14 - s.h, 4); return; }
     drawS(s, ox + o.x - (s.w >> 1), oy + o.y - 14 - s.h + bob);
     if (Math.floor(o.t * 3) % 4 === 0) drawS(S('sparkle_0'), ox + o.x + 6, oy + o.y - 28 + bob);
     if (o.price) {
       const cost = priceOf(o);
       drawS(S('coin_0'), ox + o.x - 9, oy + o.y + 3);
-      text(String(cost), ox + o.x + 1, oy + o.y + 4, G.player.coins >= cost ? 'Y' : 'R', 2);
+      text(String(cost), ox + o.x + 1, oy + o.y + 4, G.coins >= cost ? 'Y' : 'R', 2);
     }
   } else if (o.kind === 'frog') {
     shadow(ox + o.x, oy + o.y, 16);
@@ -458,7 +804,7 @@ function drawProp(o, ox, oy) {
     const hop = say && say.happy ? Math.round(Math.abs(Math.sin(o.t * 9)) * 4) : 0;
     drawFeet(S(Math.floor(o.t * 2) % 2 ? 'frog_1' : 'frog_0'), ox + o.x, oy + o.y - hop, G.player.x < o.x ? 1 : 0);
     if (say || Math.hypot(G.player.x - o.x, G.player.y - o.y) < 90) {
-      const msg = say ? say.msg : G.player.coins >= 15 ? 'RIBBIT! TAKE A LOOK!' : G.player.coins >= 4 ? 'RIBBIT! NEED A HEART?' : 'RIBBIT! GO FIND SOME COINS!';
+      const msg = say ? say.msg : G.coins >= 15 ? 'RIBBIT! TAKE A LOOK!' : G.coins >= 4 ? 'RIBBIT! NEED A HEART?' : 'RIBBIT! GO FIND SOME COINS!';
       const w = textW(msg) + 10, bx = Math.round(ox + o.x - w / 2), by = Math.round(oy + o.y - 34);
       rect(bx + 1, by, w - 2, 15, '0'); rect(bx, by + 1, w, 13, '0');
       rect(bx + 1, by + 1, w - 2, 13, 'w');
@@ -481,10 +827,11 @@ function drawProp(o, ox, oy) {
 
 function openChest(o) {
   o.open = true; o.t = 0;
-  const luck = G.player.luck;
+  const luck = teamLuck();
   for (let i = 0, n = rndi(3, 5) + luck; i < n; i++) spawnPickup('coin', o.x, o.y - 6);
   if (Math.random() < 0.35 + luck * 0.1) spawnPickup('gem', o.x, o.y - 6);
   if (Math.random() < 0.3) spawnPickup(Math.random() < 0.4 ? 'heart' : 'half', o.x, o.y - 6);
+  if (Math.random() < 0.35 + luck * 0.05) spawnPotion(o.x, o.y - 6);
   burst(o.x, o.y - 8, 14, ['Y', 'y', 'w'], 90, 0.5, { g: 120 });
   Audio_.sfx('chest');
 }
@@ -499,7 +846,8 @@ function updateHazards(dt) {
       h.tick = 0.25;
       for (const e of G.enemies) {
         if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 8) continue;
-        if (Math.hypot(e.x - h.x, e.y - h.y) < e.r + 6) hurtEnemy(e, G.player.dmg * 0.5, h.x, h.y, true);
+        const own = G.players[h.own] || G.player;
+        if (Math.hypot(e.x - h.x, e.y - h.y) < e.r + 6) hurtEnemy(e, own.dmg * 0.5, h.x, h.y, true, own);
       }
     }
     if (h.life <= 0) { hz[i] = hz[hz.length - 1]; hz.pop(); }
@@ -514,19 +862,19 @@ function drawHazards(ox, oy) {
 
 // ---------- Combo: quick successive kills pay out coins ----------
 const COMBO_T = 2.4;
-function onKill(e) {
+function onKill(e, own) {
   const c = G.combo;
   c.n++; c.t = COMBO_T;
-  addCharge(e.elite ? 0.22 : 0.1);
+  addCharge(own, e.elite ? 0.22 : 0.1);
 }
 function updateCombo(dt) {
   const c = G.combo;
   if (c.t > 0 && (c.t -= dt) <= 0) {
-    const n = c.n, p = G.player;
+    const n = c.n;
     if (n >= 3) {
       const bonus = Math.floor(n / 3) + (n >= 8 ? 2 : 0) + (n >= 15 ? 3 : 0);
-      p.coins = Math.min(999, p.coins + bonus); G.stats.coins += bonus; G.hud.coinT = 0.3;
-      if (n >= 6) earnStars(1);
+      gainCoins(bonus);
+      if (n >= 6) earnVault(2);
       G.comboPop = { n, bonus, t: 1.6 };
       Audio_.sfx('coin');
     }
@@ -536,15 +884,13 @@ function updateCombo(dt) {
 }
 
 // ---------- Starfall: special attack charged by fighting ----------
-function addCharge(v) {
-  const p = G.player;
-  if (p.charge >= 1) return;
+function addCharge(p, v) {
+  if (!p || p.charge >= 1 || !alive(p)) return;
   p.charge = Math.min(1, p.charge + v * p.chargeMul);
-  if (p.charge >= 1) { Audio_.sfx('ready'); G.hud.readyT = 1; }
+  if (p.charge >= 1) { if (p === G.player) Audio_.sfx('ready'); youFx(p, 'ready'); }
 }
-function useStarfall() {
-  const p = G.player;
-  if (p.charge < 1 || G.fall) { if (p.charge < 1) Audio_.sfx('deny'); return; }
+function useStarfall(p) {
+  if (p.charge < 1 || G.fall) { if (p.charge < 1 && p === G.player) Audio_.sfx('deny'); return; }
   p.charge = 0; p.inv = Math.max(p.inv, 1.1);
   for (const b of EBULLETS) if (b.life > 0) { b.life = 0; part(b.x, b.y, 0, 0, 0.25, null, { spr: 'sparkle', drag: 1 }); }
   const targets = G.enemies.filter(e => !e.dead && e.spawnT <= 0);
@@ -553,8 +899,8 @@ function useStarfall() {
     const e = targets.length && i < targets.length * 2 ? targets[i % targets.length] : null;
     drops.push({ x: e ? e.x + rnd(-6, 6) : rnd(40, VW - 40), y: e ? e.y + rnd(-4, 4) : rnd(60, 190), t: -i * 0.055, hit: false });
   }
-  G.fall = { t: 0, drops };
-  buzz(120);
+  G.fall = { t: 0, drops, own: p };
+  youFx(p, 'starfall');
   G.flashT = 0.08; G.shake = Math.max(G.shake, 3);
   Audio_.sfx('ult');
 }
@@ -571,7 +917,7 @@ function updateStarfall(dt) {
     d.hit = true;
     for (const e of G.enemies) {
       if (e.dead || e.spawnT > 0) continue;
-      if (Math.hypot(e.x - d.x, (e.y - d.y) * 1.3) < 20 + e.r) hurtEnemy(e, 5 + G.player.dmg * 2, d.x, d.y, true);
+      if (Math.hypot(e.x - d.x, (e.y - d.y) * 1.3) < 20 + e.r) hurtEnemy(e, 5 + f.own.dmg * 2, d.x, d.y, true, f.own);
     }
     poof(d.x, d.y - 4); dust(d.x, d.y, 6, 12);
     burst(d.x, d.y - 4, 10, ['Y', 'w', 'y', 'c'], 110, 0.45);
@@ -579,6 +925,7 @@ function updateStarfall(dt) {
     Audio_.sfx('boom');
   }
   if (!live && f.drops.every(d => d.hit)) G.fall = null;
+  if (G.fall) G.fall.own = f.own;
 }
 function drawStarfall(ox, oy) {
   const f = G.fall;

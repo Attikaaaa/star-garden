@@ -280,12 +280,47 @@ const BOSS_LAYOUT = [
   '......................',
 ];
 
-// Garden: permanent upgrades bought with stars earned across runs. cost per level.
+// Garden: permanent upgrades bought with vault coins. cost per level.
 const UPGRADES = [
-  { id: 'hp', name: 'HEART SEED', desc: '+1 HEART WHEN A RUN STARTS', icon: 'icon_heart', cost: [12, 30, 60] },
-  { id: 'dmg', name: 'SPELL POWER', desc: '+15% DAMAGE', icon: 'icon_big', cost: [15, 35, 70] },
-  { id: 'speed', name: 'SWIFT FEET', desc: '+6% SPEED', icon: 'icon_speed', cost: [10, 25, 50] },
-  { id: 'coins', name: 'TREASURE POUCH', desc: '+6 COINS WHEN A RUN STARTS', icon: 'icon_bag', cost: [8, 20, 40] },
-  { id: 'luck', name: 'LUCKY STAR', desc: 'MORE LOOT, CHEAPER SHOP', icon: 'icon_clover', cost: [15, 35, 70] },
-  { id: 'charge', name: 'STAR HEART', desc: 'STARFALL CHARGES FASTER', icon: 'icon_stardust', cost: [12, 30, 60] },
+  { id: 'hp', name: 'HEART SEED', desc: '+1 HEART WHEN A RUN STARTS', icon: 'icon_heart', cost: [24, 60, 120] },
+  { id: 'dmg', name: 'SPELL POWER', desc: '+12% DAMAGE', icon: 'icon_big', cost: [30, 70, 140] },
+  { id: 'rate', name: 'QUICK HANDS', desc: 'SHOOT 10% FASTER', icon: 'icon_rapid', cost: [30, 70, 140] },
+  { id: 'multi', name: 'EXTRA STAR', desc: 'ONE MORE PROJECTILE PER SHOT', icon: 'icon_triple', cost: [150, 350] },
+  { id: 'speed', name: 'SWIFT FEET', desc: '+6% SPEED', icon: 'icon_speed', cost: [20, 50, 100] },
+  { id: 'bank', name: 'PIGGY BANK', desc: 'KEEP MORE OF YOUR COINS FOREVER', icon: 'icon_bag', cost: [30, 80, 160] },
+  { id: 'luck', name: 'LUCKY STAR', desc: 'MORE LOOT, CHEAPER SHOP', icon: 'icon_clover', cost: [30, 70, 140] },
+  { id: 'charge', name: 'STAR HEART', desc: 'STARFALL CHARGES FASTER', icon: 'icon_stardust', cost: [24, 60, 120] },
+  { id: 'belt', name: 'POTION BELT', desc: '+1 BELT SLOT, START WITH A POTION', icon: 'pot_regen', cost: [30, 70, 140] },
 ];
+
+// Wands: unlocked forever with vault coins, one is chosen before each run.
+// Stats multiply the hero's base values; kind picks the projectile behaviour.
+const WANDS = {
+  wand: { name: 'STAR WAND', desc: 'TRUSTY AND BALANCED', cost: 0, dmg: 1, rate: 1, speed: 1, range: 1 },
+  scatter: { name: 'SPARK SCATTER', desc: 'A SPRAY OF SPARKS UP CLOSE', cost: 50, dmg: 0.55, rate: 1.5, speed: 1.1, range: 0.62, fan: 3 },
+  bubble: { name: 'BUBBLE BLASTER', desc: 'A STREAM OF SPEEDY BUBBLES', cost: 70, dmg: 0.42, rate: 0.42, speed: 0.85, range: 0.85 },
+  boomer: { name: 'MOON BOOMERANG', desc: 'PIERCES ALL AND COMES BACK', cost: 90, dmg: 1.1, rate: 1.85, speed: 1, range: 0.8 },
+  chain: { name: 'LIGHTNING ROD', desc: 'SHOTS ARC TO NEARBY ENEMIES', cost: 110, dmg: 0.85, rate: 1.1, speed: 1.25, range: 1 },
+  comet: { name: 'COMET STAFF', desc: 'SLOW COMETS THAT EXPLODE', cost: 130, dmg: 1.5, rate: 2.2, speed: 0.72, range: 1.05 },
+};
+
+// Belt items: potions and the turret kit. t: effect length in seconds.
+const POTIONS = {
+  regen: { name: 'REGENERATION', desc: 'HEALS THREE HEARTS OVER TIME', t: 9, price: 7 },
+  haste: { name: 'HASTE', desc: 'SHOOT AND RUN FASTER', t: 9, price: 6 },
+  power: { name: 'POWER', desc: 'YOUR SPELLS HIT MUCH HARDER', t: 9, price: 6 },
+  guard: { name: 'GUARD', desc: 'NOTHING CAN HURT YOU', t: 5, price: 7 },
+  turret: { name: 'STAR TURRET', desc: 'A TOWER THAT SHOOTS FOR YOU', t: 20, price: 8 },
+};
+const POTION_IDS = Object.keys(POTIONS);
+
+// Difficulty, chosen before a run (the host chooses in co-op). vault: reward multiplier.
+const DIFFS = [
+  { name: 'EASY', desc: 'A GENTLE STROLL', hp: 0.7, count: -1, elite: -0.04, pace: 0.88, bullet: 0.9, vault: 0.75 },
+  { name: 'NORMAL', desc: 'THE WAY IT IS MEANT TO BE', hp: 1, count: 0, elite: 0, pace: 1, bullet: 1, vault: 1 },
+  { name: 'HARD', desc: 'TOUGHER, FASTER, MORE OF THEM', hp: 1.35, count: 1, elite: 0.08, pace: 1.12, bullet: 1.12, vault: 1.3 },
+  { name: 'STARBREAKER', desc: 'ONLY FOR TRUE STAR WIZARDS', hp: 1.75, count: 2, elite: 0.16, pace: 1.22, bullet: 1.22, vault: 1.6 },
+];
+// Co-op makes every fight bigger: more health, a few more foes, more elites.
+const DIFF = () => DIFFS[G.diff];
+const crewHp = (boss) => 1 + (boss ? 0.65 : 0.5) * (G.players.length - 1);
