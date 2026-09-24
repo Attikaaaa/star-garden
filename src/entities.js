@@ -317,7 +317,6 @@ function drawPlayer(p, ox, oy) {
     drawFeet(S('hero_d0h' + sk), ox + p.x, oy + p.y + 1 + (Math.floor(G.time * 3) % 2), Math.floor(G.time * 6) % 5 ? 0 : 2);
     const w = 16, k = Math.min(1, p.revive / REVIVE_T), x = Math.round(ox + p.x - w / 2), y = Math.round(oy + p.y - 27);
     if (k > 0) { rect(x - 1, y - 1, w + 2, 4, '0'); rect(x, y, Math.round(w * k), 2, 'Y'); }
-    else if (Math.floor(G.time * 2) % 2) text('HELP!', ox + p.x, oy + p.y - 33, TAG_COL[p.skin], 2, 1);
     return;
   }
   if (G.warp && p === G.player) { drawWarp(p, ox, oy); return; }
@@ -339,19 +338,33 @@ function drawPlayer(p, ox, oy) {
   }
 }
 // Co-op: every hero's name over their head, in their robe colour.
+// Words over the heroes' heads: co-op names (or HELP! when down) and short potion / item
+// words. Labels of heroes standing close together stack instead of overlapping.
 const _tags = [];
 function drawTags(ox, oy) {
-  // name tags of heroes standing close together stack instead of overlapping
+  if (G.state !== 'play') return;
   _tags.length = 0;
-  for (const p of G.players) {
-    if (G.players.length < 2 || !alive(p)) continue;
-    const w = textW(p.name) + 4;
-    let y = p.y - 28;
-    for (const t of _tags) if (Math.abs(t.x - p.x) < (t.w + w) / 2 && Math.abs(t.y - y) < 9) y = t.y - 9;
-    _tags.push({ x: p.x, y, w });
-    text(p.name, ox + p.x, oy + y, TAG_COL[p.skin], 2, 1);
+  const put = (str, x, y, col) => {
+    const w = textW(str) + 4;
+    for (let k = 0; k < 8; k++) {
+      const hit = _tags.find(t => Math.abs(t.x - x) < (t.w + w) / 2 && Math.abs(t.y - y) < 10);
+      if (!hit) break;
+      y = hit.y - 10;
+    }
+    _tags.push({ x, y, w });
+    text(str, ox + x, oy + y, col, 2, 1);
+  };
+  const order = G.players.slice().sort((a, b) => b.y - a.y);
+  for (const p of order) {
+    if (p.dead) continue;
+    const top = p.y - (p.down ? 33 : 28);
+    if (G.players.length > 1) {
+      if (!p.down) put(p.name, p.x, top, TAG_COL[p.skin]);
+      else if (p.revive <= 0 && Math.floor(G.time * 2) % 2) put('HELP!', p.x, top, TAG_COL[p.skin]);
+      else _tags.push({ x: p.x, y: top, w: textW('HELP!') + 4 });
+    }
+    if (p.sayT > 0) put(p.sayMsg, p.x, top - (G.players.length > 1 ? 10 : 0) - Math.round((1.1 - p.sayT) * 6), 'Y');
   }
-  for (const p of G.players) if (p.sayT > 0 && !p.dead) text(p.sayMsg, ox + p.x, oy + p.y - 38 - Math.round((1.1 - p.sayT) * 6), 'Y', 2, 1);
 }
 function drawAimReticle(ox, oy) {
   const p = G.player;

@@ -122,12 +122,13 @@ function drawWave() {
   if (A.phase === 'fight') {
     const left = A.left + G.enemies.filter(e => !e.dead && !e.passive).length;
     text(left + ' LEFT', r, t + 12, 'c', 2, 2);
-  } else if (A.phase === 'break' && G.state === 'play' && !G.floorBanner) {
-    const n = Math.ceil(A.t), y = G.banner ? 64 : 30;
-    text(A.wave ? 'NEXT WAVE IN' : 'GET READY', VW / 2, y, 'w', 2, 1);
-    text(String(n), VW / 2, y + 11, n <= 3 && Math.floor(A.t * 4) % 2 ? 'w' : 'Y', 2, 1);
+  } else if (A.phase === 'break') {
+    // the countdown sits under the wave number; the last three seconds also count big
+    const n = Math.ceil(A.t);
+    text('NEXT IN ' + n, r, t + 12, 'c', 2, 2);
+    if (n <= 3 && G.state === 'play' && !G.floorBanner && !G.banner) text(String(n), VW / 2, 46, Math.floor(A.t * 4) % 2 ? 'w' : 'Y', 2, 1);
   }
-  return t + (A.phase === 'fight' ? 23 : 12);
+  return t + (A.phase === 'fight' || A.phase === 'break' ? 23 : 12);
 }
 function drawKills(y) {
   const r = SCR.w - SCR.ox - 5, n = String(G.stats.kills);
@@ -204,7 +205,8 @@ function drawPropTip(o) {
   }
   if (Input.lastAim === 'touch') act = 'TAP HERE TO ' + act;
   const w = Math.max(textW(title), textW(sub), textW(act) + 14) + 16, h = 40;
-  const x = Math.round((VW - w) / 2), y = 150;
+  // under the hero, or above when they stand low in the room: never on top of them
+  const py = G.player.y, x = Math.round((VW - w) / 2), y = py < 144 ? 150 : py + 6 + h <= 204 ? py + 6 : py - 66;
   G.tipRect = [x, y, w, h];
   panel(x, y, w, h);
   text(title, VW / 2, y + 5, 'Y', 1, 1);
@@ -452,45 +454,54 @@ function pauseItems() {
 }
 function drawPause() {
   dim(0.6);
-  text(NET.role ? 'MENU (THE GAME GOES ON)' : 'PAUSED', VW / 2, 30, 'Y', 2, 1);
+  const host = NET.role === 'host';
+  panel(VW / 2 - 124, 20, 248, host ? 184 : 174);
+  text(NET.role ? 'MENU (THE GAME GOES ON)' : 'PAUSED', VW / 2, 27, 'Y', 2, 1);
   const p = G.player, items = p.items;
   let tip = null;
   if (items.length) {
-    const per = 12, rows = Math.ceil(items.length / per);
-    const w = Math.min(items.length, per) * 18 + 8, x0 = Math.round((VW - w) / 2);
-    panel(x0, 44, w, rows * 18 + 8);
-    items.forEach((id, i) => {
-      const x = x0 + 5 + (i % per) * 18, y = 48 + Math.floor(i / per) * 18;
+    const per = 12, w = Math.min(items.length, per) * 18 - 2, x0 = Math.round((VW - w) / 2);
+    items.slice(0, 24).forEach((id, i) => {
+      const x = x0 + (i % per) * 18, y = 41 + Math.floor(i / per) * 18;
+      rect(x - 1, y - 1, 18, 18, '2');
       drawS(S('icon_' + id), x, y);
       if (mouseOn() && Input.mx >= x && Input.mx < x + 16 && Input.my >= y && Input.my < y + 16) tip = id;
     });
-  } else text('NO MAGIC ITEMS YET', VW / 2, 52, 'l', 2, 1);
-  const sy = items.length > 12 ? 92 : 74;
+  } else text('NO MAGIC ITEMS YET', VW / 2, 52, 'l', 1, 1);
+  const sy = !items.length ? 76 : items.length > 12 ? 82 : 64;
   if (tip) {
-    text(ITEMS[tip].name, VW / 2, sy, 'Y', 2, 1);
-    text(ITEMS[tip].desc, VW / 2, sy + 11, 'w', 2, 1);
+    text(ITEMS[tip].name, VW / 2, sy, 'Y', 1, 1);
+    text(ITEMS[tip].desc, VW / 2, sy + 11, 'w', 1, 1);
   } else {
     const shots = p.shots + (p.backshot ? 1 : 0) + (p.wand === 'scatter' ? WANDS.scatter.fan : 0);
     const cols = [['DAMAGE', p.dmg.toFixed(1)], ['SHOTS/SEC', (1 / p.fireDelay).toFixed(1) + (shots > 1 ? ' X' + shots : '')],
       ['RANGE', String(Math.round(p.range))], ['SPEED', String(Math.round(p.speed))]];
     cols.forEach(([k, v], i) => {
-      const x = i % 2 ? VW / 2 + 12 : VW / 2 - 108, y = sy + Math.floor(i / 2) * 11;
-      text(k, x, y, 'l', 2); text(v, x + 96, y, 'Y', 2, 2);
+      const x = i % 2 ? VW / 2 + 8 : VW / 2 - 108, y = sy + Math.floor(i / 2) * 11;
+      text(k, x, y, 'l', 1); text(v, x + 100, y, 'Y', 1, 2);
     });
   }
   drawMenu(pauseItems(), 118);
+  rect(VW / 2 - 110, 162, 220, 1, '2');
   const where = G.mode === 'arena' ? 'WAVE ' + Math.max(1, G.arena.wave) : 'LAND ' + (G.floor.depth + 1);
-  text(where + '   ' + DIFFS[G.diff].name + '   ' + fmtTime(G.stats.time), VW / 2, 190, 'c', 2, 1);
-  if (NET.role === 'host') text('CODE: ' + NET.code, VW / 2, 202, 'l', 2, 1);
+  text(where + '   ' + DIFFS[G.diff].name + '   ' + fmtTime(G.stats.time), VW / 2, 170, 'c', 1, 1);
+  if (host) text('CODE: ' + NET.code, VW / 2, 182, 'l', 1, 1);
 }
 function fmtTime(s) { s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function drawStats(y) {
-  const s = G.stats, arena = G.mode === 'arena';
+  const s = G.stats, arena = G.mode === 'arena', team = G.players.length > 1;
   const rows = [arena ? ['WAVE', String(Math.max(1, G.arena.wave))] : ['LAND', String(G.floor.depth + 1)], ['DEFEATED', String(s.kills)], ['COINS', String(s.coins)]];
-  if (G.players.length > 1) rows.push(['DEFEATED BY', G.players.map(p => p.name.slice(0, 5) + ' ' + p.kills).join(' ')]);
-  else rows.push(['MAGIC ITEMS', String(s.items)]);
+  if (!team) rows.push(['MAGIC ITEMS', String(s.items)]);
   rows.push(['TIME', fmtTime(s.time)], ['VAULT', '+' + G.run.vault]);
-  rows.forEach(([k, v], i) => { text(k, VW / 2 - 76, y + i * 11, 'l', 1); text(v, VW / 2 + 76, y + i * 11, i === 5 ? 'c' : 'Y', 1, 2); });
+  const gap = team ? 10 : 11;
+  rows.forEach(([k, v], i) => { text(k, VW / 2 - 76, y + i * gap, 'l', 1); text(v, VW / 2 + 76, y + i * gap, k === 'VAULT' ? 'c' : 'Y', 1, 2); });
+  if (!team) return;
+  // co-op: every hero's defeated enemies, two per row, in their robe colours
+  G.players.forEach((p, i) => {
+    const x = VW / 2 + (i % 2 ? 4 : -76), yy = y + rows.length * gap + 2 + Math.floor(i / 2) * 10;
+    text(p.name, x, yy, TAG_COL[p.skin], 1);
+    text(String(p.kills), x + 72, yy, 'w', 1, 2);
+  });
 }
 function endItems() {
   if (NET.role === 'client') return ['LEAVE'];
@@ -508,8 +519,8 @@ function endScreen(title, col, sub) {
   else text(sub, VW / 2, y + 25, 'w', 1, 1);
   rect(x + 12, y + 38, w - 24, 1, '2');
   drawStats(y + 44);
-  rect(x + 12, y + 115, w - 24, 1, '2');
-  drawMenu(endItems(), y + 126);
+  rect(x + 12, y + 117, w - 24, 1, '2');
+  drawMenu(endItems(), y + 127);
   if (NET.role === 'client') text('WAITING FOR THE HOST...', VW / 2, y + 156, 'c', 1, 1);
 }
 function drawOver() { endScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }

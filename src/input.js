@@ -79,8 +79,13 @@ function _mousePos(e) {
   Input.mx = (e.clientX - r.left) / r.width * SCR.w - SCR.ox;
   Input.my = (e.clientY - r.top) / r.height * SCR.h - SCR.oy;
 }
-window.addEventListener('mousemove', e => { _mousePos(e); Input.mouseSeen = true; Input.lastAim = 'mouse'; });
+// After a tap, phones also fire an emulated mouse click: ignore it, or every tap would
+// count twice (and switch the game to mouse controls).
+let _touchT = -1e9;
+const _fakeMouse = () => performance.now() - _touchT < 900;
+window.addEventListener('mousemove', e => { if (_fakeMouse()) return; _mousePos(e); Input.mouseSeen = true; Input.lastAim = 'mouse'; });
 cv.addEventListener('mousedown', e => {
+  if (_fakeMouse()) return;
   _mousePos(e);
   if (G.state === 'settings' && G.tapFull && Input.my >= G.tapFull[0] && Input.my < G.tapFull[1]) toggleFullscreen();
   if (e.button === 0) { Input.mouseDown = true; Input.mouseHit = true; Input.lastAim = 'mouse'; }
@@ -134,7 +139,7 @@ function pollPad() {
 function screenEdges() { return { l: -SCR.ox, t: -SCR.oy, r: SCR.w - SCR.ox, b: SCR.h - SCR.oy }; }
 function touchBtns() {
   const e = screenEdges();
-  return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], belt: [e.r - 72, e.b - 98, 12], pause: [e.l + 15, e.t + 106, 11] };
+  return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], belt: [e.r - 34, e.b - 122, 13], pause: [e.l + 15, e.t + 106, 11] };
 }
 const STICK_R = 18;
 Input.touch = { move: null, aim: null, mx: 0, my: 0, ax: 0, ay: 0 };
@@ -145,6 +150,7 @@ function _tpos(e) {
 const _inBtn = (b, x, y) => Math.hypot(x - b[0], y - b[1]) <= b[2] + 4;
 cv.addEventListener('pointerdown', e => {
   if (e.pointerType !== 'touch') return;
+  _touchT = performance.now();
   e.preventDefault();
   Audio_.unlock();
   Input.lastAim = 'touch';
@@ -177,6 +183,7 @@ cv.addEventListener('pointermove', e => {
   }
 });
 function _tend(e) {
+  if (e.pointerType === 'touch') _touchT = performance.now();
   const T = Input.touch;
   if (T.move && T.move.id === e.pointerId) T.move = null;
   if (T.aim && T.aim.id === e.pointerId) T.aim = null;

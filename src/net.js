@@ -27,7 +27,7 @@ const NET = {
 
 // ---------- Signaling through the broker ----------
 function netRandom(n, abc) { let s = ''; for (let i = 0; i < n; i++) s += abc[Math.floor(Math.random() * abc.length)]; return s; }
-function brokerOpen(id, onMsg, onOpen, onFail) {
+function brokerOpen(id, onMsg, onOpen, onFail, onClose) {
   let ws;
   try { ws = new WebSocket(NET_BROKER + '&id=' + id + '&token=' + netRandom(10, 'abcdefghijklmnopqrstuvwxyz0123456789') + '&version=1.5.4'); }
   catch (e) { onFail('NO CONNECTION'); return null; }
@@ -40,7 +40,7 @@ function brokerOpen(id, onMsg, onOpen, onFail) {
     else onMsg(d);
   };
   ws.onerror = () => onFail('NO CONNECTION');
-  ws.onclose = () => { if (NET.ws === ws) NET.ws = null; };
+  ws.onclose = () => { if (NET.ws === ws) { NET.ws = null; if (onClose) onClose(); } };
   clearInterval(NET.beat);
   NET.beat = setInterval(() => { if (ws.readyState === 1) ws.send('{"type":"HEARTBEAT"}'); }, 5000);
   return ws;
@@ -68,28 +68,63 @@ function sendU(L, msg) {
 }
 function closeLink(L) {
   if (!L) return;
+  clearInterval(L.resend);
   try { L.r && L.r.close(); L.u && L.u.close(); L.pc.close(); } catch (e) { /* already closed */ }
 }
 
 // ---------- Hosting ----------
 function netHost() {
   netReset();
-  NET.role = 'host'; NET.me = 0; NET.status = 'CREATING A GAME...';
+  NET.role = 'host'; NET.me = 0; NET.status = 'CREATING A GAME...'; NET.err = '';
   NET.lobby = { mode: 'adv', diff: Save.settings.diff, players: [] };
-  const tryCode = () => {
-    NET.code = netRandom(5, NET_ALPHA);
-    NET.ws = brokerOpen(NET_PREFIX + NET.code, hostSignal, () => { NET.status = ''; netLobbySync(); }, (why) => {
-      if (why === 'taken') { try { NET.ws.close(); } catch (e) { /* */ } tryCode(); return; }
-      if (NET.role === 'host' && G.state === 'lobby' && NET.status) { NET.err = why; }
-    });
-  };
-  tryCode();
+  NET.code = netRandom(5, NET_ALPHA); NET.announced = false;
+  hostConnect();
   setState('lobby');
+}
+// Register the game's code on the broker. The link can drop (a phone switching apps to
+// share the code): then it comes back with the same code, so friends can still join.
+function hostConnect() {
+  clearTimeout(NET.retryT);
+  if (NET.role !== 'host' || NET.ws) return;
+  NET.up = false;
+  const ws = NET.ws = brokerOpen(NET_PREFIX + NET.code, hostSignal, () => {
+    NET.up = true; NET.announced = true; NET.status = ''; NET.err = ''; netLobbySync();
+  }, (why) => {
+    if (NET.ws !== ws) return;
+    if (why === 'taken' && !NET.announced) { NET.ws = null; try { ws.close(); } catch (e) { /* */ } NET.code = netRandom(5, NET_ALPHA); hostConnect(); return; }
+    // the old link is still known to the broker, or the network is down: try again soon
+    NET.ws = null; try { ws.close(); } catch (e) { /* */ }
+    if (!NET.announced) NET.status = 'NO CONNECTION. RETRYING...';
+    NET.retryT = setTimeout(hostConnect, why === 'taken' ? 3000 : 2000);
+  }, () => { NET.up = false; if (NET.role === 'host') NET.retryT = setTimeout(hostConnect, 1000); });
+}
+// Back from the background (after sharing the code in another app): the old broker link
+// may be dead without anyone noticing, so open a fresh one.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { NET.hiddenAt = performance.now(); return; }
+  if (NET.role !== 'host') return;
+  if (!NET.up || performance.now() - (NET.hiddenAt || 0) > 3000) {
+    const ws = NET.ws;
+    NET.ws = null; NET.up = false;
+    if (ws) { try { ws.close(); } catch (e) { /* */ } }
+    hostConnect();
+  }
+});
+// Wait until the browser has found its network addresses, so they travel inside the offer
+// / answer itself (works even if single candidate messages get lost).
+function gathered(pc) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const t = setTimeout(res, 2500);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
+  });
 }
 function hostSignal(d) {
   const P = d.payload || {};
   if (d.type === 'OFFER') {
-    if (NET.peers.some(q => q.cid === P.connectionId)) return;
+    const old = NET.peers.find(q => q.cid === P.connectionId);
+    if (old) { if (old.answer) brokerSend('ANSWER', d.src, old.answer); return; } // the answer got lost: send it again
+    if (NET.peers.length >= 8) return;
     const L = newLink(d.src, P.connectionId);
     L.pid = -1; L.heard = performance.now();
     NET.peers.push(L);
@@ -98,7 +133,8 @@ function hostSignal(d) {
     L.pc.setRemoteDescription(P.sdp)
       .then(() => { L.remote = true; L.pending.forEach(c => L.pc.addIceCandidate(c).catch(() => {})); return L.pc.createAnswer(); })
       .then(a => L.pc.setLocalDescription(a))
-      .then(() => brokerSend('ANSWER', d.src, { sdp: L.pc.localDescription, type: 'data', connectionId: L.cid }))
+      .then(() => gathered(L.pc))
+      .then(() => { L.answer = { sdp: L.pc.localDescription, type: 'data', connectionId: L.cid }; brokerSend('ANSWER', d.src, L.answer); })
       .catch(() => hostDrop(L, 'failed'));
   } else if (d.type === 'CANDIDATE') {
     const L = NET.peers.find(q => q.cid === P.connectionId);
@@ -310,10 +346,13 @@ function netJoin(code) {
   NET.ws = brokerOpen('sg-' + netRandom(12, 'abcdefghijklmnopqrstuvwxyz0123456789'), (d) => {
     const P = d.payload || {};
     const L = NET.host;
-    if (!L || P.connectionId !== L.cid) { if (d.type === 'EXPIRE') fail('NO GAME WITH THIS CODE'); return; }
-    if (d.type === 'ANSWER') L.pc.setRemoteDescription(P.sdp).then(() => { L.remote = true; L.pending.forEach(c => L.pc.addIceCandidate(c).catch(() => {})); }).catch(() => fail('COULD NOT CONNECT'));
-    else if (d.type === 'CANDIDATE') { if (L.remote) L.pc.addIceCandidate(P.candidate).catch(() => {}); else L.pending.push(P.candidate); }
-    else if (d.type === 'EXPIRE') fail('NO GAME WITH THIS CODE');
+    if (!L || P.connectionId !== L.cid) return;
+    if (d.type === 'ANSWER') {
+      if (L.answered) return;
+      L.answered = true; clearInterval(L.resend); NET.status = 'CONNECTING TO ' + code + '...'; NET.answerT = performance.now();
+      L.pc.setRemoteDescription(P.sdp).then(() => { L.remote = true; L.pending.forEach(c => L.pc.addIceCandidate(c).catch(() => {})); }).catch(() => fail('COULD NOT CONNECT'));
+    } else if (d.type === 'CANDIDATE') { if (L.remote) L.pc.addIceCandidate(P.candidate).catch(() => {}); else L.pending.push(P.candidate); }
+    // EXPIRE: the host was not there for a moment; the offer is simply sent again
   }, () => {
     const L = NET.host = newLink(dst, cid);
     const onClose = () => { if (NET.host === L) clientLost('THE HOST LEFT THE GAME'); };
@@ -322,10 +361,15 @@ function netJoin(code) {
     linkChannel(L, L.pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 }), opened, (m) => NET.q.push([L, m]), onClose);
     L.pc.onconnectionstatechange = () => { if (L.pc.connectionState === 'failed') { if (G.state === 'entry') fail('COULD NOT CONNECT'); else clientLost('CONNECTION LOST'); } };
     L.pc.createOffer().then(o => L.pc.setLocalDescription(o))
-      .then(() => brokerSend('OFFER', dst, { sdp: L.pc.localDescription, type: 'data', connectionId: cid, label: cid, reliable: true, serialization: 'json' }))
+      .then(() => gathered(L.pc))
+      .then(() => {
+        const offer = () => brokerSend('OFFER', dst, { sdp: L.pc.localDescription, type: 'data', connectionId: cid, label: cid, reliable: true, serialization: 'json' });
+        offer();
+        L.resend = setInterval(() => { if (!L.answered && NET.host === L) offer(); else clearInterval(L.resend); }, 2500);
+      })
       .catch(() => fail('COULD NOT CONNECT'));
-  }, fail);
-  NET.joinT = performance.now();
+  }, fail, () => { if (NET.role === 'client' && G.state === 'entry' && NET.status) fail('NO CONNECTION TO THE GAME SERVER'); });
+  NET.joinT = performance.now(); NET.answerT = 0;
 }
 function clientLost(why) {
   if (NET.role !== 'client') return;
@@ -337,7 +381,8 @@ function netReset() {
   for (const L of NET.peers) closeLink(L);
   NET.peers = []; closeLink(NET.host); NET.host = null;
   if (NET.ws) { try { NET.ws.close(); } catch (e) { /* */ } NET.ws = null; }
-  clearInterval(NET.beat);
+  clearInterval(NET.beat); clearTimeout(NET.retryT);
+  NET.up = false;
   NET.q = []; NET.fx = []; NET.status = ''; NET.sendT = 0; NET.song = null; NET.playing = false; NET.heard = 0;
 }
 // Leave or end the game (host: everyone goes back to the title).
@@ -360,8 +405,12 @@ setInterval(() => {
 // ---------- Client: applying the host's world ----------
 function netPoll() {
   if (!NET.role) return;
-  if (NET.role === 'client' && G.state === 'entry' && NET.status && performance.now() - NET.joinT > 15000) {
-    NET.err = 'NO GAME WITH THIS CODE'; netReset(); NET.role = null; return;
+  if (NET.role === 'client' && G.state === 'entry' && NET.status) {
+    // no answer at all: nobody hosts this code; an answer but no link: the networks do not meet
+    const now = performance.now();
+    if (!NET.answerT && now - NET.joinT > 6000) NET.status = 'WAITING FOR THE HOST...';
+    if (!NET.answerT && now - NET.joinT > 40000) { NET.err = 'NO GAME WITH THIS CODE'; netReset(); NET.role = null; return; }
+    if (NET.answerT && now - NET.answerT > 20000) { NET.err = 'COULD NOT CONNECT. TRY ANOTHER NETWORK'; netReset(); NET.role = null; return; }
   }
   if (NET.role === 'client' && NET.heard && !NET.status && performance.now() - NET.heard > 12000) { clientLost('CONNECTION LOST'); return; }
   const q = NET.q; NET.q = [];
@@ -606,7 +655,7 @@ function updateCoop() {
 function drawCoop() {
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 120, 46, 240, 116);
+  panel(VW / 2 - 150, 46, 300, 116);
   text('CO-OP', VW / 2, 54, 'Y', 2, 1);
   text('PLAY TOGETHER ONLINE, UP TO FOUR HEROES', VW / 2, 70, 'w', 1, 1);
   text('THE HOST SHARES A CODE, FRIENDS JOIN WITH IT', VW / 2, 81, 'c', 1, 1);
@@ -670,7 +719,8 @@ function drawEntry() {
   const E = G.entry;
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 100, 30, 200, 176);
+  const rows = Math.ceil(E.abc.length / E.cols), bottom = 90 + (rows + 1) * 16;
+  panel(VW / 2 - 100, 30, 200, bottom - 30 + 20);
   text(E.title, VW / 2, 37, 'Y', 2, 1);
   text(E.hint, VW / 2, 50, 'c', 1, 1);
   const bw = 15, x0 = VW / 2 - E.max * (bw + 2) / 2;
@@ -685,8 +735,8 @@ function drawEntry() {
     text(k === 'OK' ? E.ok || 'OK' : k, x + w / 2 + 1, y + 4, k === 'OK' ? 'h' : sel ? 'w' : 'l', 1, 1);
   });
   const msg = NET.status || NET.err;
-  if (msg) text(msg, VW / 2, 194, NET.err ? 'R' : 'c', 1, 1);
-  else text(Input.lastAim === 'pad' ? 'A: PRESS   B: BACK' : Input.lastAim === 'touch' ? 'TAP THE LETTERS' : 'TYPE IT   ENTER: OK   ESC: BACK', VW / 2, 194, 'l', 1, 1);
+  if (msg) text(msg, VW / 2, bottom + 4, NET.err ? 'R' : 'c', 1, 1);
+  else text(Input.lastAim === 'pad' ? 'A: PRESS   B: BACK' : Input.lastAim === 'touch' ? 'TAP THE LETTERS' : 'TYPE IT   ENTER: OK   ESC: BACK', VW / 2, bottom + 4, 'l', 1, 1);
 }
 // Name entry for this player (shown over heads and in the lobby).
 function openName(back) {
@@ -753,6 +803,7 @@ function drawLobby() {
   else {
     text('CODE', VW / 2 - 30, 46, 'l', 1, 2);
     text(NET.code.split('').join(' '), VW / 2 - 22, 46, 'Y', 2);
+    if (NET.role === 'host' && !NET.up && Math.floor(G.time * 2) % 2) text('RECONNECTING...', VW / 2 + 40, 46, 'c', 1);
   }
   // the heroes in the lobby, in their robes
   const L = NET.lobby.players, host = NET.role === 'host';

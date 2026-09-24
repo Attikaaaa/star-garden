@@ -150,7 +150,7 @@ function drawKert() {
 }
 
 // ---------- Before a run: pick a wand and the difficulty ----------
-const PREP_ROWS = ['wand', 'robe', 'diff', 'start', 'back'], PREP_Y = [64, 104, 140, 166, 180];
+const PREP_ROWS = ['wand', 'robe', 'diff', 'start', 'back'], PREP_Y = [66, 110, 144, 172, 186];
 function cycle(list, cur, dir) { return list[(list.indexOf(cur) + dir + list.length) % list.length]; }
 function prepAdjust(row, dir) {
   if (row === 'wand') { const owned = WAND_IDS.filter(id => Save.wands.includes(id)); if (owned.length > 1) { Save.wand = cycle(owned, Save.wand, dir); Audio_.sfx('select'); } }
@@ -160,7 +160,7 @@ function prepAdjust(row, dir) {
 function updatePrep() {
   menuNav(PREP_ROWS.length);
   let click = -1;
-  PREP_ROWS.forEach((r, i) => { if (hoverRow(i, VW / 2 - 130, PREP_Y[i] - (i < 3 ? 16 : 5), 260, i < 3 ? 32 : 13)) click = i; });
+  PREP_ROWS.forEach((r, i) => { if (hoverRow(i, VW / 2 - 130, PREP_Y[i] - (i < 3 ? 18 : 5), 260, i < 3 ? 34 : 13)) click = i; });
   const row = PREP_ROWS[G.menuSel];
   const dir = pressed(...K_RIGHT) ? 1 : pressed(...K_LEFT) ? -1 : 0;
   if (dir) prepAdjust(row, dir);
@@ -170,8 +170,8 @@ function updatePrep() {
   return null;
 }
 // One "< value >" row with a label and a line of description (also used by the lobby).
-function pickRow(y, label, value, desc, sel, icon) {
-  text(label, VW / 2, y - 14, sel ? 'Y' : 'l', 1, 1);
+function pickRow(y, label, value, desc, sel, icon, ly) {
+  text(label, VW / 2, y - (ly || 14), sel ? 'Y' : 'l', 1, 1);
   const w = textW(value) + (icon ? 20 : 0);
   if (icon) drawFeet(S(icon), VW / 2 - w / 2 + 8, y + 10);
   text(value, VW / 2 + (icon ? 10 : 0), y, sel ? 'Y' : 'w', 2, 1);
@@ -183,14 +183,14 @@ function pickRow(y, label, value, desc, sel, icon) {
 function drawPrep() {
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 136, 30, 272, 158);
+  panel(VW / 2 - 136, 30, 272, 168);
   text(G.prep.mode === 'arena' ? 'THE ARENA' : 'ADVENTURE', VW / 2, 37, 'Y', 2, 1);
   const sel = PREP_ROWS[G.menuSel], w = WANDS[Save.wand], d = DIFFS[Save.settings.diff];
   pickRow(PREP_Y[0], 'WAND', w.name, w.desc, sel === 'wand', 'wand_' + Save.wand);
-  pickRow(PREP_Y[1], 'ROBE', ROBES[Save.skin], null, sel === 'robe', 'hero_d0' + SKIN[Save.skin]);
+  pickRow(PREP_Y[1], 'ROBE', ROBES[Save.skin], null, sel === 'robe', 'hero_d0' + SKIN[Save.skin], 19);
   pickRow(PREP_Y[2], 'DIFFICULTY', d.name, d.desc + (d.vault !== 1 ? '  VAULT X' + d.vault : ''), sel === 'diff');
   drawMenu(['START!', 'BACK'], PREP_Y[3], PREP_Y[4] - PREP_Y[3], G.menuSel - 3);
-  if (Save.wands.length < 2 && sel === 'wand') text('UNLOCK MORE WANDS IN THE GARDEN', VW / 2, 194, 'c', 2, 1);
+  if (Save.wands.length < 2 && sel === 'wand') text('UNLOCK MORE WANDS IN THE GARDEN', VW / 2, 204, 'c', 2, 1);
 }
 
 // ---------- Run save / resume (solo adventure) ----------

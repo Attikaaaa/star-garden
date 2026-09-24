@@ -371,7 +371,8 @@ function arenaWaveCleared() {
   saveBest();
   if (A.wave % 5 === 0) {
     const ids = itemPool(Math.min(5, 2 + G.players.length));
-    ids.forEach((id, i) => { addPedestal(G.room, 192 + (i - (ids.length - 1) / 2) * 48, 150, id); G.room.props[G.room.props.length - 1].group = 'free'; });
+    const gap = ids.length > 4 ? 40 : 48; // stays clear of the arena's rocks
+    ids.forEach((id, i) => { addPedestal(G.room, 192 + (i - (ids.length - 1) / 2) * gap, 100, id); G.room.props[G.room.props.length - 1].group = 'free'; });
   }
   arenaShop();
   // a new land every 5 waves (after the boss or the treasure wave)
@@ -388,12 +389,13 @@ function arenaWaveCleared() {
 }
 function arenaShop() {
   const room = G.room, w = G.arena.wave, up = Math.floor(w / 4);
-  addPedestal(room, 132, 104, 'hp', 3 + Math.floor(w / 3));
+  // the shop stands low in the room, away from the free items and the heroes' start
+  addPedestal(room, 132, 172, 'hp', 3 + Math.floor(w / 3));
   const a = pick(POTION_IDS);
   let b = pick(POTION_IDS);
   if (b === a) b = POTION_IDS[(POTION_IDS.indexOf(a) + 1) % POTION_IDS.length];
-  addPedestal(room, 192, 104, a, POTIONS[a].price + up);
-  addPedestal(room, 252, 104, b, POTIONS[b].price + up);
+  addPedestal(room, 192, 172, a, POTIONS[a].price + up);
+  addPedestal(room, 252, 172, b, POTIONS[b].price + up);
   G.propsN++;
 }
 function arenaBossReward() {
@@ -719,7 +721,7 @@ function renderGame() {
   drawHurt();
   if (G.flashT > 0 && Save.settings.shake) fillScreen(PAL.w);
   if (G.cine && G.state === 'play') drawCine();
-  else drawHUD();
+  else if (G.state === 'play') drawHUD();
 }
 
 function render() {
@@ -804,6 +806,11 @@ function frame(now) {
 bakeAtlas();
 resize();
 // installable + offline (only where service workers are allowed)
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // a new release took over: reload right away if nobody is in the middle of something
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !NET.role && (G.state === 'title' || G.state === 'coop')) location.reload(); });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 resetAmbient('meadow');
 requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
