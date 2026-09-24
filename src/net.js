@@ -13,9 +13,10 @@ const NET_PROTO = 1;
 const NET_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I mix-ups
 const NET_BROKER = 'wss://0.peerjs.com:443/peerjs?key=peerjs';
 const NET_PREFIX = 'stargarden-';
+// STUN finds each browser's public address so they can reach each other directly.
 const NET_ICE = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 const NET_MAX = 4, NET_RATE = 1 / 30;
 const NET = {
@@ -359,7 +360,7 @@ function netJoin(code) {
     const opened = () => { NET.heard = performance.now(); sendR(L, { t: 'hello', v: NET_PROTO, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin }); };
     linkChannel(L, L.pc.createDataChannel('r', { ordered: true }), opened, (m) => NET.q.push([L, m]), onClose);
     linkChannel(L, L.pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 }), opened, (m) => NET.q.push([L, m]), onClose);
-    L.pc.onconnectionstatechange = () => { if (L.pc.connectionState === 'failed') { if (G.state === 'entry') fail('COULD NOT CONNECT'); else clientLost('CONNECTION LOST'); } };
+    L.pc.onconnectionstatechange = () => { if (L.pc.connectionState === 'failed') { if (G.state === 'entry') fail('YOUR NETWORKS CANNOT REACH EACH OTHER'); else clientLost('CONNECTION LOST'); } };
     L.pc.createOffer().then(o => L.pc.setLocalDescription(o))
       .then(() => gathered(L.pc))
       .then(() => {
