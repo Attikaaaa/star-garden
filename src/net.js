@@ -165,7 +165,12 @@ function hostInput(p, L, m) {
 const NAME_ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const cleanName = (n) => String(n || '').toUpperCase().split('').filter(c => NAME_ABC.includes(c)).join('').slice(0, 8);
 function netWho(L, m) {
-  L.name = cleanName(m.name) || 'P' + (L.pid + 1);
+  // two heroes with the same name get a number, so everyone can tell them apart
+  const base = cleanName(m.name) || 'P' + (L.pid + 1);
+  const taken = (n) => n === Save.name || NET.peers.some(q => q !== L && q.pid >= 0 && q.name === n);
+  let name = base, k = 2;
+  while (taken(name)) name = base.slice(0, 7) + k++;
+  L.name = name;
   L.skin = m.skin >= 0 && m.skin < ROBES.length ? m.skin | 0 : L.pid % ROBES.length;
 }
 function netClearPresses() {
@@ -758,7 +763,7 @@ function drawLobby() {
       const skin = me ? Save.skin : pl.skin;
       drawFeet(S('hero_d0' + (Math.floor(G.time * 1.3 + i * 0.7) % 4 ? '' : 'b') + SKIN[skin]), x + 13, y + 29);
       drawS(S('wand_' + (me ? Save.wand : pl.wand)), x + 26, y + 13);
-      text(me ? Save.name : pl.name, x + 30, y + 3, TAG_COL[skin], 2, 1);
+      text(me && NET.role === 'host' ? Save.name : pl.name, x + 30, y + 3, TAG_COL[skin], 2, 1);
     } else text(i ? 'OPEN' : '', x + 30, y + 13, '3', 1, 1);
   }
   const rows = lobbyRows(), sel = rows[G.menuSel], d = DIFFS[NET.lobby.diff];
