@@ -14,7 +14,7 @@
 // broker too) and switch to it when it works, which is faster. If the direct link ever
 // drops, the messages simply go through the broker again.
 
-const NET_PROTO = 2;
+const NET_PROTO = 3;
 const NET_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I mix-ups
 const NET_RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 const NET_TOPIC = 'stargarden/' + NET_PROTO + '/';
@@ -23,6 +23,17 @@ const NET_ICE = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
+// TURN relays make the direct link work on every network (mobile data, strict routers).
+// NET_TURN: servers with fixed credentials; NET_TURN_API: an address that hands out
+// fresh ones (fetched when a game is hosted or joined).
+const NET_TURN = [];
+const NET_TURN_API = '';
+let _turn = null;
+const iceServers = () => NET_ICE.concat(NET_TURN, _turn || []);
+function fetchTurn() {
+  if (!NET_TURN_API || _turn) return;
+  fetch(NET_TURN_API).then(r => r.json()).then(a => { if (Array.isArray(a)) _turn = a; }).catch(() => {});
+}
 const NET_MAX = 4, NET_RATE = 1 / 30;
 const NET = {
   role: null, code: '', status: '', err: '', q: [],
@@ -50,8 +61,9 @@ function sendU(L, msg) {
 }
 function closeLink(L) {
   if (!L) return;
-  clearTimeout(L.helloT);
+  clearTimeout(L.helloT); clearTimeout(L.altT);
   if (L.own) L.own.close();
+  if (L.alt) { L.alt.close(); L.alt = null; }
   try { L.r && L.r.close(); L.u && L.u.close(); L.pc && L.pc.close(); } catch (e) { /* already closed */ }
   L.r = L.u = L.pc = null;
 }
@@ -67,6 +79,17 @@ function gathered(pc) {
     const t = setTimeout(res, 2500);
     pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
   });
+}
+
+// Messages through brokers are numbered, so a copy that arrives twice (two brokers) is
+// handled once.
+function fresh(L, q) {
+  if (q === undefined) return true;
+  const S = L.seen || (L.seen = new Set());
+  if (S.has(q)) return false;
+  S.add(q);
+  if (S.size > 400) { const it = S.values(); for (let i = 0; i < 200; i++) S.delete(it.next().value); }
+  return true;
 }
 
 // ---------- MQTT: a tiny 3.1.1 client (QoS 0 over a WebSocket) ----------
@@ -125,6 +148,7 @@ function netHost() {
   NET.role = 'host'; NET.me = 0; NET.status = 'CREATING A GAME...'; NET.err = '';
   NET.lobby = { mode: 'adv', diff: Save.settings.diff, players: [] };
   NET.code = netRandom(5, NET_ALPHA);
+  fetchTurn();
   hostRelays();
   NET.slowT = setTimeout(() => { if (NET.role === 'host' && NET.status) NET.status = 'NO CONNECTION. RETRYING...'; }, 8000);
   setState('lobby');
@@ -144,12 +168,13 @@ function hostRelay(i) {
     if (!L) {
       if (d.m.t !== 'hello' || NET.peers.length >= 8) return;
       const topic = base + '/c/' + d.f;
-      L = { cid: d.f, ri: i, pid: -1, open: true, heard: performance.now() };
-      L.send = (str) => { const R = NET.relays[L.ri]; if (R) R.pub(topic, str); };
+      L = { cid: d.f, ris: new Set(), pid: -1, open: true, heard: performance.now(), sq: 0 };
+      // answer on every broker the client uses (it listens on two)
+      L.send = (str) => { const out = '{"q":' + (++L.sq) + ',"m":' + str + '}'; for (const j of L.ris) { const R = NET.relays[j]; if (R && R.up) R.pub(topic, out); } };
       NET.peers.push(L);
     }
-    L.ri = i; // answer on the broker the client uses
-    NET.q.push([L, d.m]);
+    L.ris.add(i);
+    if (fresh(L, d.q)) NET.q.push([L, d.m]);
   }, (up) => {
     if (up) { if (NET.status && NET.role === 'host') { NET.status = ''; netLobbySync(); } return; }
     if (NET.role === 'host' && NET.code === code && NET.relays[i] === M) setTimeout(() => { if (NET.role === 'host' && NET.code === code && NET.relays[i] === M) NET.relays[i] = hostRelay(i); }, 3000);
@@ -159,7 +184,7 @@ function hostRelay(i) {
 // A client offers a direct link: answer it (through the broker).
 function hostOffer(L, m) {
   if (L.pc) { try { L.pc.close(); } catch (e) { /* */ } }
-  const pc = L.pc = new RTCPeerConnection({ iceServers: NET_ICE });
+  const pc = L.pc = new RTCPeerConnection({ iceServers: iceServers() });
   pc.ondatachannel = (e) => listen(L, e.channel);
   pc.setRemoteDescription(m.sdp)
     .then(() => pc.createAnswer()).then(a => pc.setLocalDescription(a))
@@ -212,6 +237,14 @@ function hostMessage(L, m) {
   else if (m.t === 'in') {
     const p = G.players.find(q => q.pid === L.pid);
     if (p && p.remote) hostInput(p, L, m);
+  } else if (m.t === 'ping') { if (m.ts) { L.rt = m.rt; sendR(L, { t: 'pong', ts: m.ts }); } }
+  else if (m.t === 'hit') {
+    // a client judged that its hero was hit (it sees the world a moment later than we do)
+    const p = G.players.find(q => q.pid === L.pid);
+    if (p && p.remote) {
+      if (m.b) for (const b of EBULLETS) if (b.nid === m.b) b.life = 0;
+      NET.netHit = true; hurtPlayer(p, 1); NET.netHit = false;
+    }
   } else if (m.t === 'offer') hostOffer(L, m);
   else if (m.t === 'resync' && L.pid >= 0) hostResync(L, m);
   else if (m.t === 'bye') hostDrop(L, 'left');
@@ -275,13 +308,14 @@ const hostAll = (msg) => { for (const L of NET.peers) if (L.pid >= 0) sendR(L, m
 // ---------- Host → clients: the world ----------
 const PF = ['pid', 'x', 'y', 'face', 'flip', 'moving', 'walkT', 'dashT', 'inv', 'hurtT', 'hp', 'maxHp', 'charge', 'shieldUp',
   'down', 'dead', 'deadT', 'revive', 'belt', 'beltMax', 'buff', 'tpN', 'kills', 'sayMsg', 'sayT', 'orbitals', 'items',
-  'speed', 'dashCd', 'wand', 'shots', 'fireDelay', 'dmg', 'range', 'luck', 'idleT', 'backshot', 'name', 'skin']
+  'speed', 'dashCd', 'wand', 'shots', 'fireDelay', 'dmg', 'range', 'luck', 'idleT', 'backshot', 'name', 'skin',
+  'shotSpeed', 'bigShot', 'bounce', 'pierce', 'homing', 'fireworks']
   .concat(typeof PF_EXTRA !== 'undefined' ? PF_EXTRA : []);
 const EF = ['id', 'type', 'x', 'y', 'z', 'state', 'anim', 'flip', 'flash', 'spawnT', 'ghost', 'elite', 'color', 't', 'n', 'w',
   'hp', 'maxHp', 'sw', 'h', 'r', 'fly', 'boss', 'passive', 'still']
   .concat(typeof EF_EXTRA !== 'undefined' ? EF_EXTRA : []);
 const SF = ['x', 'y', 'vx', 'vy', 'kind', 'tint', 'big', 'mini', 't', 'ret', 'trail', 'fw', 'r'];
-const BF = ['x', 'y', 'vx', 'vy', 'key', 'r'];
+const BF = ['x', 'y', 'vx', 'vy', 'key', 'r', 'nid'];
 const KF = ['type', 'x', 'y', 'z', 't', 'pot'];
 const r1 = (v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : v);
 function pack(o, F) { const a = new Array(F.length); for (let i = 0; i < F.length; i++) { const v = o[F[i]]; a[i] = v === undefined ? null : r1(v); } return a; }
@@ -301,7 +335,7 @@ function floorMsg() {
   const rooms = G.floor.rooms;
   return {
     t: 'floor', depth: G.floor.depth, land: LANDS.indexOf(G.floor.land),
-    rooms: rooms.map(r => { const d = {}; for (const k in r.doors) d[k] = rooms.indexOf(r.doors[k]); return [r.gx, r.gy, r.type, d]; }),
+    rooms: rooms.map(r => { const d = {}; for (const k in r.doors) d[k] = rooms.indexOf(r.doors[k]); return [r.gx, r.gy, r.type, d, r.reward || '', r.skull ? 1 : 0]; }),
   };
 }
 function netFloor() { if (NET.role === 'host') hostAll(floorMsg()); }
@@ -309,7 +343,7 @@ function roomMsg(room) {
   const rooms = G.floor.rooms;
   return {
     i: rooms.indexOf(room), tiles: Array.from(room.tiles).join(''), pits: room.pits, seed: room.seed,
-    sv: rooms.map(r => (r.seen ? 1 : 0) + (r.visited ? 2 : 0)).join(''),
+    sv: rooms.map(r => (r.seen ? 1 : 0) + (r.visited ? 2 : 0) + (r.cleared ? 4 : 0)).join(''),
   };
 }
 const roomFullMsg = () => Object.assign({ t: 'room', props: G.room.props, pickups: G.room.pickups.map(k => pack(k, KF)) }, roomMsg(G.room));
@@ -340,12 +374,40 @@ function netFx(kind, a, b) {
   burst = (x, y, n, keys, speed, life, opts) => { _burst(x, y, n, keys, speed, life, opts); rec(['b', r1(x), r1(y), n, keys, speed, life, opts || 0]); };
   poof = (x, y) => { _poof(x, y); rec(['p', r1(x), r1(y)]); };
   dust = (x, y, n, w) => { _dust(x, y, n, w); rec(['d', r1(x), r1(y), n, w]); };
-  Audio_.sfx = (name) => { _sfx(name); if (name !== 'select' && name !== 'confirm') rec(['s', name]); };
+  Audio_.sfx = (name) => { _sfx(name); if (name !== 'select' && name !== 'confirm') rec(['s', name, NET.sfxPid]); };
   Audio_.play = (song) => { NET.song = song; _play(song); rec(['m', song]); };
   Audio_.stop = () => { NET.song = null; _stop(); rec(['m', null]); };
   toast = (msg) => { _toast(msg); rec(['t', msg]); };
   breakTile = (room, c, r) => { _brk(room, c, r); netFx('tile', c, r); };
+  // A hero's own shots: marked (a client draws its own the moment it fires) and their sound
+  // tagged with the shooter.
+  const _shoot = playerShoot, _hurt = hurtPlayer, _eb = updateEBullets, _en = updateEnemies, _mk = updateMarkers;
+  playerShoot = (p, ax, ay) => {
+    const n0 = SHOTS.length;
+    NET.sfxPid = p.pid; _shoot(p, ax, ay); NET.sfxPid = -1;
+    for (let i = n0; i < SHOTS.length; i++) SHOTS[i].ps = true;
+  };
+  // Bullets, touches and falling crystals: a remote hero judges those hits on its own
+  // screen (what it sees is what counts); everything else still hurts here.
+  hurtPlayer = (p, n) => {
+    if (NET.role === 'host' && p.remote && NET.judged && !NET.netHit) return;
+    NET.sfxPid = p.pid; _hurt(p, n); NET.sfxPid = -1;
+  };
+  updateEBullets = (dt) => { NET.judged = true; _eb(dt); NET.judged = false; };
+  updateEnemies = (dt) => { NET.judged = true; _en(dt); NET.judged = false; };
+  updateMarkers = (dt) => { NET.judged = true; _mk(dt); NET.judged = false; };
 })();
+// Enemy bullets get an id (the pool reuses objects), so a client can say which one hit it.
+function liveBullets() {
+  const out = [];
+  for (const b of EBULLETS) {
+    if (b.life <= 0) continue;
+    if (b._t === undefined || b.t < b._t) b.nid = NET.bid = (NET.bid || 0) + 1;
+    b._t = b.t;
+    out.push(b);
+  }
+  return out;
+}
 const tileSum = (room) => { let h = 0; for (let i = 0; i < room.tiles.length; i++) h = (h * 7 + room.tiles[i]) % 1000003; return h; };
 function propsSig() {
   let s = '';
@@ -360,11 +422,11 @@ function netHostTick(dt) {
   NET.sendT = 0;
   const room = G.room, A = G.arena;
   const snap = {
-    t: 's',
+    t: 's', ht: Math.round(now),
     P: G.players.map(p => pack(p, PF)),
     E: G.enemies.filter(e => !e.dead).map(e => pack(e, EF)),
-    S: SHOTS.map(s => pack(s, SF)),
-    B: EBULLETS.filter(b => b.life > 0).map(b => pack(b, BF)),
+    S: SHOTS.map(s => { const a = pack(s, SF); a.push(s.ps && s.own ? s.own.pid : -1); return a; }),
+    B: liveBullets().map(b => pack(b, BF)),
     K: room.pickups.map(k => pack(k, KF)),
     M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max]),
     H: G.hazards.map(h => [r1(h.x), r1(h.y), r1(h.life)]),
@@ -407,6 +469,7 @@ function netJoin(code) {
   netReset();
   NET.role = 'client'; NET.code = code; NET.status = 'CONNECTING...'; NET.err = '';
   NET.joinT = performance.now(); NET.linked = false;
+  fetchTurn();
   joinVia(code, 0, 'c' + netRandom(12, RND_ID));
 }
 function joinFail(why) { if (NET.role === 'client' && !NET.linked) { NET.err = why; NET.status = ''; netReset(); NET.role = null; } }
@@ -417,11 +480,20 @@ function joinVia(code, i, cid) {
   NET.host = null;
   if (old && old.own) old.own.close();
   const hostT = NET_TOPIC + code + '/h', inbox = NET_TOPIC + code + '/c/' + cid;
-  const L = { cid, ri: i, open: true };
-  L.send = (str) => { if (L.own) L.own.pub(hostT, '{"f":"' + cid + '","m":' + str + '}'); };
+  const L = { cid, ri: i, open: true, sq: 0, inbox };
+  L.send = (str) => {
+    const out = '{"f":"' + cid + '","q":' + (++L.sq) + ',"m":' + str + '}';
+    if (L.own) L.own.pub(hostT, out);
+    if (L.alt) L.alt.pub(hostT, out);
+  };
+  L.take = (payload) => {
+    let d;
+    try { d = JSON.parse(payload); } catch (e) { return; }
+    if (d && d.m && d.q !== undefined) { if (fresh(L, d.q)) NET.q.push([L, d.m]); } else if (d) NET.q.push([L, d]);
+  };
   const connect = () => {
     if (L.own) L.own.close();
-    L.own = mqttOpen(NET_RELAYS[i], inbox, (payload) => { let m; try { m = JSON.parse(payload); } catch (e) { return; } NET.q.push([L, m]); }, (up) => {
+    L.own = mqttOpen(NET_RELAYS[i], inbox, L.take, (up) => {
       if (NET.host !== L) return;
       if (up) {
         NET.reached = true;
@@ -437,10 +509,22 @@ function joinVia(code, i, cid) {
   NET.host = L;
   connect();
 }
+// Once joined, a second broker carries every message too: if one of them stalls for a
+// moment, the other one keeps the game moving.
+function clientAlt(L, n) {
+  if (NET.host !== L || n > NET_RELAYS.length) return;
+  const j = (L.ri + n) % NET_RELAYS.length;
+  if (j === L.ri) return;
+  const M = L.alt = mqttOpen(NET_RELAYS[j], L.inbox, L.take, (up) => {
+    if (NET.host !== L || L.alt !== M) return;
+    if (up) sendR(L, { t: 'ping', ts: Math.round(performance.now()) });
+    else { M.close(); L.alt = null; L.altT = setTimeout(() => clientAlt(L, n + 1), 3000); }
+  });
+}
 // After joining: try a direct link; the game keeps running through the broker meanwhile.
 function clientUpgrade(L) {
   if (L.pc) return;
-  const pc = L.pc = new RTCPeerConnection({ iceServers: NET_ICE });
+  const pc = L.pc = new RTCPeerConnection({ iceServers: iceServers() });
   listen(L, pc.createDataChannel('r', { ordered: true }));
   listen(L, pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 }));
   pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && L.pc === pc) { L.pc = null; L.r = L.u = null; } };
@@ -462,6 +546,7 @@ function netReset() {
   clearTimeout(NET.slowT);
   NET.relays = []; NET.linked = false; NET.reached = false;
   NET.q = []; NET.fx = []; NET.status = ''; NET.sendT = 0; NET.song = null; NET.playing = false; NET.heard = 0;
+  NET.gaps = []; NET.offs = []; NET.off = 0; NET.delay = 0; NET.lastHt = 0; NET.lastRecv = 0; NET.rtt = 0; NET.gone = null;
 }
 // Leave or end the game (host: everyone goes back to the title).
 function netLeave() {
@@ -477,7 +562,7 @@ function netLeave() {
 // Keep-alive, also while a tab is in the background (a phone switching apps for a moment).
 setInterval(() => {
   if (NET.role === 'host') hostAll({ t: 'ping' });
-  else if (NET.role === 'client' && NET.host) sendR(NET.host, { t: 'ping' });
+  else if (NET.role === 'client' && NET.host) sendR(NET.host, { t: 'ping', ts: Math.round(performance.now()), rt: Math.round(NET.rtt || 0) });
 }, 2000);
 
 // ---------- Client: applying the host's world ----------
@@ -505,7 +590,9 @@ function clientMessage(m) {
       clearTimeout(NET.host.helloT);
       setState('lobby'); Audio_.sfx('confirm');
       clientUpgrade(NET.host);
+      clientAlt(NET.host, 1);
       break;
+    case 'pong': if (m.ts) { const rt = performance.now() - m.ts; NET.rtt = NET.rtt ? NET.rtt * 0.7 + rt * 0.3 : rt; } break;
     case 'answer': if (NET.host && NET.host.pc) NET.host.pc.setRemoteDescription(m.sdp).catch(() => {}); break;
     case 'no': NET.err = m.why; NET.status = ''; netReset(); NET.role = null; break;
     case 'lobby':
@@ -518,7 +605,10 @@ function clientMessage(m) {
     case 'room': clientRoom(m); break;
     case 'trans': clientTrans(m); break;
     case 'tile': if (G.room) { G.room.tiles[m.r * COLS + m.c] = T_FLOOR; G.room.dirty = true; flowKey = -1; } break;
-    case 'you': if (YOU_FX[m.k]) YOU_FX[m.k](m.a); break;
+    case 'you':
+      if (m.k === 'hurt' && performance.now() - (NET.localHitT || 0) < 1500) break; // shown already
+      if (YOU_FX[m.k]) YOU_FX[m.k](m.a);
+      break;
     case 'state': clientState(m); break;
     case 's': clientSnap(m); break;
   }
@@ -543,7 +633,7 @@ function clientStart(m) {
 }
 function clientFloor(m) {
   const land = LANDS[m.land];
-  const rooms = m.rooms.map(([gx, gy, type]) => Object.assign(newRoom(gx, gy), { type, stocked: true, tiles: null }));
+  const rooms = m.rooms.map(([gx, gy, type, , reward, skull]) => Object.assign(newRoom(gx, gy), { type, stocked: true, tiles: null, reward: reward || undefined, skull: !!skull }));
   m.rooms.forEach((r, i) => { for (const d in r[3]) rooms[i].doors[d] = r[3][d] >= 0 ? rooms[r[3][d]] : { type: 'challenge' }; });
   G.floor = { depth: m.depth, land, theme: land.theme, rooms, start: rooms[0] };
   if (!G.stats) G.stats = { kills: 0, coins: 0, items: 0, time: 0 };
@@ -552,7 +642,7 @@ function fillRoom(m) {
   const room = G.floor.rooms[m.i];
   room.tiles = Uint8Array.from(m.tiles, c => +c);
   room.pits = m.pits; room.seed = m.seed; room.dirty = true;
-  [...m.sv].forEach((c, i) => { G.floor.rooms[i].seen = !!(+c & 1); G.floor.rooms[i].visited = !!(+c & 2); });
+  [...m.sv].forEach((c, i) => { const r = G.floor.rooms[i]; r.seen = !!(+c & 1); r.visited = !!(+c & 2); if (r !== room || +c & 4) r.cleared = !!(+c & 4); });
   return room;
 }
 function clientRoom(m) {
@@ -601,8 +691,48 @@ function askSync(need) {
   NET.syncT = now;
   sendR(NET.host, { t: 'resync', need });
 }
+// ---------- Smooth motion ----------
+// Remote heroes and enemies are shown a moment in the past (NET.delay), gliding between
+// the two snapshots around that moment: steady motion even when packets arrive unevenly.
+function netTiming(ht) {
+  const now = performance.now();
+  if (NET.lastRecv) { NET.gaps.push(now - NET.lastRecv); if (NET.gaps.length > 40) NET.gaps.shift(); }
+  NET.lastRecv = now;
+  NET.offs.push(now - ht); if (NET.offs.length > 60) NET.offs.shift();
+  NET.off = Math.min(...NET.offs);
+  const gs = NET.gaps.slice().sort((a, b) => a - b), p90 = gs.length > 4 ? gs[Math.floor(gs.length * 0.9)] : 60;
+  const want = Math.max(50, Math.min(350, p90 * 1.3 + 10));
+  NET.delay = NET.delay ? NET.delay + (want - NET.delay) * 0.1 : want;
+}
+function sample(o, ht) {
+  const h = o.hs || (o.hs = []), last = h[h.length - 1];
+  if (last && Math.hypot(o.x - last[1], o.y - last[2]) > 60) h.length = 0; // a jump (teleport, new room): no gliding
+  h.push([ht, o.x, o.y, o.z || 0]);
+  if (h.length > 8) h.shift();
+}
+function interp(o, rt) {
+  const h = o.hs;
+  if (!h || !h.length) return;
+  let i = h.length - 1;
+  if (rt >= h[i][0] || i === 0) {
+    // past the newest sample: glide on along the last movement for a moment, then wait
+    const b = h[i], a = h[i - 1];
+    const k = a ? Math.min(rt - b[0], 120) / Math.max(1, b[0] - a[0]) : 0;
+    o.x = b[1] + (a ? (b[1] - a[1]) * Math.max(0, k) : 0); o.y = b[2] + (a ? (b[2] - a[2]) * Math.max(0, k) : 0); o.z = b[3];
+    return;
+  }
+  while (i > 0 && h[i - 1][0] > rt) i--;
+  if (i === 0) { o.x = h[0][1]; o.y = h[0][2]; o.z = h[0][3]; return; }
+  const a = h[i - 1], b = h[i], k = (rt - a[0]) / Math.max(1, b[0] - a[0]);
+  o.x = a[1] + (b[1] - a[1]) * k; o.y = a[2] + (b[2] - a[2]) * k; o.z = a[3] + (b[3] - a[3]) * k;
+}
+const renderTime = () => performance.now() - (NET.off || 0) - (NET.delay || 80);
+
 function clientSnap(m) {
   const g = m.g;
+  if (m.ht <= (NET.lastHt || 0)) return; // an older copy (two brokers, or a late packet)
+  NET.lastHt = m.ht;
+  netTiming(m.ht);
   if (!G.room || !G.player || !G.floor || G.state === 'lobby' || G.state === 'entry') { askSync('start'); return; }
   if (!G.trans && (G.floor.depth !== g.fd || G.floor.rooms.indexOf(G.room) !== g.ri || tileSum(G.room) !== g.th)) askSync('room');
   if (g.tv > NET.tvSeen) { addVault(g.tv - NET.tvSeen); NET.tvSeen = g.tv; Save.write(); }
@@ -621,10 +751,9 @@ function clientSnap(m) {
       for (const id of me.items) if (!Save.found.includes(id)) Save.found.push(id);
       if (me.hp > hp0) G.hud.heartT = 0.4;
     } else {
-      const tx = a[1], ty = a[2];
       unpack(a, PF, p);
-      if (p.nx === undefined || Math.hypot(tx - p.nx, ty - p.ny) > 40) { p.sx = tx; p.sy = ty; }
-      p.nx = tx; p.ny = ty; p.x = p.sx; p.y = p.sy;
+      sample(p, m.ht);
+      interp(p, renderTime());
     }
   }
   for (let i = G.players.length - 1; i >= 0; i--) if (!m.P.some(a => a[0] === G.players[i].pid)) G.players.splice(i, 1);
@@ -632,22 +761,27 @@ function clientSnap(m) {
   _emap.clear();
   for (const e of G.enemies) _emap.set(e.id, e);
   G.enemies.length = 0;
+  const rt = renderTime();
   for (const a of m.E) {
     const e = _emap.get(a[0]) || {};
-    const ox = e.x, oy = e.y;
     unpack(a, EF, e);
-    e.tx = e.x; e.ty = e.y;
-    if (ox !== undefined && Math.hypot(e.x - ox, e.y - oy) < 40) { e.x = ox; e.y = oy; }
+    sample(e, m.ht);
+    interp(e, rt);
     G.enemies.push(e);
   }
+  // shots: ours are drawn from the moment we fire (see clientPlay), the rest come from the host
+  const mine = SHOTS.filter(s => s.pred);
   SHOTS.length = 0;
-  for (const a of m.S) SHOTS.push(unpack(a, SF, {}));
+  for (const a of m.S) if (a[SF.length] !== NET.me) SHOTS.push(unpack(a, SF, {}));
+  SHOTS.push(...mine);
   clearEBullets();
-  m.B.forEach((a, i) => {
-    let b = EBULLETS[i];
+  let bi = 0;
+  for (const a of m.B) {
+    if (NET.gone && NET.gone.has(a[BF.indexOf('nid')])) continue; // it already hit us here
+    let b = EBULLETS[bi++];
     if (!b) { b = {}; EBULLETS.push(b); }
     unpack(a, BF, b); b.spr = S(b.key); b.life = 1; b.t = 0;
-  });
+  }
   G.room.pickups = m.K.map(a => unpack(a, KF, {}));
   G.markers = m.M.map(([x, y, t, max]) => ({ x, y, t, max }));
   G.hazards = m.H.map(([x, y, life]) => ({ x, y, life }));
@@ -675,7 +809,7 @@ function clientSnap(m) {
       case 'b': burst(f[1], f[2], f[3], f[4], f[5], f[6], f[7] || undefined); break;
       case 'p': poof(f[1], f[2]); break;
       case 'd': dust(f[1], f[2], f[3], f[4]); break;
-      case 's': Audio_.sfx(f[1]); break;
+      case 's': if (f[2] !== NET.me) Audio_.sfx(f[1]); break; // our own shots and hurts sound here already
       case 't': toast(f[1]); break;
       case 'h': case 'hap': haptic(f[1]); break;
     }
@@ -700,9 +834,16 @@ function clientPlay(dt) {
   readLocalInput(me);
   me.inv = Math.max(0, me.inv - dt); me.hurtT = Math.max(0, me.hurtT - dt); me.dashCool -= dt;
   if (me.sayT > 0) me.sayT -= dt;
+  me.cool -= dt;
   if (alive(me) && !G.cine) {
     movePlayer(me, dt);
     for (const o of G.room.props) if (o.kind === 'ped' || o.kind === 'frog' || o.kind === 'chest') pushOut(G.room, me, o);
+    // our shots appear the moment we fire (the host's copies do the damage)
+    if (me.in.aim && me.cool <= 0 && me.dashT <= 0 && G.state === 'play') {
+      const n0 = SHOTS.length;
+      playerShoot(me, me.in.ax, me.in.ay);
+      for (let i = n0; i < SHOTS.length; i++) SHOTS[i].pred = true;
+    }
   } else me.moving = false;
   const I = me.in;
   NET.ctl = NET.ctl || { sn: 0, un: 0, bn: 0, bs: -1 };
@@ -717,25 +858,32 @@ function clientPlay(dt) {
       tp: me.tpN, dn: me.dashN, sn: NET.ctl.sn, un: NET.ctl.un, bn: NET.ctl.bn, bs: NET.ctl.bs,
     });
   }
-  // glide the others toward where the host last saw them
-  const k = Math.min(1, dt * 18);
+  // the others glide along, a moment in the past (see interp)
+  const rt = renderTime();
   for (const p of G.players) {
     if (p === me) continue;
-    if (p.nx !== undefined) { p.sx += (p.nx - p.sx) * k; p.sy += (p.ny - p.sy) * k; p.x = p.sx; p.y = p.sy; }
+    interp(p, rt);
     p.walkT += p.moving ? dt : 0;
   }
   for (const e of G.enemies) {
     e.anim += dt; e.flash = Math.max(0, e.flash - dt);
     if (e.spawnT > 0) e.spawnT -= dt;
-    if (e.tx !== undefined) { e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; }
+    interp(e, rt);
   }
   for (let i = SHOTS.length - 1; i >= 0; i--) {
     const s = SHOTS[i];
     const px = s.x, py = s.y;
+    if (s.pred && s.kind === 'boomer' && s.ret) {
+      const dx = me.x - s.x, dy = me.y - 8 - s.y, d = Math.hypot(dx, dy), sp = me.shotSpeed * 1.2;
+      if (d < 9) { SHOTS.splice(i, 1); continue; }
+      s.vx += (dx / d * sp - s.vx) * Math.min(1, dt * 7); s.vy += (dy / d * sp - s.vy) * Math.min(1, dt * 7);
+    }
     s.x += s.vx * dt; s.y += s.vy * dt; s.t += dt;
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: 1, drag: 1 });
+    if (s.pred && predShot(s, px, py, dt)) SHOTS.splice(i, 1);
   }
   for (const b of EBULLETS) if (b.life > 0) { b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt; }
+  clientHits(me);
   for (const k2 of G.room.pickups) k2.t += dt;
   for (const o of G.room.props) o.t = (o.t || 0) + dt;
   for (const t of G.turrets) { t.life -= dt; t.flash -= dt; }
@@ -745,6 +893,88 @@ function clientPlay(dt) {
   if (G.fall) { G.fall.t += dt; for (const d of G.fall.drops) d.t += dt; }
   if (G.corpse) G.corpse.t += dt;
 }
+
+// One of our own shots, drawn ahead of the host's copy: it flies, homes, bounces and pops on
+// what we see, but deals no damage (the host's copy does). Returns true when it is gone.
+function predShot(s, px, py, dt) {
+  const room = G.room;
+  s.life -= dt;
+  if (s.homing) {
+    let best = null, bd = 110;
+    for (const e of G.enemies) { if (e.dead || e.spawnT > 0 || e.ghost) continue; const d = Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y); if (d < bd) { bd = d; best = e; } }
+    if (best) {
+      const want = Math.atan2(best.y - best.h / 2 - s.y, best.x - s.x), cur = Math.atan2(s.vy, s.vx);
+      let da = want - cur;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      const turn = Math.max(-1, Math.min(1, da)) * 5 * s.homing * dt, sp = Math.hypot(s.vx, s.vy);
+      s.vx = Math.cos(cur + turn) * sp; s.vy = Math.sin(cur + turn) * sp;
+    }
+  }
+  for (const e of G.enemies) {
+    if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12 || e.passive && e.type !== 'gold') continue;
+    if (s.hitList && s.hitList.includes(e)) continue;
+    if (Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y) < e.r + s.r) {
+      burst(s.x, s.y, 4, ['w', 'Y'], 60, 0.2);
+      if (s.pierce > 0) { s.pierce--; (s.hitList || (s.hitList = [])).push(e); } else { s.life = 0; break; }
+    }
+  }
+  if (s.life > 0 && !s.ret && solidPx(room, s.x, s.y + 4, 'shot')) {
+    if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
+    else if (s.bounce > 0) {
+      s.bounce--;
+      const bx = solidPx(room, s.x, py + 4, 'shot'), by = solidPx(room, px, s.y + 4, 'shot');
+      if (bx || !by) s.vx = -s.vx;
+      if (by || !bx) s.vy = -s.vy;
+      s.x = px; s.y = py;
+    } else s.life = 0;
+  }
+  if (s.life <= 0 && s.kind === 'boomer' && !s.ret) { s.ret = true; s.life = 4; s.hitList = null; return false; }
+  if (s.life > 0) return false;
+  if (s.kind === 'comet') { poof(s.x, s.y); burst(s.x, s.y, 14, ['O', 'y', 'Y', 'o', 'w'], 120, 0.4, { g: 60 }); }
+  else burst(s.x, s.y, 4, s.kind === 'bubble' ? ['C', 'c', 'w'] : s.kind === 'chain' ? ['C', 'w', 'c'] : ['Y', 'w', 'y'], 50, 0.25);
+  return true;
+}
+// Our hero's hits are judged here, on what this screen shows (bullets, touches, falling
+// crystals), and reported to the host: if you dodged it on your screen, you dodged it.
+function clientHits(me) {
+  const now = performance.now();
+  if (me.dashN !== NET.dashSeen) { NET.dashSeen = me.dashN; NET.safeUntil = Math.max(NET.safeUntil || 0, now + 280); } // rolling
+  // our own moments of safety count too (a snapshot may still carry the older state)
+  if (!alive(me) || me.inv > 0 || now < (NET.safeUntil || 0) || me.dashT > 0 || me.buff.guard > 0 || G.cine || G.trans || G.state !== 'play' && G.state !== 'pause') return;
+  let hit = false, bullet = 0;
+  for (const b of EBULLETS) {
+    if (b.life > 0 && Math.hypot(me.x - b.x, me.y - 7 - b.y) < b.r + 3) {
+      b.life = 0; hit = true; bullet = b.nid;
+      (NET.gone || (NET.gone = new Set())).add(b.nid);
+      if (NET.gone.size > 200) NET.gone.delete(NET.gone.values().next().value);
+      break;
+    }
+  }
+  if (!hit) for (const e of G.enemies) {
+    if (e.dead || e.passive || e.ghost || (e.z || 0) >= 8 || e.spawnT > 0) continue;
+    if (Math.hypot(me.x - e.x, (me.y - 5) - (e.y - e.h / 2)) < e.r + 4) { hit = true; break; }
+  }
+  if (!hit) for (const k of G.markers) {
+    if (!k.done && k.t <= 0.05 && Math.hypot(me.x - k.x, (me.y - k.y) * 1.6) < 10) { k.done = true; hit = true; break; }
+  }
+  if (!hit) return;
+  sendR(NET.host, { t: 'hit', b: bullet });
+  me.inv = 1.1; NET.safeUntil = now + 1100; // the host gives the same moment of safety
+  if (!me.shieldUp) { NET.localHitT = performance.now(); me.hurtT = 0.35; YOU_FX.hurt(); Audio_.sfx('hurt'); burst(me.x, me.y - 8, 10, ['R', 'r', 'w'], 80, 0.5); }
+}
+// Connection meter in the bottom-left corner during co-op: the round trip in milliseconds.
+(function wrapHud() {
+  const _hud = drawHUD;
+  drawHUD = () => {
+    _hud();
+    if (!NET.role || G.state !== 'play') return;
+    const ms = NET.role === 'client' ? NET.rtt : Math.max(0, ...NET.peers.filter(L => L.pid >= 0).map(L => L.rt || 0));
+    if (!ms) return;
+    const e = screenEdges();
+    text(Math.round(ms) + ' MS', e.l + 5, e.b - 10, ms < 120 ? 'h' : ms < 250 ? 'Y' : 'R', 2);
+  };
+})();
 
 // ---------- Screens: co-op menu, text entry (codes, names), the lobby ----------
 const COOP_ITEMS = ['HOST A GAME', 'JOIN A GAME', 'BACK'];

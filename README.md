@@ -133,9 +133,14 @@ You also pick your **robe** colour before a run, and your **name** for co-op.
 - Works on any network (Wi-Fi, mobile data, different homes) with nothing to install and
   no server to keep running: the host's browser runs the game, and the players meet
   through free, always-on public message brokers (HiveMQ, Eclipse Mosquitto and EMQX; the
-  game uses whichever answers). When the two devices can reach each other directly, the
-  game quietly switches to a direct, faster WebRTC link. Co-op needs an internet
-  connection; the menu keeps running for everyone while one player has it open.
+  game uses whichever answers, and sends everything through two of them at once, so one
+  stalling for a moment does not stop the game). When the two devices can reach each
+  other directly, the game quietly switches to a direct, faster WebRTC link. Co-op needs
+  an internet connection; the menu keeps running for everyone while one player has it open.
+- Made to feel smooth on any connection: your own shots appear the moment you fire, a hit
+  on your hero counts only if it hit on your own screen, and the other heroes and the
+  enemies glide steadily even when the connection hiccups. The number in the bottom-left
+  corner is the connection's round trip in milliseconds (green is great).
 
 ## Magic items
 

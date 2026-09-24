@@ -156,10 +156,19 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   `p.tpN`, otherwise the client keeps its own position.
 - Transport: free public MQTT brokers (`NET_RELAYS`, a tiny MQTT 3.1.1 client in
   `mqttOpen`). The host subscribes to `stargarden/<NET_PROTO>/<CODE>/h` on every broker;
-  a client tries them in turn, writes `{ f: clientId, m: message }` there and listens on
-  `.../c/<clientId>`. After `hi` the client offers a WebRTC link through the broker
-  (`clientUpgrade` / `hostOffer`); `sendR` / `sendU` use it whenever it is open. Bump
-  `NET_PROTO` when the messages change incompatibly.
+  a client tries them in turn, writes `{ f: clientId, q: seq, m: message }` there and
+  listens on `.../c/<clientId>`. Once joined it also uses a second broker (`clientAlt`);
+  every message goes through both and is numbered, so copies are dropped (`fresh`). After
+  `hi` the client offers a WebRTC link through the broker (`clientUpgrade` / `hostOffer`);
+  `sendR` / `sendU` use it whenever it is open. TURN servers for that link go into
+  `NET_TURN` (fixed credentials) or `NET_TURN_API` (an address that returns fresh ones).
+  Bump `NET_PROTO` when the messages change incompatibly.
+- Feel on a slow link: remote heroes and enemies are drawn `NET.delay` in the past,
+  interpolated between snapshots (`sample` / `interp`, timed by the host clock `ht`).
+  A client draws its own shots when it fires (`pred`, `predShot`); the host's copies of
+  them (`ps`) are left out of its snapshots. A client judges bullets, touches and falling
+  crystals on its own hero (`clientHits`, message `hit`); on the host those sources are
+  wrapped (`NET.judged`) so they do not hurt remote heroes a second time.
 - Test co-op with two separate browsers (two profiles): the host must stay in the
   foreground, a hidden tab stops the game for everyone.
 
