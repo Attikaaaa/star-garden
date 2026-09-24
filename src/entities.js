@@ -479,7 +479,8 @@ function drawShots(ox, oy) {
     if (s.mini) { rect(ox + s.x - 1, oy + s.y - 1, 2, 2, f ? 'Y' : 'w'); continue; }
     let sp, v = 0;
     if (s.kind === 'boomer') { const k = Math.floor(s.t * 16) % 4; sp = S(BOOM_FR[k]); v = k === 3 ? 1 : 0; }
-    else if (s.kind === 'scatter' || s.kind === 'bubble' || s.kind === 'comet') sp = S('shot' + s.kind + '_' + (s.kind === 'bubble' ? Math.floor(s.t * 6) % 2 : f));
+    else if (s.kind === 'scatter') sp = S('shotspark_' + f);
+    else if (s.kind === 'bubble' || s.kind === 'comet') sp = S('shot' + s.kind + '_' + (s.kind === 'bubble' ? Math.floor(s.t * 6) % 2 : f));
     else sp = S((s.big ? 'shotbig' : 'shot') + s.tint + '_' + f);
     drawS(sp, ox + s.x - (sp.w >> 1), oy + s.y - (sp.h >> 1), v);
   }

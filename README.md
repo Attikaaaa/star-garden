@@ -126,10 +126,12 @@ You also pick your **robe** colour before a run, and your **name** for co-op.
   moment to help them up. Everyone who is down gets back up when the room or wave is
   cleared. The run ends only when the whole team is down.
 - In treasure rooms and after bosses every hero picks their own item.
-- The host's browser runs the game; players connect directly to each other (WebRTC). The
-  free PeerJS broker (`0.peerjs.com`) is only used to find each other by code, and its
-  relay helps when a network blocks direct connections. Co-op needs an internet connection;
-  the menu keeps running for everyone while one player has it open.
+- Works on any network (Wi-Fi, mobile data, different homes) with nothing to install and
+  no server to keep running: the host's browser runs the game, and the players meet
+  through free, always-on public message brokers (HiveMQ, Eclipse Mosquitto and EMQX; the
+  game uses whichever answers). When the two devices can reach each other directly, the
+  game quietly switches to a direct, faster WebRTC link. Co-op needs an internet
+  connection; the menu keeps running for everyone while one player has it open.
 
 ## Magic items
 

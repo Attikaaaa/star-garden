@@ -42,7 +42,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `ui.js` | HUD, minimap, banners, menus, settings, collection, pause, end screens, touch overlay |
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
-| `net.js` | online co-op: broker signaling, WebRTC links, host snapshots, client sync, co-op menu, text entry, lobby |
+| `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, co-op menu, text entry, lobby |
 
 ## Pixel-art rules (mandatory)
 
@@ -141,17 +141,25 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 - The host simulates everything; clients only move their own hero (so it feels instant),
   send their controls (`in` packets, presses as counters) and draw what the host sends.
   Never run game logic on a client (`NET.role === 'client'`): `clientPlay` only animates.
-- Host → client: snapshots ~30/s on an unreliable channel (`netHostTick`: heroes `PF`,
-  enemies `EF`, shots, bullets, pickups, turrets, props when they change, and recorded
-  effects), plus reliable events: `start`, `floor`, `room`, `trans`, `tile`, `state`,
-  `vault`, `you`. New fields a client must draw go into those field lists.
+- Host → client: snapshots (`netHostTick`: heroes `PF`, enemies `EF`, shots, bullets,
+  pickups, turrets, props when they change, and recorded effects; 30/s on a direct link,
+  15/s through a broker), plus events: `start`, `floor`, `room`, `trans`, `tile`,
+  `state`, `you`. New fields a client must draw go into those field lists (other files
+  can add `PF_EXTRA` / `EF_EXTRA`).
+- Brokers do not guarantee delivery, so the sync heals itself: snapshots carry the room,
+  floor, a tile checksum and the team's vault total; a client that sees a mismatch asks
+  for `resync`, and the host repeats the lobby and end-of-run state every second.
 - `net.js` wraps `burst`, `poof`, `dust`, `toast`, `breakTile` and `Audio_.sfx/play/stop`
   on the host, so effects show on every screen without extra code. Other one-off
   particles (`part`) are local.
 - Moving a hero on the host (room entry, placement) must go through `placeHeroes` or bump
   `p.tpN`, otherwise the client keeps its own position.
-- Signaling uses the public PeerJS broker (`NET_BROKER`) with the room id
-  `stargarden-<CODE>`; bump `NET_PROTO` when the messages change incompatibly.
+- Transport: free public MQTT brokers (`NET_RELAYS`, a tiny MQTT 3.1.1 client in
+  `mqttOpen`). The host subscribes to `stargarden/<NET_PROTO>/<CODE>/h` on every broker;
+  a client tries them in turn, writes `{ f: clientId, m: message }` there and listens on
+  `.../c/<clientId>`. After `hi` the client offers a WebRTC link through the broker
+  (`clientUpgrade` / `hostOffer`); `sendR` / `sendU` use it whenever it is open. Bump
+  `NET_PROTO` when the messages change incompatibly.
 - Test co-op with two separate browsers (two profiles): the host must stay in the
   foreground, a hidden tab stops the game for everyone.
 
