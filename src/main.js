@@ -550,15 +550,9 @@ function update(dt) {
   for (const p of G.players) if (p.in.use) { const o = nearestProp(p); if (o) interact(o, p); }
   if (G.state === 'play' || G.state === 'pause' || G.state === 'settings') {
     if (room.cleared && !G.reward && !G.corpse && Wipe.t < 0) {
-      for (const p of G.players) {
-        if (!alive(p)) continue;
-        let dir = null;
-        if (p.y < 30 && room.doors.u) dir = 'u';
-        else if (p.y > 211 && room.doors.d) dir = 'd';
-        else if (p.x < 7 && room.doors.l) dir = 'l';
-        else if (p.x > 377 && room.doors.r) dir = 'r';
-        if (dir) { startTransition(dir); break; }
-      }
+      // the team leaves together: once every standing hero waits in the same doorway
+      const up = G.players.filter(alive), dir = up.length ? doorOf(up[0], room) : null;
+      if (dir && up.every(p => doorOf(p, room) === dir)) startTransition(dir);
     }
   }
   if (mp) netClearPresses();
@@ -577,6 +571,26 @@ function tickHud(dt) {
 function heartbeat(dt) {
   const p = G.player;
   if (p.hp <= 2 && p.maxHp > 2 && alive(p) && (G.beatT = (G.beatT || 0) - dt) <= 0) { G.beatT = 1.1; Audio_.sfx('beat'); }
+}
+
+// The open door a hero stands in, if any (the room is left through it).
+function doorOf(p, room) {
+  if (p.y < 30 && room.doors.u) return 'u';
+  if (p.y > 211 && room.doors.d) return 'd';
+  if (p.x < 7 && room.doors.l) return 'l';
+  if (p.x > 377 && room.doors.r) return 'r';
+  return null;
+}
+// Co-op: how many heroes already wait in each doorway, e.g. 2/4.
+const DOOR_TAG = { u: [224, 26], d: [224, 202], l: [16, 150], r: [368, 150] }; // beside each door, on the wall
+function drawDoorWait(ox, oy) {
+  const room = G.room;
+  if (G.players.length < 2 || !room.cleared || G.state !== 'play' || G.trans) return;
+  const up = G.players.filter(alive);
+  for (const d in DOOR_TAG) {
+    const n = up.filter(p => doorOf(p, room) === d).length;
+    if (n) text(n + '/' + up.length, ox + DOOR_TAG[d][0], oy + DOOR_TAG[d][1], 'Y', 2, 1);
+  }
 }
 
 function updateProps(room, dt) {
@@ -649,6 +663,7 @@ function renderWorld(ox, oy) {
   drawStarfall(ox, oy);
   drawParts(ox, oy);
   drawTags(ox, oy);
+  drawDoorWait(ox, oy);
   drawAimReticle(ox, oy);
 }
 

@@ -125,7 +125,11 @@ You also pick your **robe** colour before a run, and your **name** for co-op.
 - A hero who runs out of hearts goes **down** instead of dying: stand next to them for a
   moment to help them up. Everyone who is down gets back up when the room or wave is
   cleared. The run ends only when the whole team is down.
-- In treasure rooms and after bosses every hero picks their own item.
+- The team moves on together: a door takes everyone to the next room once every standing
+  hero waits in it (the door shows how many are there, e.g. 2/4).
+- In treasure rooms and after bosses every hero picks their own item. Anything bought in
+  a shop goes to the whole team: every hero gets the item, a heart heals everyone who is
+  hurt, and a potion or turret kit goes into every belt with room.
 - Works on any network (Wi-Fi, mobile data, different homes) with nothing to install and
   no server to keep running: the host's browser runs the game, and the players meet
   through free, always-on public message brokers (HiveMQ, Eclipse Mosquitto and EMQX; the

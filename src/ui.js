@@ -197,12 +197,13 @@ function drawTouch() {
 function drawPropTip(o) {
   let title, sub, act;
   if (o.kind === 'portal') { title = 'STAR GATE'; sub = 'ON TO THE NEXT LAND'; act = 'ENTER'; }
-  else if (o.item === 'hp') { title = 'LITTLE HEART'; sub = 'RESTORES TWO HEARTS'; act = 'BUY'; }
+  else if (o.item === 'hp') { title = 'LITTLE HEART'; sub = G.players.length > 1 ? 'TWO HEARTS FOR EVERYONE' : 'RESTORES TWO HEARTS'; act = 'BUY'; }
   else {
     const it = POTIONS[o.item] || ITEMS[o.item];
     title = it.name; sub = it.desc; act = o.price ? 'BUY' : 'TAKE';
     if (o.group && G.players.length > 1) sub += '  (ONE EACH)';
   }
+  if (o.price && G.players.length > 1) act += ' FOR EVERYONE'; // co-op: the whole team gets it
   if (Input.lastAim === 'touch') act = 'TAP HERE TO ' + act;
   const w = Math.max(textW(title), textW(sub), textW(act) + 14) + 16, h = 40;
   // under the hero, or above when they stand low in the room: never on top of them

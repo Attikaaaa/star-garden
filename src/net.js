@@ -253,13 +253,16 @@ function netWho(L, m) {
   while (taken(name)) name = base.slice(0, 7) + k++;
   L.name = name;
   L.skin = m.skin >= 0 && m.skin < ROBES.length ? m.skin | 0 : L.pid % ROBES.length;
+  L.cos = m.cos && typeof m.cos === 'object' ? m.cos : undefined;
 }
+// Cosmetics (pet, trail, title) when the game has them (defined in another file).
+const myCos = () => (typeof myCosmetics === 'function' ? myCosmetics() : undefined);
 function netClearPresses() {
   for (const p of G.players) if (p.remote) { p.in.star = false; p.in.use = false; p.in.belt = -1; }
 }
 function netRoster() {
   return [{ pid: 0, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin }]
-    .concat(NET.peers.filter(L => L.pid >= 0 && L.open).map(L => ({ pid: L.pid, wand: L.wand, up: L.up, name: L.name, skin: L.skin, remote: true })));
+    .concat(NET.peers.filter(L => L.pid >= 0 && L.open).map(L => ({ pid: L.pid, wand: L.wand, up: L.up, name: L.name, skin: L.skin, cos: L.cos, remote: true })));
 }
 function netLobbySync() {
   if (NET.role !== 'host') return;
@@ -289,7 +292,7 @@ function sprName(s) {
   return _rev.get(s);
 }
 
-const startMsg = () => ({ t: 'start', mode: G.mode, diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin })) });
+const startMsg = () => ({ t: 'start', mode: G.mode, diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
 function netStartRun() {
   NET.playing = true;
   hostAll(startMsg());
@@ -423,7 +426,7 @@ function joinVia(code, i, cid) {
       if (up) {
         NET.reached = true;
         if (NET.linked) { sendR(L, { t: 'ping' }); return; } // back after a drop: the host still knows us
-        sendR(L, { t: 'hello', v: NET_PROTO, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin });
+        sendR(L, { t: 'hello', v: NET_PROTO, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin, cos: myCos() });
         clearTimeout(L.helloT);
         L.helloT = setTimeout(() => { if (NET.host === L && !NET.linked) joinVia(code, i + 1, cid); }, 5000);
       } else if (NET.linked) setTimeout(() => { if (NET.host === L && !(L.own && L.own.up)) connect(); }, 1500); // keep the game going
@@ -522,7 +525,12 @@ function clientMessage(m) {
 }
 function clientStart(m) {
   G.mode = m.mode; G.diff = m.diff;
-  G.players = m.roster.map(r => { const p = newPlayer(r.pid); p.wand = r.wand; p.name = r.name; p.skin = r.skin; p.remote = r.pid !== NET.me; return p; });
+  G.players = m.roster.map(r => {
+    const p = newPlayer(r.pid);
+    p.wand = r.wand; p.name = r.name; p.skin = r.skin; p.remote = r.pid !== NET.me;
+    if (typeof applyCosmetics === 'function') applyCosmetics(p, p.remote ? r.cos : myCos());
+    return p;
+  });
   G.player = G.players.find(p => p.pid === NET.me);
   G.stats = { kills: 0, coins: 0, items: 0, time: 0 };
   G.run = { vault: 0, keep: 0 };
@@ -843,7 +851,7 @@ function openName(back) {
 // Tell the others about a new name / robe / wand.
 function netMe() {
   if (NET.role === 'host') netLobbySync();
-  else if (NET.role === 'client') sendR(NET.host, { t: 'me', name: Save.name, skin: Save.skin, wand: Save.wand });
+  else if (NET.role === 'client') sendR(NET.host, { t: 'me', name: Save.name, skin: Save.skin, wand: Save.wand, cos: myCos() });
 }
 
 // The lobby. Everyone sets their name, robe and wand; the host picks the mode and difficulty.
@@ -860,7 +868,11 @@ function updateLobby() {
   rows.forEach((r, i) => { if (hoverRow(i, VW / 2 - 124, lobbyY(r) - 3, 248, 12)) click = i; });
   const row = rows[G.menuSel], pickClick = click >= 0 && Input.mouseHit && PICK_ROWS.has(row);
   const dir = pressed(...K_RIGHT) ? 1 : pressed(...K_LEFT) ? -1 : pickClick ? (Input.mx < VW / 2 + 24 ? -1 : 1) : 0;
-  if (dir && row === 'robe') { Save.skin = (Save.skin + dir + ROBES.length) % ROBES.length; Save.write(); Audio_.sfx('select'); netMe(); }
+  if (dir && row === 'robe') {
+    // robes still locked are skipped (when the game locks any)
+    Save.skin = typeof nextRobe === 'function' ? nextRobe(Save.skin, dir) : (Save.skin + dir + ROBES.length) % ROBES.length;
+    Save.write(); Audio_.sfx('select'); netMe();
+  }
   if (dir && row === 'wand') {
     const owned = WAND_IDS.filter(id => Save.wands.includes(id));
     if (owned.length > 1) { Save.wand = cycle(owned, Save.wand, dir); Save.write(); Audio_.sfx('select'); netMe(); }

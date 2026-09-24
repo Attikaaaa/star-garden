@@ -346,6 +346,7 @@ function drawTags(ox, oy) {
   _tags.length = 0;
   const put = (str, x, y, col) => {
     const w = textW(str) + 4;
+    x = Math.max(w / 2 - SCR.ox, Math.min(VW + SCR.ox - w / 2, x)); // stay on screen next to a doorway
     for (let k = 0; k < 8; k++) {
       const hit = _tags.find(t => Math.abs(t.x - x) < (t.w + w) / 2 && Math.abs(t.y - y) < 10);
       if (!hit) break;
@@ -757,17 +758,29 @@ function interact(o, p) {
   if (o.kind === 'portal') { if (G.players.length > 1) nextFloor(); else startWarp(o); return; }
   const pot = POTIONS[o.item];
   const frog = room.props.find(q => q.kind === 'frog');
-  if (pot && p.belt.length >= p.beltMax) { Audio_.sfx('deny'); if (frog) frog.say = { msg: 'YOUR BELT IS FULL!', until: frog.t + 1.3 }; else say(p, 'BELT FULL'); return; }
-  if (o.item === 'hp' && p.hp >= p.maxHp) { Audio_.sfx('deny'); return; }
+  // co-op: whatever is bought goes to the whole team (items to everyone, hearts heal
+  // everyone who is hurt, potions and turret kits fill every belt with room)
+  const team = o.price && G.players.length > 1 ? G.players.filter(q => !q.dead) : [p];
+  const wants = (q) => (pot ? q.belt.length < q.beltMax : o.item === 'hp' ? alive(q) && q.hp < q.maxHp : true);
+  if (!team.some(wants)) {
+    Audio_.sfx('deny');
+    const msg = pot ? (team.length > 1 ? 'EVERY BELT IS FULL!' : 'YOUR BELT IS FULL!') : team.length > 1 ? 'EVERYONE IS HEALTHY!' : null;
+    if (msg && frog) frog.say = { msg, until: frog.t + 1.3 }; else if (pot) say(p, 'BELT FULL');
+    return;
+  }
   if (o.price) {
     const cost = priceOf(o);
     if (G.coins < cost) { Audio_.sfx('deny'); G.shake = Math.max(G.shake, 1); if (frog) frog.say = { msg: 'NOT ENOUGH COINS!', until: frog.t + 1.3 }; else say(p, 'NOT ENOUGH COINS'); return; }
     if (frog) frog.say = { msg: 'THANKS! RIBBIT!', until: frog.t + 1.6, happy: true };
     G.coins -= cost;
   }
-  if (o.item === 'hp') { healPlayer(p, 4); Audio_.sfx('heart'); }
-  else if (pot) addBelt(p, o.item);
-  else giveItem(o.item, p);
+  for (const q of team) {
+    if (!wants(q)) continue;
+    if (o.item === 'hp') healPlayer(q, 4);
+    else if (pot) { addBelt(q, o.item); if (q !== p) say(q, POTIONS[o.item].name); }
+    else giveItem(o.item, q);
+  }
+  if (o.item === 'hp') Audio_.sfx('heart');
   room.props.splice(room.props.indexOf(o), 1);
   if (o.group) {
     // co-op: every hero picks one item from a group; the rest vanish once all have chosen
