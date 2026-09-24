@@ -1,0 +1,560 @@
+'use strict';
+// Enemies, bosses and enemy bullets.
+
+const EBULLETS = [];
+function ebullet(x, y, ang, speed, color, big) {
+  let b = null;
+  for (let i = 0; i < EBULLETS.length; i++) if (EBULLETS[i].life <= 0) { b = EBULLETS[i]; break; }
+  if (!b) { b = {}; EBULLETS.push(b); }
+  b.x = x; b.y = y; b.vx = Math.cos(ang) * speed; b.vy = Math.sin(ang) * speed;
+  b.life = 6; b.r = big ? 3.5 : 2.5; b.spr = S((big ? 'ebb_' : 'eb_') + color); b.t = 0;
+}
+function muzzle(x, y) { part(x, y, 0, 0, 0.14, null, { spr: 'sparkle', drag: 1 }); }
+function ring(x, y, n, speed, color, off, big) {
+  muzzle(x, y);
+  for (let i = 0; i < n; i++) ebullet(x, y, (off || 0) + i * Math.PI * 2 / n, speed, color, big);
+}
+function fan(x, y, ang, n, step, speed, color, big) {
+  muzzle(x + Math.cos(ang) * 5, y + Math.sin(ang) * 4);
+  for (let i = 0; i < n; i++) ebullet(x, y, ang + (i - (n - 1) / 2) * step, speed, color, big);
+}
+function updateEBullets(dt) {
+  const room = G.room, p = G.player;
+  for (const b of EBULLETS) {
+    if (b.life <= 0) continue;
+    b.life -= dt; b.t += dt;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) { b.life = 0; burst(b.x, b.y, 3, ['w', 'l'], 30, 0.2); continue; }
+    if (!p.dead && Math.hypot(p.x - b.x, p.y - 7 - b.y) < b.r + 3) {
+      if (p.inv <= 0) { b.life = 0; hurtPlayer(1); }
+    }
+  }
+}
+function drawEBullets(ox, oy) {
+  for (const b of EBULLETS) if (b.life > 0) shadow(ox + b.x, oy + b.y + 6, b.r > 3 ? 6 : 4);
+  for (const b of EBULLETS) {
+    if (b.life <= 0) continue;
+    const s = b.spr;
+    drawS(s, ox + b.x - (s.w >> 1), oy + b.y - (s.h >> 1));
+  }
+}
+function clearEBullets() { for (const b of EBULLETS) b.life = 0; }
+
+// ---------- Enemy definitions ----------
+const EDEF = {
+  slime: { hp: 6, r: 6, h: 10, hw: 5, hh: 4, sw: 14 },
+  mini: { hp: 3, r: 4, h: 6, hw: 4, hh: 3, sw: 10 },
+  gold: { hp: 14, r: 6, h: 10, hw: 5, hh: 4, sw: 14, passive: true },
+  bee: { hp: 4, r: 6, h: 12, hw: 4, hh: 3, sw: 10, fly: true },
+  shroom: { hp: 9, r: 7, h: 13, hw: 6, hh: 4, sw: 14, still: true },
+  flower: { hp: 8, r: 7, h: 13, hw: 6, hh: 4, sw: 14, still: true },
+  crab: { hp: 9, r: 7, h: 10, hw: 6, hh: 4, sw: 16 },
+  wisp: { hp: 7, r: 6, h: 12, hw: 4, hh: 3, sw: 10, fly: true },
+  jelly: { hp: 7, r: 6, h: 12, hw: 4, hh: 3, sw: 12, fly: true },
+  bat: { hp: 5, r: 6, h: 9, hw: 4, hh: 3, sw: 10, fly: true },
+  king: { hp: 150, r: 14, h: 22, hw: 12, hh: 7, sw: 30, boss: true },
+  bcrab: { hp: 170, r: 15, h: 18, hw: 14, hh: 7, sw: 34, boss: true },
+  golem: { hp: 210, r: 13, h: 24, hw: 11, hh: 6, sw: 28, boss: true },
+};
+
+function spawnEnemy(type, x, y, opts) {
+  const d = EDEF[type], depth = G.floor.depth;
+  const hpMul = d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2;
+  const e = {
+    type, x, y, hp: d.hp * hpMul, maxHp: d.hp * hpMul, r: d.r, h: d.h, hw: d.hw, hh: d.hh, sw: d.sw,
+    fly: !!d.fly, still: !!d.still, boss: !!d.boss, flash: 0, flashCd: 0, kx: 0, ky: 0, z: 0, vz: 0,
+    state: 'idle', t: rnd(0.3, 1.2), anim: Math.random() * 3, spawnT: opts && opts.instant ? 0 : 0.7,
+    dead: false, flip: false, vx: 0, vy: 0, n: 0, color: type === 'gold' ? 'gold' : G.floor.land.slime, ghost: false,
+    passive: !!d.passive, elite: !!(opts && opts.elite), life: type === 'gold' ? 8 : 0, drops: 0,
+  };
+  if (e.elite) { e.hp *= 2; e.maxHp *= 2; }
+  if (e.boss) { e.state = 'intro'; e.t = CINE_T; e.spawnT = 0; e.z = type === 'king' ? 160 : 0; }
+  else unstick(G.room, e, e.fly ? 'fly' : 'enemy');
+  G.enemies.push(e);
+  return e;
+}
+
+function hurtEnemy(e, dmg, fx, fy, quiet) {
+  if (e.dead || e.spawnT > 0) return;
+  e.hp -= dmg;
+  if (e.boss) addCharge(dmg * 0.004);
+  if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
+  if (e.flashCd <= 0) { e.flash = 0.07; e.flashCd = 0.14; }
+  if (!e.boss && !e.still) {
+    const d = Math.hypot(e.x - fx, e.y - fy) || 1;
+    e.kx = (e.x - fx) / d * 90; e.ky = (e.y - fy) / d * 90;
+  }
+  if (!quiet) Audio_.sfx('hit');
+  burst(fx, fy, 4, ['w', 'Y'], 60, 0.2);
+  if (e.hp <= 0) killEnemy(e);
+}
+
+function killEnemy(e) {
+  e.dead = true;
+  const p = G.player;
+  G.stats.kills++; Save.stats.kills++;
+  if (!e.boss) onKill(e);
+  const cx = e.x, cy = e.y - e.h / 2;
+  poof(cx, cy);
+  burst(cx, cy, e.boss ? 40 : 10, enemyColors(e), e.boss ? 160 : 90, e.boss ? 1.1 : 0.5, { g: 120 });
+  if (e.boss) { bossDefeated(e); return; }
+  Audio_.sfx('kill');
+  G.shake = Math.max(G.shake, 1.5);
+  G.hitstop = Math.max(G.hitstop, 0.035);
+  if (e.type === 'jelly') { ring(e.x, e.y - 8, 6, 48, 'cyan', Math.random()); Audio_.sfx('pop'); }
+  if (e.type === 'slime' && e.color === 'blue') {
+    for (let i = 0; i < 2; i++) { const m = spawnEnemy('mini', e.x + (i ? 5 : -5), e.y, { instant: true }); m.state = 'idle'; m.t = 0.4; }
+  }
+  if (e.type === 'gold') {
+    for (let i = 0; i < 6; i++) spawnPickup('coin', e.x, e.y - 4);
+    spawnPickup('gem', e.x, e.y - 4);
+    earnStars(1);
+    toast('GOLDEN SLIME: +1 STAR!');
+    return;
+  }
+  if (e.elite) { for (let i = 0; i < 3; i++) spawnPickup('coin', e.x, e.y - 2); if (Math.random() < 0.3 + p.luck * 0.05) spawnPickup('gem', e.x, e.y - 2); }
+  else if (Math.random() < 0.3 + p.luck * 0.08) dropLoot(e.x, e.y - 2, 0.5);
+  if (p.honey && ++p.honeyN >= 12) { p.honeyN = 0; if (p.hp < p.maxHp) { healPlayer(1); Audio_.sfx('heart'); } }
+}
+function enemyColors(e) {
+  switch (e.type) {
+    case 'gold': return ['y', 'Y', 'w'];
+    case 'slime': case 'mini': case 'king': return e.color === 'blue' ? ['B', 'c', 'C'] : e.color === 'pink' ? ['P', 'q', 'w'] : ['G', 'h', 'H'];
+    case 'bee': return ['y', 'Y', '1'];
+    case 'shroom': return ['P', 'q', 'w'];
+    case 'flower': return ['P', 'y', 'G'];
+    case 'crab': case 'bcrab': return ['r', 'R', 'O'];
+    case 'wisp': return ['C', 'c', 'w'];
+    case 'jelly': return ['q', 'P', 'w'];
+    case 'bat': return ['2', '3', 'P'];
+    default: return ['l', 'm', 'c'];
+  }
+}
+
+// ---------- AI ----------
+const _dir = { x: 0, y: 0 };
+function towardPlayer(e) {
+  const p = G.player, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  if (!e.fly && d > 20) { const f = flowDir(e.x, e.y); if (f) { _dir.x = f.x; _dir.y = f.y; return _dir; } }
+  _dir.x = dx / d; _dir.y = dy / d;
+  return _dir;
+}
+const aimAt = (x, y) => Math.atan2(G.player.y - 7 - y, G.player.x - x);
+
+function updateEnemies(dt) {
+  const room = G.room, p = G.player;
+  for (const e of G.enemies) {
+    if (e.dead) continue;
+    e.anim += dt;
+    e.flash = Math.max(0, e.flash - dt);
+    e.flashCd -= dt;
+    if (e.spawnT > 0) { e.spawnT -= dt; continue; }
+    if (e.kx || e.ky) {
+      moveBox(room, e, e.kx * dt, e.ky * dt, e.fly ? 'fly' : 'enemy');
+      e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
+      if (Math.abs(e.kx) + Math.abs(e.ky) < 5) e.kx = e.ky = 0;
+    }
+    AI[e.type](e, e.elite ? dt * 1.25 : dt, room, p);
+    // contact damage
+    if (!p.dead && !e.passive && !e.ghost && e.z < 8 && Math.hypot(p.x - e.x, (p.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(1);
+  }
+  for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
+}
+
+const AI = {
+  slime(e, dt, room) {
+    e.t -= dt;
+    const mini = e.type === 'mini';
+    if (e.state === 'idle') {
+      if (e.t <= 0) { e.state = 'jump'; e.t = mini ? 0.32 : 0.42; const d = towardPlayer(e); e.vx = d.x * (mini ? 75 : 62); e.vy = d.y * (mini ? 75 : 62); e.flip = e.vx < 0; }
+    } else if (e.state === 'jump') {
+      const dur = mini ? 0.32 : 0.42;
+      e.z = Math.sin((1 - e.t / dur) * Math.PI) * (mini ? 6 : 9);
+      moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
+      if (e.t <= 0) {
+        e.z = 0; e.state = 'land'; e.t = 0.14;
+        dust(e.x, e.y, mini ? 2 : 4, mini ? 8 : 12);
+        if (e.color === 'pink' && !mini && Math.random() < 0.6) { ring(e.x, e.y - 5, 4, 60, 'pink', Math.PI / 4); Audio_.sfx('eshoot'); }
+      }
+    } else if (e.state === 'land' && e.t <= 0) { e.state = 'idle'; e.t = rnd(0.45, 0.9) * (mini ? 0.7 : 1); }
+  },
+  mini(e, dt, room, p) { AI.slime(e, dt, room, p); },
+  // Golden slime: harmless, hops away from the hero and escapes after a while.
+  gold(e, dt, room, p) {
+    e.t -= dt; e.life -= dt;
+    if (e.life <= 0 && e.state !== 'jump') {
+      e.dead = true; poof(e.x, e.y - 5); Audio_.sfx('tele'); toast('THE GOLDEN SLIME GOT AWAY!');
+      return;
+    }
+    if (e.state === 'idle') {
+      if (e.t <= 0) {
+        let a = Math.atan2(e.y - p.y, e.x - p.x) + rnd(-0.8, 0.8);
+        for (let k = 0; k < 6 && boxSolid(room, e.x + Math.cos(a) * 20, e.y + Math.sin(a) * 20, e.hw, e.hh, 'enemy'); k++) a += rnd(1, 2.5);
+        e.vx = Math.cos(a) * 95; e.vy = Math.sin(a) * 95; e.flip = e.vx < 0;
+        e.state = 'jump'; e.t = 0.34;
+      }
+    } else if (e.state === 'jump') {
+      e.z = Math.sin((1 - e.t / 0.34) * Math.PI) * 8;
+      moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
+      if (Math.random() < 0.4) part(e.x + rnd(-4, 4), e.y - rnd(2, 10), 0, -10, 0.4, null, { spr: 'sparkle', drag: 1 });
+      if (e.t <= 0) { e.z = 0; e.state = 'land'; e.t = 0.1; dust(e.x, e.y, 3, 10); }
+    } else if (e.t <= 0) { e.state = 'idle'; e.t = rnd(0.15, 0.35); }
+  },
+  bee(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle' || e.state === 'fly') {
+      e.state = 'fly';
+      const d = towardPlayer(e), s = Math.sin(e.anim * 4) * 0.8;
+      e.vx += ((d.x - d.y * s) * 48 - e.vx) * 3 * dt;
+      e.vy += ((d.y + d.x * s) * 48 - e.vy) * 3 * dt;
+      if (e.t <= 0 && Math.hypot(p.x - e.x, p.y - e.y) < 150) { e.state = 'aim'; e.t = 0.45; }
+    } else if (e.state === 'aim') {
+      e.vx *= 0.85; e.vy *= 0.85;
+      if (e.t <= 0) { const a = Math.atan2(p.y - e.y, p.x - e.x); e.vx = Math.cos(a) * 150; e.vy = Math.sin(a) * 150; e.state = 'dash'; e.t = 0.38; }
+    } else if (e.state === 'dash' && e.t <= 0) { e.state = 'fly'; e.t = rnd(2, 3); }
+    if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly') && e.state === 'dash') { e.vx *= -0.3; e.vy *= -0.3; }
+    if (Math.abs(e.vx) > 3) e.flip = e.vx < 0;
+    e.z = 6 + Math.sin(e.anim * 5) * 2;
+  },
+  shroom(e, dt) {
+    e.t -= dt;
+    if (e.state === 'idle' && e.t <= 0) { e.state = 'charge'; e.t = 0.6; }
+    else if (e.state === 'charge' && e.t <= 0) {
+      const deep = G.floor.depth >= 2;
+      ring(e.x, e.y - 6, deep ? 10 : 8, 62, 'orange', e.n++ % 2 ? Math.PI / (deep ? 10 : 8) : 0);
+      Audio_.sfx('eshoot');
+      e.state = 'shoot'; e.t = 0.3;
+    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = rnd(1.8, 2.4); }
+  },
+  flower(e, dt, room, p) {
+    e.t -= dt;
+    e.flip = p.x < e.x;
+    if (e.state === 'idle' && e.t <= 0) { e.state = 'charge'; e.t = 0.5; }
+    else if (e.state === 'charge' && e.t <= 0) {
+      const a = aimAt(e.x, e.y - 8);
+      if (G.floor.depth === 0) ebullet(e.x, e.y - 8, a, 82, 'pink');
+      else fan(e.x, e.y - 8, a, 3, 0.26, 82, 'pink');
+      Audio_.sfx('eshoot');
+      e.state = 'shoot'; e.t = 0.25;
+    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = rnd(1.6, 2.2); }
+  },
+  crab(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle' || e.state === 'walk') {
+      e.state = 'walk';
+      const dx = p.x - e.x, dy = p.y - e.y;
+      const d = towardPlayer(e);
+      moveBox(room, e, d.x * 36 * dt, d.y * 36 * dt, 'enemy');
+      const aligned = Math.abs(dy) < 9 || Math.abs(dx) < 9;
+      if (e.t <= 0 && aligned && Math.hypot(dx, dy) < 190 && clearLine(room, e.x, e.y - 3, p.x, p.y - 3)) {
+        e.state = 'tele'; e.t = 0.45;
+        if (Math.abs(dy) < 9) { e.vx = Math.sign(dx) * 165; e.vy = 0; } else { e.vx = 0; e.vy = Math.sign(dy) * 165; }
+      }
+    } else if (e.state === 'tele') {
+      if (e.t <= 0) { e.state = 'charge'; e.t = 1.5; Audio_.sfx('dash'); }
+    } else if (e.state === 'charge') {
+      if (Math.random() < 0.5) part(e.x + rnd(-5, 5), e.y - 1, 0, -10, 0.3, 'l', { size: 2 });
+      if (moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy') || e.t <= 0) { e.state = 'stun'; e.t = 0.7; G.shake = Math.max(G.shake, 1); Audio_.sfx('land'); dust(e.x, e.y, 5, 12); }
+    } else if (e.state === 'stun' && e.t <= 0) { e.state = 'walk'; e.t = rnd(0.6, 1.2); }
+  },
+  wisp(e, dt, room, p) {
+    e.t -= dt;
+    e.z = 5 + Math.sin(e.anim * 3) * 2;
+    if (e.state === 'idle' || e.state === 'float') {
+      e.state = 'float';
+      const d = towardPlayer(e);
+      moveBox(room, e, d.x * 20 * dt, d.y * 20 * dt, 'fly');
+      if (e.t <= 0) { e.state = 'fade'; e.t = 0.45; }
+    } else if (e.state === 'fade') {
+      if (e.t < 0.15) e.ghost = true;
+      if (e.t <= 0) {
+        for (let k = 0; k < 30; k++) {
+          const x = rnd(32, VW - 32), y = rnd(60, 190);
+          if (Math.hypot(x - p.x, y - p.y) > 80 && !boxSolid(room, x, y, e.hw, e.hh, 'fly')) { e.x = x; e.y = y; break; }
+        }
+        Audio_.sfx('tele');
+        e.state = 'appear'; e.t = 0.4;
+      }
+    } else if (e.state === 'appear') {
+      if (e.t < 0.2) e.ghost = false;
+      if (e.t <= 0) {
+        fan(e.x, e.y - 8, aimAt(e.x, e.y - 8), 5, 0.22, 70, 'cyan');
+        Audio_.sfx('eshoot');
+        e.state = 'float'; e.t = rnd(1.8, 2.6);
+      }
+    }
+  },
+
+  // Jellyfish: drifts, then pulses toward the hero in short bursts.
+  jelly(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle' || e.state === 'drift') {
+      e.state = 'drift';
+      if (e.t <= 0) {
+        e.state = 'pulse'; e.t = 0.25;
+        const a = Math.atan2(p.y - e.y, p.x - e.x) + rnd(-0.3, 0.3);
+        e.vx = Math.cos(a) * 78; e.vy = Math.sin(a) * 78;
+      }
+    } else if (e.state === 'pulse' && e.t <= 0) { e.state = 'drift'; e.t = rnd(0.9, 1.4); }
+    e.vx *= Math.pow(0.25, dt); e.vy *= Math.pow(0.25, dt);
+    if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly')) { e.vx *= -0.5; e.vy *= -0.5; }
+    e.z = 7 + Math.sin(e.anim * 2.5) * 2;
+  },
+  // Bat: flutters in a loose circle around the hero, then swoops through.
+  bat(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle' || e.state === 'flutter') {
+      if (e.state === 'idle') { e.ang = Math.atan2(e.y - p.y, e.x - p.x); e.t = rnd(1.4, 2.2); }
+      e.state = 'flutter';
+      e.ang += dt * 1.6;
+      const tx = p.x + Math.cos(e.ang) * 58, ty = p.y - 6 + Math.sin(e.ang) * 40;
+      e.vx += ((tx - e.x) * 3 + rnd(-40, 40) - e.vx) * 4 * dt;
+      e.vy += ((ty - e.y) * 3 + rnd(-40, 40) - e.vy) * 4 * dt;
+      if (e.t <= 0) { e.state = 'aim'; e.t = 0.3; }
+    } else if (e.state === 'aim') {
+      e.vx *= 0.8; e.vy *= 0.8;
+      if (e.t <= 0) { const a = Math.atan2(p.y - e.y, p.x - e.x); e.vx = Math.cos(a) * 165; e.vy = Math.sin(a) * 165; e.state = 'swoop'; e.t = 0.5; }
+    } else if (e.state === 'swoop' && e.t <= 0) { e.state = 'flutter'; e.t = rnd(1.6, 2.4); e.ang = Math.atan2(e.y - p.y, e.x - p.x); }
+    if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly') && e.state === 'swoop') { e.vx *= -0.4; e.vy *= -0.4; }
+    if (Math.abs(e.vx) > 4) e.flip = e.vx < 0;
+    e.z = 9 + Math.sin(e.anim * 9) * 1.5;
+  },
+
+  // ---------- Bosses ----------
+  king(e, dt, room, p) {
+    e.t -= dt;
+    const rage = e.hp < e.maxHp * 0.5;
+    switch (e.state) {
+      case 'intro':
+        e.z = Math.max(0, e.z - 260 * dt);
+        if (e.z === 0 && !e.landed) { e.landed = true; G.shake = 6; Audio_.sfx('boom'); ring(e.x, e.y - 8, 12, 60, 'pink'); }
+        if (e.t <= 0) { e.state = 'pre'; e.t = 0.3; e.n = 0; }
+        break;
+      case 'pre':
+        if (e.t <= 0) { e.state = 'hop'; e.t = 0.55; const d = towardPlayer(e); e.vx = d.x * (rage ? 95 : 75); e.vy = d.y * (rage ? 95 : 75); }
+        break;
+      case 'hop':
+        e.z = Math.sin((1 - e.t / 0.55) * Math.PI) * 14;
+        moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
+        if (e.t <= 0) {
+          e.z = 0; e.state = 'land'; e.t = 0.35; e.n++;
+          G.shake = Math.max(G.shake, 2); Audio_.sfx('land'); dust(e.x, e.y, 10, 26);
+          if (e.n % 2 === 0 || rage) { ring(e.x, e.y - 8, rage ? 12 : 10, 66, 'pink', e.n * 0.3); Audio_.sfx('eshoot'); }
+        }
+        break;
+      case 'land':
+        if (e.t <= 0) {
+          if (e.n >= 3) { e.state = 'rise'; e.t = 0.4; Audio_.sfx('charge'); } else { e.state = 'pre'; e.t = 0.25; }
+        }
+        break;
+      case 'rise':
+        e.z += 420 * dt;
+        if (e.t <= 0) { e.state = 'hover'; e.t = rage ? 0.9 : 1.2; }
+        break;
+      case 'hover': {
+        e.z = 200;
+        const k = Math.min(1, 3 * dt);
+        e.x += (p.x - e.x) * k; e.y += (Math.max(70, Math.min(185, p.y)) - e.y) * k;
+        if (e.t <= 0) { e.state = 'fall'; e.t = 0.35; }
+        break;
+      }
+      case 'fall':
+        e.z = Math.max(0, e.z - 600 * dt);
+        if (e.z === 0) {
+          e.state = 'rest'; e.t = rage ? 0.6 : 0.9; e.n = 0;
+          G.shake = 7; Audio_.sfx('boom'); dust(e.x, e.y, 16, 34);
+          ring(e.x, e.y - 6, rage ? 20 : 16, 70, 'pink', 0, true);
+          burst(e.x, e.y, 16, ['G', 'h', 'H'], 120, 0.5, { g: 200 });
+          if (rage && G.enemies.length < 6) for (let i = 0; i < 2; i++) spawnEnemy('mini', e.x + (i ? 18 : -18), e.y + 4, { instant: true });
+          unstick(room, e, 'enemy');
+        }
+        break;
+      case 'rest':
+        if (e.t <= 0) { e.state = 'pre'; e.t = 0.2; }
+        break;
+    }
+  },
+  bcrab(e, dt, room, p) {
+    e.t -= dt;
+    const rage = e.hp < e.maxHp * 0.5;
+    switch (e.state) {
+      case 'intro':
+        if (e.t <= 0) { e.state = 'walk'; e.t = 2.4; e.n = 0; }
+        break;
+      case 'walk': {
+        const tx = p.x, ty = Math.min(110, Math.max(70, p.y - 40));
+        e.vx += (Math.sign(tx - e.x) * (Math.abs(tx - e.x) > 6 ? 55 : 0) - e.vx) * 4 * dt;
+        e.vy += (Math.sign(ty - e.y) * (Math.abs(ty - e.y) > 6 ? 30 : 0) - e.vy) * 4 * dt;
+        moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
+        e.n += dt;
+        if (e.n > (rage ? 0.6 : 0.85)) { e.n = 0; fan(e.x, e.y - 10, aimAt(e.x, e.y - 10), rage ? 5 : 3, 0.24, 78, 'cyan'); Audio_.sfx('eshoot'); }
+        if (e.t <= 0) { e.state = Math.random() < 0.55 ? 'tele' : 'spiral'; e.t = e.state === 'tele' ? 0.7 : 2.4; e.n = 0; if (e.state === 'tele') Audio_.sfx('charge'); }
+        break;
+      }
+      case 'tele':
+        if (e.t <= 0) {
+          const a = Math.atan2(p.y - e.y, p.x - e.x);
+          e.vx = Math.cos(a) * (rage ? 230 : 195); e.vy = Math.sin(a) * (rage ? 230 : 195);
+          e.state = 'charge'; e.t = 2;
+        }
+        break;
+      case 'charge':
+        if (Math.random() < 0.7) part(e.x + rnd(-12, 12), e.y - 1, 0, -10, 0.4, 'A', { size: 2 });
+        if (moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy') || e.t <= 0) {
+          G.shake = 6; Audio_.sfx('boom'); dust(e.x, e.y, 12, 30);
+          ring(e.x, e.y - 10, rage ? 16 : 12, 64, 'cyan', Math.random());
+          e.state = 'stun'; e.t = 0.9;
+        }
+        break;
+      case 'stun':
+        if (e.t <= 0) { e.state = 'walk'; e.t = 2.2; }
+        break;
+      case 'spiral':
+        e.n += dt;
+        if (e.n > 0.1) {
+          e.n = 0;
+          const arms = rage ? 3 : 2, base = e.t * 2.6;
+          for (let i = 0; i < arms; i++) ebullet(e.x, e.y - 10, base + i * Math.PI * 2 / arms, 70, 'cyan');
+          Audio_.sfx('eshoot');
+        }
+        if (e.t <= 0) { e.state = 'walk'; e.t = 2.4; e.n = 0; }
+        break;
+    }
+  },
+  golem(e, dt, room, p) {
+    e.t -= dt;
+    const rage = e.hp < e.maxHp * 0.5;
+    switch (e.state) {
+      case 'intro':
+        if (e.t <= 0) { e.state = 'walk'; e.t = 1.2; }
+        break;
+      case 'walk': {
+        const d = towardPlayer(e);
+        moveBox(room, e, d.x * (rage ? 34 : 26) * dt, d.y * (rage ? 34 : 26) * dt, 'enemy');
+        e.flip = p.x < e.x;
+        if (e.t <= 0) {
+          e.state = pick(['raise', 'rain', 'burst']);
+          e.t = e.state === 'raise' ? 0.65 : e.state === 'rain' ? 0.5 : 0; e.n = 0; e.w = 0;
+          if (e.state !== 'burst') Audio_.sfx('charge');
+        }
+        break;
+      }
+      case 'raise':
+        if (e.t <= 0) {
+          G.shake = 7; Audio_.sfx('boom'); dust(e.x, e.y, 16, 30);
+          ring(e.x, e.y - 4, 18, 58, 'purple', 0, true);
+          e.state = 'slam2'; e.t = 0.3;
+        }
+        break;
+      case 'slam2':
+        if (e.t <= 0) { ring(e.x, e.y - 4, 18, 72, 'purple', Math.PI / 18); e.state = 'walk'; e.t = rage ? 0.9 : 1.4; }
+        break;
+      case 'rain':
+        if (e.t <= 0) {
+          for (let i = 0; i < (rage ? 8 : 6); i++) {
+            const x = i === 0 ? p.x : rnd(40, VW - 40), y = i === 0 ? p.y : rnd(60, 190);
+            G.markers.push({ x, y, t: 1 + i * 0.08, max: 1 + i * 0.08 });
+          }
+          e.state = 'walk'; e.t = rage ? 1.6 : 2.1;
+        }
+        break;
+      case 'burst':
+        e.n += dt;
+        if (e.n >= 0.35 * (e.w + 1)) {
+          e.w++;
+          fan(e.x, e.y - 14, aimAt(e.x, e.y - 14), 7, 0.17, 80, 'purple');
+          Audio_.sfx('eshoot');
+          if (e.w >= 3) { e.w = 0; e.state = 'walk'; e.t = rage ? 1 : 1.5; }
+        }
+        break;
+    }
+  },
+};
+
+// Falling crystals (golem): telegraph ring, then shatter into bullets.
+function updateMarkers(dt) {
+  const m = G.markers;
+  for (let i = m.length - 1; i >= 0; i--) {
+    const k = m[i];
+    k.t -= dt;
+    if (k.t <= 0) {
+      ring(k.x, k.y - 4, 5, 62, 'cyan', Math.random());
+      burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
+      G.shake = Math.max(G.shake, 2);
+      Audio_.sfx('brk');
+      const p = G.player;
+      if (Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(1);
+      m[i] = m[m.length - 1]; m.pop();
+    }
+  }
+}
+function drawMarkers(ox, oy) {
+  const cs = S('rock_crystal');
+  for (const k of G.markers) {
+    const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
+    ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));
+    const fall = Math.min(1, k.t / 0.6);
+    if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(cs, ox + k.x - 8, oy + k.y - 16 - fall * 150); }
+  }
+}
+
+// ---------- Drawing ----------
+const SLIME_FR = { idle: 'idle', jump: 'stretch', land: 'squash' };
+function enemySprite(e) {
+  switch (e.type) {
+    case 'slime': {
+      const st = e.state === 'idle' ? (Math.floor(e.anim * 2.5) % 3 === 2 ? 'squash' : 'idle') : SLIME_FR[e.state];
+      return S('slime_' + e.color + '_' + st);
+    }
+    case 'mini': return S('slime_' + e.color + '_mini');
+    case 'gold': return S('slime_gold_' + (SLIME_FR[e.state] || 'idle'));
+    case 'bee': return S('bee_' + (Math.floor(e.anim * 16) % 2));
+    case 'shroom': return S('shroom_' + (e.state === 'charge' ? 1 : e.state === 'shoot' ? 2 : 0));
+    case 'flower': return S('flower_' + (e.state === 'charge' ? 1 : e.state === 'shoot' ? 2 : 0));
+    case 'crab': return S('crab_' + (e.state === 'walk' ? Math.floor(e.anim * 6) % 2 : e.state === 'charge' ? Math.floor(e.anim * 12) % 2 : 0));
+    case 'wisp': return S('wisp_' + (Math.floor(e.anim * 6) % 3));
+    case 'jelly': return S(e.state === 'pulse' ? 'jelly_1' : 'jelly_0');
+    case 'bat': return S('bat_' + [0, 1, 2, 1][Math.floor(e.anim * (e.state === 'swoop' ? 8 : 14)) % 4]);
+    case 'king': return S('king_' + (e.state === 'hop' || e.state === 'rise' || e.state === 'fall' || e.state === 'hover' || e.state === 'intro' ? 2 : e.state === 'pre' || e.state === 'land' ? 1 : Math.floor(e.anim * 2) % 2));
+    case 'bcrab': return S('bcrab_' + (e.state === 'tele' || e.state === 'charge' ? 2 : Math.floor(e.anim * (e.state === 'walk' ? 6 : 2)) % 2));
+    case 'golem': return S('golem_' + (e.state === 'raise' || e.state === 'rain' ? 2 : e.state === 'walk' ? Math.floor(e.anim * 3) % 2 : 0));
+  }
+}
+function drawEnemy(e, ox, oy) {
+  if (e.spawnT > 0) {
+    const k = e.spawnT / 0.7;
+    const s = S(Math.floor(e.spawnT * 12) % 2 ? 'sparkle_0' : 'sparkle_1');
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + e.spawnT * 5;
+      drawS(s, ox + e.x + Math.cos(a) * 10 * k - 1, oy + e.y - 6 + Math.sin(a) * 6 * k - 1);
+    }
+    return;
+  }
+  if (e.ghost && Math.floor(e.anim * 20) % 2) return;
+  if (e.state === 'fade' && Math.floor(e.anim * 20) % 2) return;
+  const s = enemySprite(e);
+  const hover = e.fly || e.boss;
+  shadow(ox + e.x, oy + e.y, e.z > 60 ? Math.max(6, e.sw - (e.z - 60) / 8) : e.sw);
+  if (e.boss && e.z > 180) return;
+  let v = e.flip ? 1 : 0;
+  if (e.flash > 0) v += 2;
+  let x = e.x;
+  if ((e.state === 'tele' || e.state === 'aim') && Math.floor(e.anim * 30) % 2) x += 1;
+  if (e.state === 'charge' && e.type === 'shroom') x += Math.floor(e.anim * 30) % 2 ? 1 : 0;
+  const fy = oy + e.y - Math.round(e.z || 0) + (hover ? 0 : 1);
+  if (e.elite || e.type === 'gold') drawGlow(s, ox + x - (s.w >> 1), fy - s.h, e.flip);
+  drawFeet(s, ox + x, fy, v);
+  const g = glintAt(e);
+  if (g && Math.floor(e.anim * 16) % 2) drawS(S('sparkle_0'), ox + e.x + g[0] - 1, oy + e.y + g[1] - Math.round(e.z || 0) - 1);
+}
+// Where an enemy is about to shoot from, during the last moment before it fires.
+function glintAt(e) {
+  switch (e.type) {
+    case 'flower': return e.state === 'charge' && e.t < 0.28 ? [0, -8] : null;
+    case 'shroom': return e.state === 'charge' && e.t < 0.28 ? [0, -12] : null;
+    case 'wisp': return e.state === 'appear' && e.t < 0.22 ? [0, -9] : null;
+    case 'bcrab': return e.state === 'walk' && e.n > (e.hp < e.maxHp * 0.5 ? 0.4 : 0.62) ? [0, -12] : null;
+    case 'golem': return e.state === 'burst' && e.n > 0.35 * (e.w + 1) - 0.15 ? [0, -16] : null;
+    default: return null;
+  }
+}
