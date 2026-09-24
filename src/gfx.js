@@ -1,6 +1,11 @@
 'use strict';
 // Low level graphics: sprite registry, atlas baking, pixel-perfect drawing.
 const VW = 384, VH = 216, TILE = 16;
+// The canvas is as big as the screen (in game pixels); the 384x216 play view sits centred
+// in it at (SCR.ox, SCR.oy) and the margins show more of the surroundings.
+const SCR = { w: VW, h: VH, ox: 0, oy: 0 };
+// Fill the whole screen (callers draw in play-view coordinates).
+function fillScreen(style) { ctx.fillStyle = style; ctx.fillRect(-SCR.ox, -SCR.oy, SCR.w, SCR.h); }
 
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d', { alpha: false });

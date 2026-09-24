@@ -9,11 +9,12 @@ function panel(x, y, w, h) {
   rect(x + 2, y + 1, w - 4, 1, '2');
   rect(x + 1, y + 2, 1, h - 4, '2');
 }
-function dim(a) { ctx.fillStyle = 'rgba(43,26,71,' + a + ')'; ctx.fillRect(0, 0, VW, VH); }
+function dim(a) { fillScreen('rgba(43,26,71,' + a + ')'); }
 
 // ---------- HUD ----------
 function drawHUD() {
   const p = G.player;
+  ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins and the Starfall meter hug the screen corner
   const hearts = Math.ceil(p.maxHp / 2);
   const low = p.hp <= 2 && p.maxHp > 2 && !p.dead, beat = low && (G.beatT || 0) > 0.95;
   const flash = G.hud.heartT > 0 && Math.floor(G.hud.heartT * 20) % 2 ? 2 : 0;
@@ -34,6 +35,7 @@ function drawHUD() {
   rect(14, my, 26, 5, '0');
   rect(15, my + 1, Math.round(24 * p.charge), 3, full ? (blink ? 'w' : 'Y') : 'c');
   if (full) text(Input.lastAim === 'pad' ? 'RB' : Input.lastAim === 'touch' ? '' : 'Q', 44, my - 1, 'Y', 2);
+  ctx.translate(SCR.ox, SCR.oy);
   drawCombo();
   drawMinimap();
   if (G.boss && !G.boss.dead && G.boss.state !== 'intro') {
@@ -82,7 +84,7 @@ function drawMinimap() {
   for (const r of rooms) if (r.seen) { minx = Math.min(minx, r.gx); maxx = Math.max(maxx, r.gx); miny = Math.min(miny, r.gy); maxy = Math.max(maxy, r.gy); }
   const cw = 8, ch = 6;
   const W = (maxx - minx + 1) * cw + 3, H = (maxy - miny + 1) * ch + 3;
-  const x0 = VW - W - 4, y0 = 3;
+  const x0 = SCR.w - SCR.ox - W - 4, y0 = 3 - SCR.oy;
   ctx.fillStyle = 'rgba(43,26,71,0.55)';
   ctx.fillRect(x0 - 1, y0 - 1, W + 2, H + 2);
   for (const r of rooms) {
@@ -107,9 +109,10 @@ function drawTouch() {
     const dx = s.x - s.ox, dy = s.y - s.oy, d = Math.hypot(dx, dy), k = d > STICK_R ? STICK_R / d : 1;
     tCircle(s.ox + dx * k, s.oy + dy * k, 8, T_KNOB);
   };
-  stick(T.move, 40, VH - 44);
-  stick(T.aim, VW - 104, VH - 48);
-  const b = TOUCH_BTN, p = G.player;
+  const e = screenEdges();
+  stick(T.move, e.l + 48, e.b - 46);
+  stick(T.aim, e.r - 110, e.b - 50);
+  const b = touchBtns(), p = G.player;
   tCircle(b.dash[0], b.dash[1], b.dash[2], T_BTN);
   drawS(S('icon_speed'), b.dash[0] - 8, b.dash[1] - 8, p.dashCool > 0 ? 4 : 0);
   tCircle(b.star[0], b.star[1], b.star[2], T_BTN);
@@ -123,6 +126,7 @@ function drawPropTip(o) {
   if (o.kind === 'portal') { title = 'STAR GATE'; sub = 'ON TO THE NEXT LAND'; act = 'ENTER'; }
   else if (o.item === 'hp') { title = 'LITTLE HEART'; sub = 'RESTORES TWO HEARTS'; act = 'BUY'; }
   else { title = ITEMS[o.item].name; sub = ITEMS[o.item].desc; act = o.price ? 'BUY' : 'TAKE'; }
+  if (Input.lastAim === 'touch') act = 'TAP HERE TO ' + act;
   const w = Math.max(textW(title), textW(sub), textW(act) + 14) + 16, h = 40;
   const x = Math.round((VW - w) / 2), y = 150;
   G.tipRect = [x, y, w, h];
@@ -173,7 +177,11 @@ function menu(items, y, gap) {
   gap = gap || 14;
   menuNav(items.length);
   let chosen = -1;
-  items.forEach((it, i) => { const w = textW(it) + 20; if (hoverRow(i, VW / 2 - w / 2, y + i * gap - 3, w, gap - 1)) chosen = i; });
+  const wide = Input.lastAim === 'touch';
+  items.forEach((it, i) => {
+    const w = wide ? VW : textW(it) + 20;
+    if (hoverRow(i, VW / 2 - w / 2, y + i * gap - (wide ? gap / 2 - 3 : 3), w, wide ? gap : gap - 1)) chosen = i;
+  });
   if (pressed(...K_OK)) chosen = G.menuSel;
   return chosen;
 }
@@ -192,7 +200,7 @@ function drawMenu(items, y, gap) {
 }
 // Key cap with a letter (E on keyboard, X on a controller).
 function keyCap(x, y) {
-  if (Input.lastAim === 'touch') { drawS(S('sparkle_0'), x + 3, y + 3); return; }
+  if (Input.lastAim === 'touch') { drawS(S(Math.floor(G.time * 4) % 2 ? 'sparkle_0' : 'sparkle_1'), x + 3, y + 3); return; }
   drawS(S('key_cap'), x, y);
   text(Input.lastAim === 'pad' ? 'X' : 'E', x + 2, y + 1, '1', 0);
 }
@@ -205,17 +213,18 @@ function drawTitleBg() {
   const t = G.time;
   const fl = ['floor_0@meadow', 'floor_1@meadow', 'floor_3@meadow', 'floor_2@meadow'];
   const scroll = Math.floor(t * 8) % 16;
-  for (let y = -1; y < 14; y++) for (let x = -1; x < 25; x++) {
+  const cx0 = Math.floor(-SCR.ox / 16) - 2, cx1 = Math.ceil((SCR.w - SCR.ox) / 16) + 1;
+  for (let y = Math.floor(-SCR.oy / 16) - 1; y < Math.ceil((SCR.h - SCR.oy) / 16) + 1; y++) for (let x = cx0; x < cx1; x++) {
     const h = hash(x - Math.floor(t * 8 / 16), y, 7) % 100;
     drawS(S(fl[h < 60 ? 0 : h < 80 ? 1 : h < 90 ? 2 : 3]), x * 16 + scroll, y * 16);
   }
   drawAmbient(0, 0);
   dim(0.25);
-  for (let x = 0; x < 24; x++) {
-    drawS(S('cap@meadow'), x * 16, -8); drawS(S('cap@meadow'), x * 16, 8);
-    drawS(S('face_' + (x % 5 === 2 ? 1 : 0) + '@meadow'), x * 16, 24);
+  for (let x = cx0; x < cx1; x++) {
+    for (let y = 8; y > -SCR.oy - 16; y -= 16) drawS(S('cap@meadow'), x * 16, y);
+    drawS(S('face_' + (((x % 5) + 5) % 5 === 2 ? 1 : 0) + '@meadow'), x * 16, 24);
   }
-  rect(0, 40, VW, 3, SHADOW);
+  rect(-SCR.ox, 40, SCR.w, 3, SHADOW);
   const logo = S('logo');
   drawS(logo, (VW - logo.w) / 2, 6 + Math.round(Math.sin(t * 2) * 1.5));
 }
@@ -251,33 +260,37 @@ function drawTitle() {
     text('Q / RIGHT CLICK: STARFALL   E: TAKE   ESC: PAUSE', VW / 2, 195, 'w', 2, 1);
   }
   const st = Save.stats;
-  if (st.bestDepth > 0 && !G.toast) text('BEST: LAND ' + st.bestDepth + (st.wins ? '   WINS: ' + st.wins : ''), VW / 2, 207, 'c', 2, 1);
+  if (IS_IOS && !navigator.standalone && !G.toast) text('TIP: SHARE > ADD TO HOME SCREEN FOR FULLSCREEN', VW / 2, 207, 'c', 2, 1);
+  else if (st.bestDepth > 0 && !G.toast) text('BEST: LAND ' + st.bestDepth + (st.wins ? '   WINS: ' + st.wins : ''), VW / 2, 207, 'c', 2, 1);
 }
 
 // ---------- Settings ----------
 const SET_X = VW / 2 - 84, SET_Y = 70, BAR_X = SET_X + 98;
+// Rows carry ids so a row can be hidden (no fullscreen on iPhone) without breaking the logic.
 function settingsRows() {
-  const s = Save.settings;
-  return [['MUSIC', 'bar', s.music], ['EFFECTS', 'bar', s.sfx], ['SCREEN SHAKE', s.shake ? 'ON' : 'OFF'],
-    ['FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF'], ['BACK', null]];
+  const s = Save.settings, rows = [
+    ['music', 'MUSIC', 'bar', s.music], ['sfx', 'EFFECTS', 'bar', s.sfx],
+    ['shake', IS_TOUCH ? 'SHAKE/VIBRATE' : 'SCREEN SHAKE', s.shake ? 'ON' : 'OFF'],
+  ];
+  if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
+  rows.push(['back', 'BACK', null]);
+  return rows;
 }
-// Returns true when the screen should close.
 function updateSettings() {
   const s = Save.settings, rows = settingsRows();
   menuNav(rows.length);
   let click = false;
   rows.forEach((r, i) => { if (hoverRow(i, SET_X - 12, SET_Y + i * 16 - 4, 184, 15)) click = true; });
   const dir = pressed(...K_RIGHT) ? 1 : pressed(...K_LEFT) ? -1 : 0;
-  const i = G.menuSel, ok = pressed(...K_OK) || click;
-  if (pressed(...K_BACK, 'KeyP') || (ok && i === 4)) { Save.write(); Audio_.sfx('select'); return true; }
-  if (i <= 1 && (dir || ok)) {
-    const k = i ? 'sfx' : 'music';
-    if (click && Input.mx >= BAR_X - 2) s[k] = Math.max(0, Math.min(10, Math.round((Input.mx - BAR_X + 3) / 7)));
-    else if (dir) s[k] = Math.max(0, Math.min(10, s[k] + dir));
-    else s[k] = (s[k] + 1) % 11;
+  const id = rows[G.menuSel][0], ok = pressed(...K_OK) || click;
+  if (pressed(...K_BACK, 'KeyP') || (ok && id === 'back')) { Save.write(); Audio_.sfx('select'); return true; }
+  if ((id === 'music' || id === 'sfx') && (dir || ok)) {
+    if (click && Input.mx >= BAR_X - 2) s[id] = Math.max(0, Math.min(10, Math.round((Input.mx - BAR_X + 3) / 7)));
+    else if (dir) s[id] = Math.max(0, Math.min(10, s[id] + dir));
+    else s[id] = (s[id] + 1) % 11;
     Audio_.applySettings(); Audio_.sfx('select'); Save.write();
-  } else if (i === 2 && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
-  else if (i === 3 && (dir || ok)) toggleFullscreen();
+  } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); buzz(40); }
+  else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
   return false;
 }
 function drawSettings() {
@@ -285,7 +298,7 @@ function drawSettings() {
   dim(0.5);
   panel(VW / 2 - 104, 46, 208, 124);
   text('SETTINGS', VW / 2, 54, 'Y', 2, 1);
-  settingsRows().forEach(([label, val, v], i) => {
+  settingsRows().forEach(([, label, val, v], i) => {
     const y = SET_Y + i * 16, sel = i === G.menuSel;
     if (sel) pointer(SET_X - 10, y);
     text(label, SET_X, y, sel ? 'Y' : 'l', 1);
@@ -294,6 +307,8 @@ function drawSettings() {
       for (let k = 0; k < 10; k++) rect(BAR_X + k * 7, y, 6, 7, k < v ? (sel ? 'Y' : 'w') : '2');
     } else if (val) text(val, BAR_X + 69, y, sel ? 'Y' : 'w', 1, 2);
   });
+  const fi = settingsRows().findIndex(r => r[0] === 'full');
+  G.tapFull = fi < 0 ? null : [SET_Y + fi * 16 - 4, SET_Y + fi * 16 + 11];
   rect(VW / 2 - 92, 149, 184, 1, '2');
   text(Input.lastAim === 'pad' ? 'LEFT / RIGHT: ADJUST    B: BACK' : 'LEFT / RIGHT: ADJUST    ESC: BACK', VW / 2, 155, 'c', 1, 1);
 }
@@ -409,4 +424,19 @@ function drawWin() {
     const a = G.time * 0.7 + i * 0.63;
     drawS(S(i % 2 ? 'sparkle_0' : 'sparkle_1'), VW / 2 + Math.cos(a) * 116 - 1, 108 + Math.sin(a) * 92 - 1);
   }
+}
+
+// Portrait on a phone: a little phone tipping over to landscape.
+function drawRotate() {
+  dim(0.9);
+  const x = VW / 2, y = 88, flat = Math.floor(G.time * 1.2) % 2;
+  const w = flat ? 30 : 18, h = flat ? 18 : 30;
+  rect(x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2, '0');
+  rect(x - w / 2, y - h / 2, w, h, 'l');
+  rect(x - w / 2 + 2, y - h / 2 + 2, w - 4, h - 4, '2');
+  if (flat) { drawS(S('hero_s0'), x - 8, y - 9); rect(x + w / 2 - 2, y - 2, 1, 4, 'm'); }
+  else rect(x - 2, y + h / 2 - 2, 4, 1, 'm');
+  drawS(S('sparkle_' + (Math.floor(G.time * 4) % 2)), x + 20, y - 18);
+  text('PLEASE TURN YOUR DEVICE', VW / 2, 118, 'Y', 2, 1);
+  text('STAR GARDEN PLAYS IN LANDSCAPE', VW / 2, 132, 'w', 2, 1);
 }

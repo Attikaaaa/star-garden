@@ -1,11 +1,29 @@
 'use strict';
 // Keyboard + mouse. Positions are converted to game pixels.
+// Phones and tablets (a coarse primary pointer) start in touch mode.
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const Input = {
   down: Object.create(null),   // currently held (by e.code)
   hit: Object.create(null),    // pressed this frame
   mx: VW / 2, my: VH / 2, mouseDown: false, mouseHit: false, mouseSeen: false,
-  lastAim: 'mouse',            // 'mouse' | 'keys'
+  lastAim: IS_TOUCH ? 'touch' : 'mouse', // 'mouse' | 'keys' | 'pad' | 'touch'
 };
+// no pinch-zoom or double-tap zoom on iOS
+for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+
+// Short vibration for big moments (Android; tied to the screen-shake setting).
+function buzz(ms) {
+  if (navigator.vibrate && Input.lastAim === 'touch' && Save.settings.shake) navigator.vibrate(ms);
+}
+// Fullscreen + landscape lock. Browsers only allow it from inside a user gesture.
+function goFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !document.fullscreenEnabled || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+  }).catch(() => {});
+}
 
 const GAME_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'Space', 'ShiftLeft', 'ShiftRight', 'KeyE', 'Enter', 'Escape', 'KeyP', 'KeyM']);
@@ -20,14 +38,16 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { Input.down[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in Input.down) Input.down[k] = false; Input.mouseDown = false; });
 
+// Pointer position in play-view coordinates (the canvas is bigger than the play view).
 function _mousePos(e) {
   const r = cv.getBoundingClientRect();
-  Input.mx = (e.clientX - r.left) / r.width * VW;
-  Input.my = (e.clientY - r.top) / r.height * VH;
+  Input.mx = (e.clientX - r.left) / r.width * SCR.w - SCR.ox;
+  Input.my = (e.clientY - r.top) / r.height * SCR.h - SCR.oy;
 }
 window.addEventListener('mousemove', e => { _mousePos(e); Input.mouseSeen = true; Input.lastAim = 'mouse'; });
 cv.addEventListener('mousedown', e => {
   _mousePos(e);
+  if (G.state === 'settings' && G.tapFull && Input.my >= G.tapFull[0] && Input.my < G.tapFull[1]) toggleFullscreen();
   if (e.button === 0) { Input.mouseDown = true; Input.mouseHit = true; Input.lastAim = 'mouse'; }
   Audio_.unlock();
 });
@@ -75,12 +95,17 @@ function pollPad() {
 // ---------- Touch: floating twin sticks + buttons ----------
 // Left half: move stick. Right half: aim stick (shoots while held). Round buttons: roll,
 // Starfall, pause. Tapping the item tooltip uses it. Outside play, a tap is a click.
-const TOUCH_BTN = { dash: [VW - 28, VH - 30, 14], star: [VW - 64, VH - 18, 11], pause: [12, 46, 9] };
+// Screen edges in play-view coordinates; buttons hug the edges (in the side margins on phones).
+function screenEdges() { return { l: -SCR.ox, t: -SCR.oy, r: SCR.w - SCR.ox, b: SCR.h - SCR.oy }; }
+function touchBtns() {
+  const e = screenEdges();
+  return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], pause: [e.l + 15, e.t + 49, 11] };
+}
 const STICK_R = 18;
 Input.touch = { move: null, aim: null, mx: 0, my: 0, ax: 0, ay: 0 };
 function _tpos(e) {
   const r = cv.getBoundingClientRect();
-  return [(e.clientX - r.left) / r.width * VW, (e.clientY - r.top) / r.height * VH];
+  return [(e.clientX - r.left) / r.width * SCR.w - SCR.ox, (e.clientY - r.top) / r.height * SCR.h - SCR.oy];
 }
 const _inBtn = (b, x, y) => Math.hypot(x - b[0], y - b[1]) <= b[2] + 4;
 cv.addEventListener('pointerdown', e => {
@@ -90,14 +115,17 @@ cv.addEventListener('pointerdown', e => {
   Input.lastAim = 'touch';
   const [x, y] = _tpos(e), T = Input.touch;
   Input.mx = x; Input.my = y; Input.mouseSeen = true;
+  if (G.state === 'title') goFullscreen();
+  if (G.state === 'settings' && G.tapFull && y >= G.tapFull[0] && y < G.tapFull[1]) toggleFullscreen();
   if (G.state !== 'play') { Input.mouseHit = true; return; }
-  if (_inBtn(TOUCH_BTN.pause, x, y)) { Input.hit.TouchPause = true; return; }
-  if (_inBtn(TOUCH_BTN.dash, x, y)) { Input.hit.TouchDash = true; return; }
-  if (_inBtn(TOUCH_BTN.star, x, y)) { Input.hit.TouchStar = true; return; }
+  const B = touchBtns();
+  if (_inBtn(B.pause, x, y)) { Input.hit.TouchPause = true; return; }
+  if (_inBtn(B.dash, x, y)) { Input.hit.TouchDash = true; return; }
+  if (_inBtn(B.star, x, y)) { Input.hit.TouchStar = true; return; }
   const tr = G.tipRect;
   if (tr && x >= tr[0] && x < tr[0] + tr[2] && y >= tr[1] && y < tr[1] + tr[3]) { Input.hit.TouchUse = true; return; }
   const s = { id: e.pointerId, ox: x, oy: y, x, y };
-  if (x < VW / 2) { if (!T.move) T.move = s; } else if (!T.aim) T.aim = s;
+  if (x + SCR.ox < SCR.w / 2) { if (!T.move) T.move = s; } else if (!T.aim) T.aim = s;
 }, { passive: false });
 cv.addEventListener('pointermove', e => {
   if (e.pointerType !== 'touch') return;

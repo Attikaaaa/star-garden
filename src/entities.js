@@ -95,6 +95,7 @@ function hurtPlayer(n) {
     return;
   }
   p.hp -= n; p.inv = 1.1; p.hurtT = 0.35; G.hurtT = 0.25;
+  buzz(p.hp <= 0 ? 400 : 60);
   G.shake = Math.max(G.shake, 4); G.hitstop = 0.07;
   burst(p.x, p.y - 8, 10, ['R', 'r', 'w'], 80, 0.5);
   Audio_.sfx('hurt');
@@ -165,6 +166,19 @@ function updatePlayer(p, dt) {
   else if (pad.ax || pad.ay) { ax = pad.ax; ay = pad.ay; aiming = true; p.padAim = true; }
   else if (tch.ax || tch.ay) { ax = tch.ax; ay = tch.ay; aiming = true; p.padAim = true; }
   else if (Input.mouseDown && Input.lastAim === 'mouse') { ax = Input.mx - p.x; ay = Input.my - (p.y - 8); aiming = true; }
+  if (aiming && p.padAim) {
+    const a0 = Math.atan2(ay, ax);
+    let best = null, bd = 0.38;
+    for (const e of G.enemies) {
+      if (e.dead || e.spawnT > 0 || e.ghost || e.passive && e.type !== 'gold') continue;
+      const ex = e.x - p.x, ey = e.y - e.h / 2 - (p.y - 8), dist = Math.hypot(ex, ey);
+      if (dist > p.range + 20) continue;
+      let da = Math.abs(Math.atan2(ey, ex) - a0);
+      if (da > Math.PI) da = Math.PI * 2 - da;
+      if (da < bd) { bd = da; best = [ex, ey]; }
+    }
+    if (best) { ax = best[0]; ay = best[1]; }
+  }
   if (aiming) { p.ax = ax; p.ay = ay; }
   if (aiming) {
     if (Math.abs(ax) > Math.abs(ay) * 1.1) { p.face = 's'; p.flip = ax < 0; } else p.face = ay < 0 ? 'u' : 'd';
@@ -540,6 +554,7 @@ function useStarfall() {
     drops.push({ x: e ? e.x + rnd(-6, 6) : rnd(40, VW - 40), y: e ? e.y + rnd(-4, 4) : rnd(60, 190), t: -i * 0.055, hit: false });
   }
   G.fall = { t: 0, drops };
+  buzz(120);
   G.flashT = 0.08; G.shake = Math.max(G.shake, 3);
   Audio_.sfx('ult');
 }

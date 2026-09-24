@@ -18,6 +18,18 @@ python3 -m http.server
 
 and open `http://localhost:8000`.
 
+## On your phone
+
+Open the link and turn your phone sideways. Star Garden fills the whole screen, with
+twin thumb sticks (left half of the screen moves, right half aims and shoots), round
+buttons for rolling, Starfall and pause, and gentle aim assist.
+
+- **Install it:** on Android use *Install app* / *Add to Home screen*; on iPhone use
+  *Share → Add to Home Screen*. It then starts fullscreen in landscape like a normal app,
+  and works **offline** after the first visit.
+- On Android the game goes fullscreen when you first tap the title screen.
+- Vibration on hits and big moments follows the *Shake/Vibrate* setting.
+
 ## Controls
 
 | Keyboard and mouse | Controller | Touch | Action |

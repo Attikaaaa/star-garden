@@ -5,7 +5,10 @@ text, code, comments and docs.
 
 Live build: https://attikaaaa.github.io/star-garden/ (GitHub Pages, served from `main`).
 `og.png`, `favicon.png` and `apple-touch-icon.png` are the link-preview and icon assets;
-the `og:` / `twitter:` URLs in `index.html` must stay absolute.
+the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an installable PWA
+(`manifest.webmanifest`, icons `icon-192/512.png`) with offline support in `sw.js`:
+**bump `VERSION` in `sw.js` on every release** and keep its file list in sync with
+`index.html`, or players keep a stale cached copy.
 
 ## Principles
 
@@ -29,7 +32,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute.
 | `art_world.js` | tiles, doors, obstacles, pickups, shots, chest, star gate, ambient critters |
 | `art_ui.js` | HUD bits, cursor, item icons, frog, title logo |
 | `audio.js` | `Audio_`: sound effects and 4 songs on a step sequencer, cross-fades, volumes |
-| `input.js` | keyboard, mouse, controller (`pollPad`) and touch sticks (`pollTouch`) |
+| `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, `buzz`, `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES` |
 | `level.js` | floor generation, tile collision, flow field, cached static room layer, doors |
 | `entities.js` | player, shots, pickups, particles, props, combo, Starfall, star-gate warp |
@@ -53,7 +56,12 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute.
    bottom-centre. Depth comes from sorting by y. The top wall's face is 16px tall and heads
    may overlap it.
 5. **Shadows** under everything that stands, floats or flies, via `shadow()`.
-6. Internal resolution is **384x216**, tiles are 16px, display scaling is integer-only.
+6. The play view is **384x216**, tiles are 16px, display scaling is integer-only. The
+   canvas itself is resized to cover the whole screen (`SCR`: size in game pixels and the
+   play view's offset `ox/oy`); the margins show more wall/meadow, never stretched pixels.
+   Rendering is translated so game code keeps using play-view coordinates; use
+   `fillScreen()` / `screenEdges()` for anything that must reach the real screen edges
+   (overlays, HUD corners, touch buttons).
 
 ## Making sprites
 
@@ -115,7 +123,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute.
   breaks (`room.dirty`).
 - All sprites live in one atlas. Text comes from a canvas cache.
 - Particles, ambient life and enemy bullets are pooled; avoid allocations in hot loops.
-- Fixed 60 Hz logic with an accumulator; the game pauses when the tab is hidden.
+- Fixed 60 Hz logic with an accumulator; the game pauses when the tab is hidden, and on
+  touch devices when the phone is turned to portrait.
 
 ## Checking your work
 

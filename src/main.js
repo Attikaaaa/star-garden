@@ -174,6 +174,7 @@ function bossDefeated(e) {
   for (const o of G.enemies) if (!o.dead && o !== e) { o.dead = true; poof(o.x, o.y - o.h / 2); }
   clearEBullets(); G.markers.length = 0;
   room.cleared = true; room.doorT = 0;
+  buzz(250);
   G.corpse = { s: enemySprite(e), x: e.x, y: e.y, w: e.sw, h: e.h, flip: e.flip, colors: enemyColors(e), t: 0, n: 0 };
   earnStars(8);
   saveBest();
@@ -284,7 +285,8 @@ function update(dt) {
   }
   // --- play ---
   const p = G.player, room = G.room;
-  if (pressed('Escape', 'KeyP', 'PadStart', 'TouchPause') && !p.dead) { setState('pause'); Audio_.sfx('select'); return; }
+  const portrait = IS_TOUCH && window.innerHeight > window.innerWidth;
+  if ((pressed('Escape', 'KeyP', 'PadStart', 'TouchPause') || portrait) && !p.dead && !G.warp) { setState('pause'); Audio_.sfx('select'); return; }
   if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
   if (G.floorBanner && (G.floorBanner.t -= dt) <= 0) G.floorBanner = null;
   G.shake = Math.max(0, G.shake - dt * 18);
@@ -427,8 +429,8 @@ function drawCine() {
   const t = G.cine.t, k = Math.min(1, t * 4, (CINE_T - t) * 4);
   const h = Math.round(24 * k);
   if (h <= 0) return;
-  rect(0, 0, VW, h, '0');
-  rect(0, VH - h, VW, h, '0');
+  rect(-SCR.ox, -SCR.oy, SCR.w, h + SCR.oy, '0');
+  rect(-SCR.ox, VH - h, SCR.w, h + SCR.oy + 1, '0');
   if (k > 0.9 && t > 0.3) {
     text('BOSS', VW / 2, VH - 21, 'c', 0, 1);
     text(G.floor.land.bossName, VW / 2, VH - 11, 'Y', 0, 1);
@@ -437,8 +439,8 @@ function drawCine() {
 // Red frame when the hero gets hurt.
 function drawHurt() {
   if (G.hurtT <= 0) return;
-  const w = G.hurtT > 0.12 ? 3 : 1;
-  rect(0, 0, VW, w, 'r'); rect(0, VH - w, VW, w, 'r'); rect(0, 0, w, VH, 'r'); rect(VW - w, 0, w, VH, 'r');
+  const w = G.hurtT > 0.12 ? 3 : 1, x = -SCR.ox, y = -SCR.oy;
+  rect(x, y, SCR.w, w, 'r'); rect(x, y + SCR.h - w, SCR.w, w, 'r'); rect(x, y, w, SCR.h, 'r'); rect(x + SCR.w - w, y, w, SCR.h, 'r');
 }
 
 function renderGame() {
@@ -462,13 +464,16 @@ function renderGame() {
     p.x = sx; p.y = sy;
   } else renderWorld(ox, oy);
   drawHurt();
-  if (G.flashT > 0 && Save.settings.shake) rect(0, 0, VW, VH, 'w');
+  if (G.flashT > 0 && Save.settings.shake) fillScreen(PAL.w);
   if (G.cine && G.state === 'play') drawCine();
   else drawHUD();
 }
 
 function render() {
   const s = G.state;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (G.floor && (s === 'play' || s === 'pause' || s === 'over' || s === 'win' || (s === 'settings' && G.back !== 'title'))) drawBackdrop(G.floor.theme);
+  ctx.setTransform(1, 0, 0, 1, SCR.ox, SCR.oy);
   if (s === 'title') drawTitle();
   else if (s === 'collection') drawCollection();
   else if (s === 'kert') drawKert();
@@ -482,28 +487,46 @@ function render() {
   }
   if (Input.lastAim === 'touch' && (s === 'play') && !G.trans) drawTouch();
   drawWipe();
-  if (Input.lastAim === 'touch' && window.innerHeight > window.innerWidth) {
-    dim(0.85);
-    text('PLEASE TURN YOUR DEVICE', VW / 2, VH / 2 - 8, 'Y', 2, 1);
-    text('THE GAME PLAYS IN LANDSCAPE', VW / 2, VH / 2 + 6, 'w', 2, 1);
-  }
-  if (G.toast) { const w = textW(G.toast.msg) + 12; panel((VW - w) / 2, VH - 16, w, 15); text(G.toast.msg, VW / 2, VH - 12, 'w', 0, 1); }
+  if ((IS_TOUCH || Input.lastAim === 'touch') && window.innerHeight > window.innerWidth) drawRotate();
+  if (G.toast) { const w = textW(G.toast.msg) + 12, y = SCR.h - SCR.oy - 16; panel((VW - w) / 2, y, w, 15); text(G.toast.msg, VW / 2, y + 4, 'w', 0, 1); }
   drawCursor();
 }
 
-// ---------- Screen fit: integer scaling for crisp pixels ----------
+// ---------- Screen fit: integer scaling for crisp pixels, inside the safe area ----------
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth * dpr, h = window.innerHeight * dpr;
+  const dpr = window.devicePixelRatio || 1, cs = getComputedStyle(document.body);
+  const vv = window.visualViewport;
+  const vw = (vv ? vv.width : window.innerWidth) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const vh = (vv ? vv.height : window.innerHeight) - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const w = vw * dpr, h = vh * dpr;
+  // whole device pixels per game pixel; the canvas grows to cover the rest of the screen
   let k = Math.floor(Math.min(w / VW, h / VH));
-  if (k < 1) k = Math.min(w / VW, h / VH);
-  cv.style.width = (VW * k / dpr) + 'px';
-  cv.style.height = (VH * k / dpr) + 'px';
+  if (k >= 1) { SCR.w = Math.floor(w / k); SCR.h = Math.floor(h / k); }
+  else { k = Math.min(w / VW, h / VH); SCR.w = VW; SCR.h = VH; }
+  SCR.ox = (SCR.w - VW) >> 1; SCR.oy = (SCR.h - VH) >> 1;
+  if (cv.width !== SCR.w || cv.height !== SCR.h) { cv.width = SCR.w; cv.height = SCR.h; ctx.imageSmoothingEnabled = false; }
+  cv.style.width = (SCR.w * k / dpr) + 'px';
+  cv.style.height = (SCR.h * k / dpr) + 'px';
+}
+// Wall caps of the current land around the play view, on the room's own tile grid.
+let _bd = null, _bdKey = '';
+function drawBackdrop(theme) {
+  const key = theme + SCR.w + 'x' + SCR.h;
+  if (key !== _bdKey) {
+    _bdKey = key;
+    _bd = document.createElement('canvas'); _bd.width = SCR.w; _bd.height = SCR.h;
+    const g = _bd.getContext('2d'), cap = S('cap@' + theme);
+    const x0 = SCR.ox % 16 - 16, y0 = (SCR.oy + OY) % 16 - 16;
+    for (let y = y0; y < SCR.h; y += 16) for (let x = x0; x < SCR.w; x += 16) blit(g, cap, x, y);
+  }
+  ctx.drawImage(_bd, 0, 0);
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 150));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
-  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  else goFullscreen();
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play' && !G.player.dead) setState('pause'); });
 
@@ -523,5 +546,7 @@ function frame(now) {
 
 bakeAtlas();
 resize();
+// installable + offline (only where service workers are allowed)
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 resetAmbient('meadow');
 requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });

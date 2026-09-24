@@ -31,13 +31,14 @@ function updateWipe(dt) {
 function drawWipe() {
   if (Wipe.t < 0) return;
   const closing = Wipe.t < WIPE_D, u = closing ? Wipe.t / WIPE_D : Wipe.t / WIPE_D - 1;
-  for (let cy = 0; cy < 14; cy++) for (let cx = 0; cx < 24; cx++) {
-    const d = (cx + cy) / 36;
+  const cols = Math.ceil(SCR.w / 16) + 1, rows = Math.ceil(SCR.h / 16) + 1;
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+    const d = (cx + cy) / (cols + rows);
     let k = closing ? u * (1 + WIPE_S) - WIPE_S * d : 1 - (u * (1 + WIPE_S) - WIPE_S * d);
     k = Math.max(0, Math.min(1, k));
     const r = Math.round(k * 16);
     if (!r) continue;
-    ctx.drawImage(diamond(r), cx * 16 + 8 - r, cy * 16 + 8 - r);
+    ctx.drawImage(diamond(r), cx * 16 + 8 - r - SCR.ox, cy * 16 + 8 - r - SCR.oy);
   }
 }
 
@@ -53,10 +54,10 @@ function amb(kind, x, y, vx, vy, life) {
 }
 const PETAL = ['P', 'q', 'w', 'Y'];
 function spawnAmbient(theme, anywhere) {
-  const y0 = anywhere ? rnd(0, VH) : -4;
+  const y0 = anywhere ? rnd(-SCR.oy, SCR.h - SCR.oy) : -SCR.oy - 4, xl = -SCR.ox, xr = SCR.w - SCR.ox;
   if (theme === 'meadow') {
-    if (Math.random() < 0.9) amb('petal', rnd(-60, VW), y0, rnd(10, 18), rnd(9, 15), 30);
-    else if (AMB.filter(a => a.life > 0 && a.kind === 'fly').length < 2) { const l = Math.random() < 0.5; amb('fly', l ? -8 : VW + 8, rnd(60, 180), l ? 1 : -1, 0, 30); }
+    if (Math.random() < 0.9) amb('petal', rnd(xl - 60, xr), y0, rnd(10, 18), rnd(9, 15), 30);
+    else if (AMB.filter(a => a.life > 0 && a.kind === 'fly').length < 2) { const l = Math.random() < 0.5; amb('fly', l ? xl - 8 : xr + 8, rnd(60, 180), l ? 1 : -1, 0, 30); }
   } else if (theme === 'beach') {
     amb('glint', rnd(20, VW - 20), rnd(44, 196), 0, 0, 0.6);
     const pits = G.room && G.room.pits;
@@ -65,7 +66,7 @@ function spawnAmbient(theme, anywhere) {
     amb('mote', rnd(16, VW - 16), anywhere ? rnd(40, 200) : rnd(120, 205), rnd(-3, 3), rnd(-9, -4), rnd(3, 6));
   }
 }
-const AMB_RATE = { meadow: 2.2, beach: 5, crystal: 3 };
+const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4 };
 let ambAcc = 0;
 function resetAmbient(theme) {
   for (const a of AMB) a.life = 0;
@@ -83,7 +84,7 @@ function updateAmbient(dt, theme) {
     }
     a.x += (a.kind === 'petal' ? a.vx + Math.sin(a.ph * 2) * 8 : a.vx) * dt;
     a.y += a.vy * dt;
-    if (a.x > VW + 70 || a.y > VH + 6 || a.x < -80 || a.y < -10) a.life = 0;
+    if (a.x > SCR.w - SCR.ox + 70 || a.y > SCR.h - SCR.oy + 6 || a.x < -SCR.ox - 80 || a.y < -SCR.oy - 10) a.life = 0;
   }
 }
 function drawAmbient(ox, oy) {
