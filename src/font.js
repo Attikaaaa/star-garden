@@ -87,17 +87,19 @@ const FONT_W = Object.create(null);
   }
 })();
 
-function textW(str) {
+// style 3 (outline, wider spacing) is one pixel wider per gap
+function textW(str, style) {
   str = tr(String(str));
+  const gap = style === 3 ? 2 : 1;
   let w = 0;
-  for (const ch of str) w += (FONT_W[ch] || 3) + 1;
-  return Math.max(0, w - 1);
+  for (const ch of str) w += (FONT_W[ch] || 3) + gap;
+  return Math.max(0, w - gap);
 }
 
 // Rendered strings are cached as small canvases: text never costs more than one drawImage.
 const _txtCache = new Map();
 function _renderText(str, col, style) {
-  const w = textW(str) + 2, h = 12;
+  const w = textW(str, style) + 2, h = 12, gap = style === 3 ? 2 : 1;
   const c = document.createElement('canvas');
   c.width = Math.max(1, w); c.height = h;
   const g = c.getContext('2d');
@@ -106,17 +108,17 @@ function _renderText(str, col, style) {
     for (const ch of str) {
       const s = SPR['f' + key + ch];
       if (s) g.drawImage(ATLAS, s.x[0], s.y[0], s.w, s.h, x, 1 + oy, s.w, s.h);
-      x += (FONT_W[ch] || 3) + 1;
+      x += (FONT_W[ch] || 3) + gap;
     }
   };
-  if (style === 2) {
+  if (style >= 2) {
     for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (ox || oy) put('0', ox, oy);
   } else if (style === 1) put('0', 0, 1);
   put(col, 0, 0);
   return c;
 }
 
-// style: 0 plain, 1 drop shadow, 2 outline. align: 0 left, 1 centre, 2 right.
+// style: 0 plain, 1 drop shadow, 2 outline, 3 outline with wider spacing (HUD numbers). align: 0 left, 1 centre, 2 right.
 function text(str, x, y, col, style, align) {
   str = tr(String(str).toUpperCase());
   col = col || 'w';

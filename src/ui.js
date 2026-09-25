@@ -41,10 +41,10 @@ function drawHUD() {
   const cy = hearts > 10 ? 22 : 14, bump = G.hud.coinT > 0.1 ? 1 : 0;
   drawS(S('coin_0'), 5, cy - bump);
   const cs = String(G.coins);
-  text(cs, 16, cy + 1 - bump, G.hud.coinT > 0 ? 'w' : 'Y', 2);
-  let ix = 20 + textW(cs);
+  text(cs, 16, cy + 1 - bump, G.hud.coinT > 0 ? 'w' : 'Y', 3);
+  let ix = 20 + textW(cs, 3);
   if (p.shieldUp) { drawS(S('icon_shield'), ix, cy - 4); ix += 18; }
-  if (G.hud.vaultT > 0) text('VAULT +' + G.run.vault, ix + 2, cy + 1, 'c', 2);
+  if (G.hud.vaultT > 0) text('VAULT +' + G.run.vault, ix + 6, cy + 1, 'c', 3);
   // Starfall meter
   const my = cy + 11, full = p.charge >= 1, blink = full && Math.floor(G.time * 4) % 2;
   drawS(S(full ? 'shot_' + (Math.floor(G.time * 8) % 2) : 'shot_0'), 5, my - 1);
