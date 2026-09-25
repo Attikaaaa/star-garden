@@ -1038,10 +1038,17 @@ function frame(now) {
   lastT = now;
   acc += dt;
   let n = 0;
-  while (acc >= STEP && n < 5) { update(STEP); endInputFrame(); acc -= STEP; n++; }
-  if (n === 5) acc = 0;
-  render();
+  // the next frame is asked for first: one faulty frame must never stop the whole game
   requestAnimationFrame(frame);
+  try {
+    while (acc >= STEP && n < 5) { update(STEP); endInputFrame(); acc -= STEP; n++; }
+    if (n === 5) acc = 0;
+  } catch (e) { acc = 0; endInputFrame(); frameError(e); }
+  try { render(); } catch (e) { hudOff(); frameError(e); }
+}
+// still reported (online.js), without stopping the loop
+function frameError(e) {
+  if (window.reportError) reportError(e); else setTimeout(() => { throw e; });
 }
 
 bakeAtlas();

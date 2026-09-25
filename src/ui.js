@@ -207,6 +207,7 @@ function drawTouch() {
 function drawPropTip(o) {
   let title, sub, act;
   if (o.kind === 'portal') { title = 'STAR GATE'; sub = 'ON TO THE NEXT LAND'; act = 'ENTER'; }
+  else if (ROOM_PROPS.has(o.kind)) [title, sub, act] = roomPropTip(o);
   else if (o.item === 'hp') { title = 'LITTLE HEART'; sub = G.players.length > 1 ? 'TWO HEARTS FOR EVERYONE' : 'RESTORES TWO HEARTS'; act = 'BUY'; }
   else {
     const it = POTIONS[o.item] || ITEMS[o.item];

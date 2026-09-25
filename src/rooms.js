@@ -153,6 +153,14 @@ function roomInteract(o, p) {
   }
   return false;
 }
+// The tip under the hero when they stand at one of our props: [title, line, action].
+function roomPropTip(o) {
+  if (o.kind === 'bless') { const B = BLESSINGS[o.bless]; return ['BLESSING: ' + B.name, B.desc, 'TAKE']; }
+  if (o.kind === 'fountain') return ['A FOUNTAIN', o.used ? 'THE FOUNTAIN IS DRY' : 'HEALS EVERYONE', 'DRINK'];
+  if (o.kind === 'gfrog') return ['THE LUCKY FROG', o.plays >= 3 ? 'NO MORE GAMES TODAY!' : 'A GAME? 8 COINS!', 'PLAY'];
+  if (o.kind === 'cage') return ['A CRITTER IN A CAGE!', G.room.cleared ? 'SET IT FREE' : 'DEFEAT THE GUARDS FIRST', 'OPEN'];
+  return ['BIG STAR', 'RETURN A BIG STAR TO THE SKY', 'TAKE'];
+}
 // A rescued critter moves to the Garden (on every hero's own device).
 onNote((ev, a) => {
   if (ev !== 'rescue' || !CRITTERS[a]) return;
