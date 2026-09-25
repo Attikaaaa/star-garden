@@ -106,6 +106,15 @@ function buildRoom(room) {
   room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'arena';
 }
 
+// Changes a tile of the room in play (sinkholes open and close) and tells co-op clients.
+function setTile(room, c, r, v) {
+  const i = r * COLS + c;
+  room.tiles[i] = v; room.dirty = true; flowKey = -1;
+  room.pits = room.pits.filter(q => q[0] !== c * 16 || q[1] !== OY + r * 16);
+  if (v === T_PIT) room.pits.push([c * 16, OY + r * 16, hash(i, 3, room.seed)]);
+  if (typeof netFx === 'function') netFx('tile', c, r, v);
+}
+
 const tileAt = (room, c, r) => (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? T_WALL : room.tiles[r * COLS + c];
 
 function doorPass(room, x, y) {

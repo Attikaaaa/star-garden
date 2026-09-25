@@ -572,12 +572,13 @@ function bossPhase(e, n) {
 // After its big attack a boss is dazed: it stops, cannot hurt by touch, and takes extra damage.
 function stagger(e, t) { e.stag = t || 1.5; e.vx = e.vy = 0; Audio_.sfx('tele'); }
 // A boss's frame: calm, or angry from phase 2 on, dazed while staggered.
-const bossFrame = (e, f) => S(e.type + (e.stag > 0 ? '_stag' : '_' + (e.p2 ? 'p' : '') + f));
+const bossFrame = (e, f, t) => S((t || e.type) + (e.stag > 0 ? '_stag' : '_' + (e.p2 ? 'p' : '') + f));
 const bob = (e, sp, a, b) => Math.floor(e.anim * sp) % 2 ? a : b;
 // a charge picks its lane when the tell starts and shows it, so stepping aside is always safe
 function lane(e, p) { e.la = Math.atan2(p.y - e.y, p.x - e.x); G.markers.push({ kind: 'lane', x: e.x, y: e.y - 6, a: e.la, t: e.t, max: e.t }); }
 const crabGap = (e) => e.hp < e.maxHp * 0.5 ? 0.6 : 0.85;
-// Falling crystals (golem): telegraph ring, then shatter into bullets.
+// Falling crystals (golem), rocks and clods (mayor): telegraph ring, then shatter into bullets.
+// kind 'zone' is only a warning ring; fall '' drops nothing (a burst from below).
 function updateMarkers(dt) {
   const m = G.markers;
   for (let i = m.length - 1; i >= 0; i--) {
@@ -585,7 +586,7 @@ function updateMarkers(dt) {
     k.t -= dt;
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, 5, 62, { cmoth: 'dust', nmoth: 'nstar' }[k.src] || 'shard', grand());
+      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod' }[k.src] || 'shard', grand());
       burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
@@ -595,14 +596,14 @@ function updateMarkers(dt) {
   }
 }
 function drawMarkers(ox, oy) {
-  const cs = S('rock_crystal');
   for (const k of G.markers) {
     if (k.kind === 'lane') { if (Math.floor(k.t * 8) % 2) for (let d = 20; d < 400; d += 14) drawS(S('sparkle_c'), ox + k.x + Math.cos(k.a) * d - 1, oy + k.y + Math.sin(k.a) * d - 1); continue; }
     if (k.kind === 'line') { if (Math.floor(k.t * 8) % 2) for (let i = 0; i < 20; i++) if (Math.abs(i - k.x) > 1) drawS(S('sparkle_c'), ox + 23 + i * 17, oy + k.y - 1); continue; }
     const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
     ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));
-    const fall = Math.min(1, k.t / 0.6);
-    if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(cs, ox + k.x - 8, oy + k.y - 16 - fall * 150); }
+    if (k.kind || k.fall === '') continue;
+    const fall = Math.min(1, k.t / 0.6), s = S(k.fall || 'rock_crystal');
+    if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - fall * 150); }
   }
 }
 
@@ -640,7 +641,7 @@ function drawEnemy(e, ox, oy) {
     }
     return;
   }
-  if (e.ghost && Math.floor(e.anim * 20) % 2) return;
+  if (e.ghost && e.type !== 'mayor' && Math.floor(e.anim * 20) % 2) return;
   if (e.state === 'fade' && Math.floor(e.anim * 20) % 2) return;
   const s = enemySprite(e);
   const hover = e.fly || e.boss;
@@ -649,7 +650,7 @@ function drawEnemy(e, ox, oy) {
   let v = e.flip ? 1 : 0;
   if (e.flash > 0) v += 2;
   let x = e.x;
-  if ((e.state === 'tele' || e.state === 'aim') && Math.floor(e.anim * 30) % 2) x += 1;
+  if ((e.state === 'tele' || e.state === 'aim' || e.state === 'rise') && Math.floor(e.anim * 30) % 2) x += 1;
   if (e.state === 'charge' && e.type === 'shroom') x += Math.floor(e.anim * 30) % 2 ? 1 : 0;
   const fy = oy + e.y - Math.round(e.z || 0) + (hover ? 0 : 1);
   if (EDEF[e.type].under) EDEF[e.type].under(e, ox, oy);

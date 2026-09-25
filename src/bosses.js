@@ -12,22 +12,27 @@ Object.assign(EDEF, {
     glint: (e) => (e.state === 'flutter' && e.n > 0.75 ? [0, -10] : null) },
   nmoth: { hp: 240, r: 16, h: 26, hw: 14, hh: 8, sw: 42, boss: true, intro: 'STOLE THE STARS', phases: [0.6, 0.25], fly: true, colors: ['2', '3', 'Y'], sprite: (e) => bossFrame(e, { stars: 'tell', call: 'tell', spiral: 'atk' }[e.state] || bob(e, 6, 1, 0)),
     glint: (e) => (e.state === 'drift' && e.n > (e.p2 ? 0.7 : 1) - 0.45 ? [0, -12] : null) },
+  mayor: { hp: 460, r: 13, h: 24, hw: 12, hh: 7, sw: 34, boss: true, intro: 'DIGS IN', phases: [0.66, 0.33], colors: ['N', 'n', 'p'],
+    sprite: (e) => e.ghost ? S(mayorSet(e) + '_mound') : bossFrame(e, { dig: 'tell', grab: 'tell', sink: 'tell', hills: 'atk', walk: bob(e, 4, 'move', 0) }[e.state] || bob(e, 2, 1, 0), mayorSet(e)),
+    glint: (e) => (e.state === 'walk' && e.n > mayorGap(e) - 0.45 ? [0, -26] : null) },
+  hill: { hp: 10, r: 7, h: 11, hw: 7, hh: 4, sw: 18, still: true, colors: ['N', 'n', 'h'], sprite: (e) => S(e.state === 'aim' ? 'mhill_1' : 'mhill_0'),
+    glint: (e) => (e.state === 'aim' ? [0, -10] : null) },
 });
-Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH' });
-LANDS[0].alt = 'queen'; LANDS[1].alt = 'octo'; LANDS[2].alt = 'cmoth';
+Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL' });
+LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = 'octo'; LANDS[2].alt = 'cmoth';
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
 const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
 
 // ---------- Which boss waits at the end of a land ----------
-// The alternate boss only turns up once the land's first boss has been beaten.
+// The alternate bosses only turn up once the land's first boss has been beaten.
 function chooseBoss(floor) {
   const L = floor.land;
   if (G.run.bow && L === LANDS[G.run.bow.land]) return G.run.bow.boss;
   if (!L.alt) return L.boss;
   return withSeed(hashSeed(G.run.seed, 'boss', floor.depth), () => {
     const known = G.daily || cnt('b:' + L.boss) > 0 || Save.stats.bestDepth > (floor.depth % LANDS.length) + 1;
-    return known && grand() < 0.5 ? L.alt : L.boss;
+    return known ? gpick([L.boss].concat(L.alt)) : L.boss;
   });
 }
 
@@ -224,6 +229,120 @@ Object.assign(AI, {
         break;
     }
   },
+  // Mole Mayor: waddles and flicks clods, burrows after you and bursts out, throws the arena's
+  // rocks; molehills from phase 2; sinkholes and a chain of bursts in phase 3.
+  mayor(e, dt, room, p) {
+    e.t -= dt;
+    if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+    if (e.hp < e.maxHp * 0.33) bossPhase(e, 3);
+    switch (e.state) {
+      case 'intro': if (e.t <= 0) { e.state = 'walk'; e.t = 1.4; e.n = 0; } break;
+      case 'walk':
+        if (Math.hypot(p.x - e.x, p.y - e.y) > 70) { const v = towardPlayer(e); moveBox(room, e, v.x * 30 * dt, v.y * 30 * dt, 'enemy'); }
+        e.flip = p.x < e.x;
+        if ((e.n += dt) > mayorGap(e)) { e.n = 0; fan(e.x, e.y - 14, aimAt(e.x, e.y - 14), 3, 0.3, 70, 'clod'); Audio_.sfx('eshoot'); }
+        if (e.t <= 0) {
+          const r = grand();
+          e.state = e.phase > 1 && !e.hills ? 'hills' : e.phase > 2 && (!e.sank || r < 0.35) ? 'sink' : r < 0.6 ? 'dig' : 'grab';
+          e.t = { hills: 0.7, sink: 1, dig: 0.45, grab: 0.6 }[e.state]; e.n = 0;
+          Audio_.sfx('charge');
+          if (e.state === 'sink') { e.sank = sinkTiles(room, p); for (const [c, r] of e.sank) G.markers.push({ kind: 'zone', x: c * 16 + 8, y: OY + r * 16 + 10, t: 1, max: 1 }); }
+          if (e.state === 'grab') {
+            // lifts one of the arena's rocks (cover!) and throws it at every hero
+            const rocks = []; for (let i = 0; i < room.tiles.length; i++) if (room.tiles[i] === T_ROCK) rocks.push(i);
+            const i = rocks.length ? gpick(rocks) : -1;
+            if (i >= 0) { const c = i % COLS, rr = (i / COLS) | 0; setTile(room, c, rr, T_FLOOR); poof(c * 16 + 8, OY + rr * 16 + 8); dust(c * 16 + 8, OY + rr * 16 + 12, 10, 16); }
+            for (const q of G.players) if (alive(q)) G.markers.push({ x: q.x, y: q.y, t: 1.1, max: 1.1, src: 'mayor', fall: 'rock_meadow' });
+          }
+        }
+        break;
+      case 'grab': if (e.t <= 0) { e.state = 'walk'; e.t = 1.6; e.n = 0; } break;
+      case 'hills':
+        if (e.t <= 0) {
+          // three molehills, as far from the heroes as the arena allows
+          const far = (s) => Math.min(...G.players.map(q => Math.hypot(q.x - s[0], q.y - s[1])));
+          const spots = [[72, 72], [312, 72], [72, 168], [312, 168], [192, 60], [192, 176]].sort((a, b) => far(b) - far(a));
+          spots.slice(0, 3).forEach((s, i) => { spawnEnemy('hill', s[0], s[1]).k = i; });
+          e.hills = 1; Audio_.sfx('brk'); G.shake = Math.max(G.shake, 2);
+          e.state = 'walk'; e.t = 1.6;
+        }
+        break;
+      case 'sink':
+        if (e.t <= 0) {
+          for (const [c, r] of e.sank) if (pitOk(room, c, r)) { setTile(room, c, r, T_PIT); (room.sunk = room.sunk || []).push([c, r]); dust(c * 16 + 8, OY + r * 16 + 12, 8, 14); }
+          Audio_.sfx('brk'); G.shake = Math.max(G.shake, 3);
+          e.state = 'dig'; e.t = 0.45; // then the chain of bursts
+        }
+        break;
+      case 'dig':
+        if (Math.random() < 0.5) dust(e.x, e.y, 1, 16);
+        if (e.t <= 0) { e.ghost = true; e.state = 'under'; e.t = 1.2; e.tr = []; e.n = 0; dust(e.x, e.y, 10, 20); Audio_.sfx('brk'); }
+        break;
+      case 'under': {
+        const v = towardPlayer(e);
+        moveBox(room, e, v.x * 62 * dt, v.y * 62 * dt, 'enemy');
+        if (Math.random() < 0.4) dust(e.x, e.y, 1, 14);
+        if ((e.n += dt) > 0.25) { e.n = 0; e.tr.push([e.x, e.y]); }
+        if (e.t <= 0) {
+          const k = e.phase > 2 ? 1 : 0.55, tr = e.tr;
+          e.state = 'rise'; e.t = k;
+          G.markers.push({ x: e.x, y: e.y, t: k, max: k, src: 'mayor', fall: '', n: 8 });
+          if (k > 0.6) for (const [j, t] of [[4, 0.5], [2, 0.75]]) if (tr.length >= j) G.markers.push({ x: tr[tr.length - j][0], y: tr[tr.length - j][1], t, max: t, src: 'mayor', fall: '', n: 6 });
+          Audio_.sfx('charge');
+        }
+        break;
+      }
+      case 'rise':
+        if (e.t <= 0) {
+          e.ghost = false; unstick(room, e, 'enemy');
+          dust(e.x, e.y, 14, 24); G.shake = Math.max(G.shake, 3);
+          stagger(e); e.state = 'walk'; e.t = 1.6; e.n = 0;
+        }
+        break;
+    }
+  },
+  // A molehill: in turn, lobs a clod at a hero; the ring shows where it lands.
+  hill(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle') { e.state = 'wait'; e.t = 1 + (e.k || 0); }
+    else if (e.state === 'wait' && e.t <= 0) { e.state = 'aim'; e.t = 0.5; }
+    else if (e.state === 'aim' && e.t <= 0) {
+      G.markers.push({ x: p.x, y: p.y, t: 1, max: 1, src: 'mayor', fall: 'ebb_clod', n: 3 });
+      Audio_.sfx('eshoot'); dust(e.x, e.y - 6, 4, 8);
+      e.state = 'wait'; e.t = 2.5;
+    }
+  },
+});
+const mayorSet = (e) => (e.phase > 2 ? 'mayor3' : 'mayor');
+const mayorGap = (e) => (e.phase > 1 ? 1.8 : 1.4);
+// A floor tile can sink if nobody stands on it, it keeps clear of the doors and the rest of
+// the floor stays in one piece.
+function pitOk(room, c, r) {
+  if (tileAt(room, c, r) !== T_FLOOR || c < 3 || c > 20 || r < 3 || r > 10 || (room.sunk || []).length >= 12) return false;
+  const x = c * 16 + 8, y = OY + r * 16 + 8;
+  for (const o of G.players.concat(G.enemies)) if (!o.dead && Math.abs(o.x - x) < 10 + o.hw && Math.abs(o.y - y) < 10 + o.hh) return false;
+  const t = room.tiles, seen = new Uint8Array(t.length), q = [];
+  t[r * COLS + c] = T_PIT;
+  let floor = 0;
+  for (let i = 0; i < t.length; i++) if (t[i] === T_FLOOR) { floor++; if (!q.length) { q.push(i); seen[i] = 1; } }
+  for (let h = 0; h < q.length; h++) for (const d of [1, -1, COLS, -COLS]) { const j = q[h] + d; if (t[j] === T_FLOOR && !seen[j]) { seen[j] = 1; q.push(j); } }
+  t[r * COLS + c] = T_FLOOR;
+  return q.length === floor;
+}
+// Four floor tiles near the hero, marked a second before they sink.
+function sinkTiles(room, p) {
+  const all = [];
+  for (let r = 3; r <= 10; r++) for (let c = 3; c <= 20; c++) if (pitOk(room, c, r)) all.push([c, r]);
+  const near = all.filter(([c, r]) => Math.hypot(c * 16 + 8 - p.x, OY + r * 16 + 8 - p.y) < 96);
+  const pool = near.length >= 4 ? near : all, out = [];
+  while (out.length < 4 && pool.length) out.push(pool.splice(Math.floor(grand() * pool.length), 1)[0]);
+  return out;
+}
+// The Mayor's sinkholes fill back in once he is beaten.
+onNote((ev, a) => {
+  if (ev !== 'boss' || a !== 'mayor' || NET.role === 'client' || !G.room || !G.room.sunk) return;
+  for (const [c, r] of G.room.sunk) { setTile(G.room, c, r, T_FLOOR); dust(c * 16 + 8, OY + r * 16 + 12, 6, 14); }
+  G.room.sunk = null;
 });
 // Its darkness: the night overlay while the Night Moth is in its later moods.
 const bossDark = () => !!(G.boss && G.boss.dark && !G.boss.dead);
@@ -233,5 +352,6 @@ BEASTS.push(
   { t: 'queen', spr: 'queen_0', boss: true, lore: ['THE QUEEN BEE RULES THE MEADOW HIVES.', 'SHE LEAVES DROPS OF HONEY WHERE SHE DASHES.', 'HER CROWN IS A BIG STAR, BENT TO FIT.'] },
   { t: 'octo', spr: 'octo_0', boss: true, lore: ['THE PEARL OCTOPUS GUARDS THE DEEP SHORE.', 'WHEN IT SINKS, IT COMES UP SOMEWHERE ELSE.', 'ITS PEARL IS REALLY A BIG STAR.'] },
   { t: 'cmoth', spr: 'cmoth_0', boss: true, lore: ['THE CRYSTAL MOTH LIVES DEEP IN THE CAVE.', 'ITS WINGS SHED GLOWING DUST.', 'IT CARRIES A BIG STAR FOR THE NIGHT MOTH.'] },
+  { t: 'mayor', spr: 'mayor_0', boss: true, lore: ['THE MOLE MAYOR RUNS THE MEADOW FROM BELOW.', 'WHEN THE GROUND BULGES, HE IS RIGHT UNDER IT.', 'HE LOST HIS HAT ONCE, AND NEVER GOT OVER IT.'] },
   { t: 'nmoth', spr: 'nmoth_0', boss: true, lore: ['THE NIGHT MOTH ATE THE STARLIGHT.', 'IN ITS DARK, ONLY YOUR OWN GLOW IS SAFE.', 'IT WAS ONCE A LITTLE MOTH THAT FEARED THE DARK.'] },
 );

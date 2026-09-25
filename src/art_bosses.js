@@ -114,6 +114,56 @@
       ...44...`);
   };
   bossFrames('nmoth', nmoth, o);
+
+  // ---------- Mole Mayor (Bloom Meadow) ----------
+  // A plump mole in a little top hat with huge digging claws. In phase 3 the hat is gone
+  // (the 'mayor3' set) and he sweats.
+  const HAT = `
+    ..000000..
+    ..0XXxx0..
+    ..0XXxx0..
+    ..0yyyo0..
+    .00XXxx00.
+    0XXXxxxxx0
+    .00000000.`;
+  const mayor = (f, bare) => {
+    const dy = f.st || f.d ? 3 : f.tl ? 1 : 0, px = f.a ? 1 : 0;
+    const py = 21 + dy + (f.tl ? -6 : f.a ? 1 : 0);
+    let r = sculpt(36, 32, [
+      { e: [18, 20 + dy / 2, 12.5, 11 - dy / 2], ramp: 'nNNa' },
+      { e: [18, 25 + dy / 2, 7.5, 5.5], ramp: 'eaaA', hi: false, noLine: true },
+      { e: [5 - px, py + (f.m ? -2 : 0), 4.5, 4.5], ramp: 'pPPq' },
+      { e: [31 + px, py + (f.m ? 2 : 0), 4.5, 4.5], ramp: 'pPPq' },
+    ]);
+    r = rim(r, { n: 'p' });
+    // claws: three pale hooks on each paw
+    for (const [x, y] of [[1 - px, py + (f.m ? 2 : 4)], [28 + px, py + (f.m ? 6 : 4)]]) r = stamp(r, x, y, 'L0L0L\nL0L0L\n0.0.0');
+    const ey = 14 + dy;
+    r = bossEyes(r, 11, ey, 10, f.face);
+    // the pink nose, and a wide mouth under it
+    r = stamp(r, 15, ey + 4, '.0000.\n0qPPP0\n0PPPp0\n.0pp0.');
+    r = stamp(r, 16, ey + 8, f.a || f.face === 'mad' ? '0000\n0ww0\n.00.' : MOUTH[f.face]);
+    r = stamp(r, 9, ey + 5, f.p ? 'rr' : 'qq');
+    r = stamp(r, 25, ey + 5, f.p ? 'rr' : 'qq');
+    // the hat: straight, tipped when angry, lying on the ground once he is beaten
+    if (f.d) return stamp(r, 26, 25, HAT);
+    if (bare) return f.st ? r : stamp(stamp(r, 11, ey - 3, 'C\nc'), 25, ey - 2, 'C\nc');
+    return stamp(r, f.p ? 14 : 13, 1 + dy - (f.tl ? 1 : 0), HAT);
+  };
+  bossFrames('mayor', (f) => mayor(f), o);
+  bossFrames('mayor3', (f) => mayor(f, true), o);
+  // under the ground: a travelling mound, the hat (or the bare nose) poking out
+  const mound = (hat) => {
+    let r = sculpt(36, 17, [{ e: [18, 16, 16, 9], ramp: 'nNNa', cut: 15 }]);
+    for (const [x, y] of [[8, 11], [14, 13], [22, 12], [27, 10], [11, 8]]) r = stamp(r, x, y, 'nn');
+    return stamp(r, hat ? 13 : 15, hat ? 1 : 5, hat ? HAT : '.0000.\n0qPPP0\n0PPPp0\n.0000.');
+  };
+  def('mayor_mound', mound(true), o);
+  def('mayor3_mound', mound(false), o);
+  // the molehills he raises in phase 2 (they lob clods); _1 is the moment before a throw
+  const hill = (up) => stamp(stamp(sculpt(18, 14, [{ e: [9, 13, 8.5, 9], ramp: 'nNNa', cut: 12 }]), 6, 5, up ? '.0000.\n0nNNn0\n0NNnn0\n.0000.' : '.0000.\n000000\n.0000.'), 2, 8, 'h..........G');
+  def('mhill_0', hill(false), { flash: true });
+  def('mhill_1', hill(true), { flash: true });
 })();
 
 // The Star Well's rocks (dark stone with a star) and breakable star lanterns.
@@ -136,6 +186,7 @@
     ink: [['.32.', '3w21', '2211', '.11.'], ['.332.2', '3w221.', '322211', '222111', '.2111.', '..11..']],
     pearl: [['.wL.', 'wLLq', 'LLqq', '.qP.'], ['.wLLq.', 'wwLLqq', 'wLLLqq', 'LLLqqP', 'LLqqPP', '.qqPP.']],
     dust: [['.C..', 'C43.', '.332', '..2.'], ['..C...', '.C43..', 'C4433.', '.43322', '..322.', '...2..']],
+    clod: [['.hG.', 'aNNn', 'NNnn', '.nn.'], ['.h.G..', 'aNhNN.', 'aNNNNn', 'NNNnnn', 'NNnnnn', '.nnnn.']],
     nstar: [['..q..', 'qqwPP', '.qPp.', '.P.p.'], ['...q...', '..qqP..', 'qqqwPPp', '.qqPPp.', '..qPp..', '.qp.pp.', '.p...p.']],
   };
   for (const k in B) {

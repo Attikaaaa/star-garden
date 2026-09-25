@@ -134,11 +134,12 @@ onNote((ev) => {
 });
 
 // ---------- Boss of the Week: a stronger boss at the end of its land ----------
-const BOW_BOSSES = [['king', 0], ['bcrab', 1], ['golem', 2], ['queen', 0], ['octo', 1], ['cmoth', 2]];
+const BOW_BOSSES = [['king', 0], ['bcrab', 1], ['golem', 2], ['queen', 0], ['octo', 1], ['cmoth', 2], ['mayor', 0, '2026-W40']];
 const BOW_HP = 1.4;
 function bossOfWeek(key) {
   key = key || utcWeek();
-  const [boss, land] = BOW_BOSSES[hashSeed('bow', key) % BOW_BOSSES.length];
+  const pool = BOW_BOSSES.filter(b => !b[2] || key >= b[2]); // new bosses join from their week on, so past weeks stay the same
+  const [boss, land] = pool[hashSeed('bow', key) % pool.length];
   return { key, boss, land, mod: withSeed(hashSeed('bow-mod', key), () => gpick(['swift', 'giants', 'glowing', 'echo'])) };
 }
 function startBossWeek() {
