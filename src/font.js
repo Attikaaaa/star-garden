@@ -88,6 +88,7 @@ const FONT_W = Object.create(null);
 })();
 
 function textW(str) {
+  str = tr(String(str));
   let w = 0;
   for (const ch of str) w += (FONT_W[ch] || 3) + 1;
   return Math.max(0, w - 1);
@@ -117,7 +118,7 @@ function _renderText(str, col, style) {
 
 // style: 0 plain, 1 drop shadow, 2 outline. align: 0 left, 1 centre, 2 right.
 function text(str, x, y, col, style, align) {
-  str = String(str).toUpperCase();
+  str = tr(String(str).toUpperCase());
   col = col || 'w';
   style = style === undefined ? 1 : style;
   const key = str + '\u0001' + col + style;

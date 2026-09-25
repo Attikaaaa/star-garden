@@ -110,7 +110,7 @@ function pollPad() {
   const P = Input.pad;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   let gp = null;
-  for (const g of pads) if (g && g.connected) { gp = g; break; }
+  for (const g of pads) if (g && g.connected && !(typeof couchPad === 'function' && couchPad(g.index))) { gp = g; break; }
   if (!gp) { P.mx = P.my = P.ax = P.ay = 0; return; }
   const dz = (v) => (Math.abs(v || 0) < 0.22 ? 0 : v);
   P.mx = dz(gp.axes[0]); P.my = dz(gp.axes[1]);
@@ -139,6 +139,8 @@ function pollPad() {
 function screenEdges() { return { l: -SCR.ox, t: -SCR.oy, r: SCR.w - SCR.ox, b: SCR.h - SCR.oy }; }
 function touchBtns() {
   const e = screenEdges();
+  // left-handed layout: everything mirrored
+  if (Save.settings.lefty) return { dash: [e.l + 34, e.b - 36, 17], star: [e.l + 34, e.b - 82, 14], belt: [e.l + 34, e.b - 122, 13], pause: [e.r - 15, e.t + 106, 11] };
   return { dash: [e.r - 34, e.b - 36, 17], star: [e.r - 34, e.b - 82, 14], belt: [e.r - 34, e.b - 122, 13], pause: [e.l + 15, e.t + 106, 11] };
 }
 const STICK_R = 18;
@@ -169,7 +171,7 @@ cv.addEventListener('pointerdown', e => {
   const tr = G.tipRect;
   if (tr && x >= tr[0] && x < tr[0] + tr[2] && y >= tr[1] && y < tr[1] + tr[3]) { Input.hit.TouchUse = true; return; }
   const s = { id: e.pointerId, ox: x, oy: y, x, y };
-  if (x + SCR.ox < SCR.w / 2) { if (!T.move) T.move = s; } else if (!T.aim) T.aim = s;
+  if ((x + SCR.ox < SCR.w / 2) !== !!Save.settings.lefty) { if (!T.move) T.move = s; } else if (!T.aim) T.aim = s;
 }, { passive: false });
 cv.addEventListener('pointermove', e => {
   if (e.pointerType !== 'touch') return;

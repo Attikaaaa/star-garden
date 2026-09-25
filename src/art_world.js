@@ -529,6 +529,17 @@ def('poof_2', `
   ..........`);
 def('sparkle_0', '.Y.\nYwY\n.Y.');
 def('sparkle_1', 'Y.Y\n.w.\nY.Y');
+// Stardrop: the Star Rain event's pickup (a fallen shooting star)
+def('stardrop', autoOutline(parseArt('stardrop', `
+  ...........
+  .....w.....
+  ....wYy....
+  .wwwYYyyyO.
+  ..wYYYYyO..
+  ...YYyyO...
+  ..Yyy.yyO..
+  ..yO...yO..
+  ...........`)));
 
 // Star gate that appears after a boss: a swirling flat disc on the floor.
 for (let f = 0; f < 3; f++) {

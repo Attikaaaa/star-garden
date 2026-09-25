@@ -311,8 +311,11 @@ const POTIONS = {
   power: { name: 'POWER', desc: 'YOUR SPELLS HIT MUCH HARDER', t: 9, price: 6 },
   guard: { name: 'GUARD', desc: 'NOTHING CAN HURT YOU', t: 5, price: 7 },
   turret: { name: 'STAR TURRET', desc: 'A TOWER THAT SHOOTS FOR YOU', t: 20, price: 8 },
+  // charms stay in the belt and recharge after a few cleared rooms (see items2.js)
+  charmheal: { name: 'HEALING CHARM', desc: 'HEALS A HEART, RECHARGES IN 3 ROOMS', charm: true, rooms: 3, price: 12 },
+  charmshield: { name: 'BUBBLE CHARM', desc: 'A BUBBLE SHIELD, RECHARGES IN 2 ROOMS', charm: true, rooms: 2, price: 12 },
 };
-const POTION_IDS = Object.keys(POTIONS);
+const POTION_IDS = Object.keys(POTIONS).filter(k => !POTIONS[k].charm), CHARM_IDS = Object.keys(POTIONS).filter(k => POTIONS[k].charm);
 
 // Difficulty, chosen before a run (the host chooses in co-op). vault: reward multiplier.
 const DIFFS = [
@@ -322,5 +325,5 @@ const DIFFS = [
   { name: 'STARBREAKER', desc: 'ONLY FOR TRUE STAR WIZARDS', hp: 1.75, count: 2, elite: 0.16, pace: 1.22, bullet: 1.22, vault: 1.6 },
 ];
 // Co-op makes every fight bigger: more health, a few more foes, more elites.
-const DIFF = () => DIFFS[G.diff];
+const DIFF = () => G.diffX || DIFFS[G.diff]; // G.diffX: with the run's modifiers (mods.js)
 const crewHp = (boss) => 1 + (boss ? 0.65 : 0.5) * (G.players.length - 1);

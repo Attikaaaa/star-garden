@@ -6,9 +6,11 @@ function ebullet(x, y, ang, speed, color, big) {
   let b = null;
   for (let i = 0; i < EBULLETS.length; i++) if (EBULLETS[i].life <= 0) { b = EBULLETS[i]; break; }
   if (!b) { b = {}; EBULLETS.push(b); }
-  speed *= DIFF().bullet;
+  speed *= DIFF().bullet * bulletSlow();
   b.x = x; b.y = y; b.vx = Math.cos(ang) * speed; b.vy = Math.sin(ang) * speed;
-  b.life = 6; b.r = big ? 3.5 : 2.5; b.key = (big ? 'ebb_' : 'eb_') + color; b.spr = S(b.key); b.t = 0;
+  b.life = 6; b.r = big ? 3.5 : 2.5; b.key = (big ? 'ebb_' : 'eb_') + color; b.spr = S(b.key); b.t = 0; b.src = E_SRC;
+  b.grazed = false; b.soft = false; b.echo = false;
+  return b;
 }
 function muzzle(x, y) { part(x, y, 0, 0, 0.14, null, { spr: 'sparkle', drag: 1 }); }
 function ring(x, y, n, speed, color, off, big) {
@@ -25,10 +27,27 @@ function updateEBullets(dt) {
     if (b.life <= 0) continue;
     b.life -= dt; b.t += dt;
     b.x += b.vx * dt; b.y += b.vy * dt;
-    if (solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) { b.life = 0; burst(b.x, b.y, 3, ['w', 'l'], 30, 0.2); continue; }
+    if (solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
+      // ECHO: every enemy bullet bounces off the first wall it meets
+      if (!b.echo && modOn('echo')) {
+        b.echo = true;
+        const px = b.x - b.vx * dt, py = b.y - b.vy * dt;
+        if (solidPx(room, b.x, py + 5, 'shot') || b.x < 8 || b.x > VW - 8) b.vx = -b.vx;
+        if (solidPx(room, px, b.y + 5, 'shot')) b.vy = -b.vy;
+        b.x = px; b.y = py;
+        continue;
+      }
+      b.life = 0; burst(b.x, b.y, 3, ['w', 'l'], 30, 0.2); continue;
+    }
     for (const p of G.players) {
-      if (!alive(p) || Math.hypot(p.x - b.x, p.y - 7 - b.y) >= b.r + 3) continue;
-      if (p.inv <= 0 || p.buff.guard > 0) { b.life = 0; hurtPlayer(p, 1); break; }
+      if (!alive(p)) continue;
+      const d = Math.hypot(p.x - b.x, p.y - 7 - b.y);
+      // rolling right through a bullet is a graze: a sparkle and a little Starfall charge
+      if (p.dashT > 0 && !b.grazed && d < b.r + 7) { b.grazed = true; grazeBullet(p, b); }
+      if (d >= b.r + 3) continue;
+      // practice bullets (the tutorial) just pop
+      if (b.soft) { if (p.dashT <= 0) { b.life = 0; burst(b.x, b.y, 4, ['C', 'w'], 40, 0.25); Audio_.sfx('pop'); } break; }
+      if (p.inv <= 0 || p.buff.guard > 0) { b.life = 0; hurtPlayer(p, 1, b.src); break; }
     }
   }
 }
@@ -36,7 +55,7 @@ function drawEBullets(ox, oy) {
   for (const b of EBULLETS) if (b.life > 0) shadow(ox + b.x, oy + b.y + 6, b.r > 3 ? 6 : 4);
   for (const b of EBULLETS) {
     if (b.life <= 0) continue;
-    const s = b.spr;
+    const s = cbSprite(b);
     drawS(s, ox + b.x - (s.w >> 1), oy + b.y - (s.h >> 1));
   }
 }
@@ -61,16 +80,17 @@ const EDEF = {
 
 function spawnEnemy(type, x, y, opts) {
   const d = EDEF[type], depth = G.floor.depth;
-  const hpMul = (d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2) * DIFF().hp * crewHp(d.boss);
+  const hpMul = (d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2) * DIFF().hp * crewHp(d.boss) * (d.boss && G.run && G.run.bow ? BOW_HP : 1);
   const e = {
     type, x, y, hp: d.hp * hpMul, maxHp: d.hp * hpMul, r: d.r, h: d.h, hw: d.hw, hh: d.hh, sw: d.sw,
     fly: !!d.fly, still: !!d.still, boss: !!d.boss, flash: 0, flashCd: 0, kx: 0, ky: 0, z: 0, vz: 0,
-    state: 'idle', t: rnd(0.3, 1.2), anim: Math.random() * 3, spawnT: opts && opts.instant ? 0 : 0.7,
-    dead: false, flip: false, vx: 0, vy: 0, n: 0, color: type === 'gold' ? 'gold' : G.floor.land.slime, ghost: false,
+    state: 'idle', t: grnd(0.3, 1.2), anim: grand() * 3, spawnT: opts && opts.instant ? 0 : 0.7,
+    dead: false, flip: false, vx: 0, vy: 0, n: 0, color: type === 'gold' ? 'gold' : slimeColor(G.floor.land.slime), ghost: false,
     passive: !!d.passive, elite: !!(opts && opts.elite), life: type === 'gold' ? 8 : 0, drops: 0,
     id: ++G.eid, tgt: null, tgtT: 0,
   };
-  if (e.elite) { e.hp *= 2; e.maxHp *= 2; }
+  if (e.elite) { e.hp *= 2; e.maxHp *= 2; rollAffix(e); }
+  if (d.init) d.init(e);
   if (e.boss) { e.state = 'intro'; e.t = CINE_T; e.spawnT = 0; e.z = type === 'king' ? 160 : 0; }
   else unstick(G.room, e, e.fly ? 'fly' : 'enemy');
   G.enemies.push(e);
@@ -79,6 +99,7 @@ function spawnEnemy(type, x, y, opts) {
 
 function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.dead || e.spawnT > 0) return;
+  if (affixBlock(e, fx, fy)) return;
   e.hp -= dmg;
   if (e.boss) addCharge(own, dmg * 0.004 / crewHp(true));
   if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
@@ -94,10 +115,12 @@ function hurtEnemy(e, dmg, fx, fy, quiet, own) {
 
 function killEnemy(e, own) {
   e.dead = true;
+  // practice targets (the tutorial) only burst: no stats, no loot, no combo
+  if (EDEF[e.type].practice) { poof(e.x, e.y - e.h / 2); burst(e.x, e.y - e.h / 2, 12, enemyColors(e), 90, 0.5, { g: 120 }); Audio_.sfx('kill'); return; }
   const p = own && G.players.includes(own) ? own : G.player;
   G.stats.kills++; p.kills++;
   if (p === G.player) Save.stats.kills++;
-  if (!e.boss) { onKill(e, p); youFx(p, e.elite ? 'elite' : 'kill'); }
+  if (!e.boss) { onKill(e, p); youFx(p, e.elite ? 'elite' : 'kill', e.type); }
   if (G.arena) G.arena.killed++;
   const cx = e.x, cy = e.y - e.h / 2;
   poof(cx, cy);
@@ -106,22 +129,30 @@ function killEnemy(e, own) {
   Audio_.sfx('kill');
   G.shake = Math.max(G.shake, 1.5);
   G.hitstop = Math.max(G.hitstop, 0.035);
-  if (e.type === 'jelly') { ring(e.x, e.y - 8, 6, 48, 'cyan', Math.random()); Audio_.sfx('pop'); }
+  if (e.type === 'jelly') { E_SRC = 'jelly'; ring(e.x, e.y - 8, 6, 48, 'cyan', grand()); Audio_.sfx('pop'); }
   if (e.type === 'slime' && e.color === 'blue') {
     for (let i = 0; i < 2; i++) { const m = spawnEnemy('mini', e.x + (i ? 5 : -5), e.y, { instant: true }); m.state = 'idle'; m.t = 0.4; }
   }
+  if (e.affix) affixDeath(e);
+  if (e.grudge) nemesisDeath(e);
+  if (e.elite) maybeScroll(e.x, e.y - 2, 0.04);
   if (e.type === 'gold') {
-    for (let i = 0; i < 6; i++) spawnPickup('coin', e.x, e.y - 4);
+    for (let i = 0; i < (teamHas('jackpot') ? 12 : 6); i++) spawnPickup('coin', e.x, e.y - 4);
     spawnPickup('gem', e.x, e.y - 4);
     earnVault(10);
+    noteTeam('gold');
     toast('GOLDEN SLIME: +10 VAULT COINS!');
     return;
   }
   const luck = teamLuck();
-  if (e.elite) { for (let i = 0; i < 3; i++) spawnPickup('coin', e.x, e.y - 2); if (Math.random() < 0.3 + luck * 0.05) spawnPickup('gem', e.x, e.y - 2); }
-  else if (Math.random() < 0.3 + luck * 0.08) dropLoot(e.x, e.y - 2, 0.5);
-  if (Math.random() < (e.elite ? 0.08 : 0.018) + luck * 0.005) spawnPotion(e.x, e.y - 2);
-  if (p.honey && ++p.honeyN >= 12) { p.honeyN = 0; if (p.hp < p.maxHp) { healPlayer(p, 1); Audio_.sfx('heart'); } }
+  if (e.elite) { for (let i = 0; i < 3; i++) spawnPickup('coin', e.x, e.y - 2); if (grand() < 0.3 + luck * 0.05) spawnPickup('gem', e.x, e.y - 2); }
+  else if (grand() < 0.3 + luck * 0.08) dropLoot(e.x, e.y - 2, 0.5);
+  if (grand() < (e.elite ? 0.08 : 0.018) + luck * 0.005) spawnPotion(e.x, e.y - 2);
+  if (p.honey && ++p.honeyN >= (p.honeyEvery || 12)) {
+    p.honeyN = 0;
+    if (p.hp < p.maxHp) { healPlayer(p, 1); Audio_.sfx('heart'); }
+    if (p.honeyShield && p.shield) p.shieldUp = true; // HONEY BUBBLE
+  }
 }
 function enemyColors(e) {
   switch (e.type) {
@@ -134,13 +165,15 @@ function enemyColors(e) {
     case 'wisp': return ['C', 'c', 'w'];
     case 'jelly': return ['q', 'P', 'w'];
     case 'bat': return ['2', '3', 'P'];
-    default: return ['l', 'm', 'c'];
+    default: return (EDEF[e.type] && EDEF[e.type].colors) || ['l', 'm', 'c'];
   }
 }
 
 // ---------- AI ----------
 // The hero the enemy being updated is after (see updateEnemies).
 let EP = null;
+// Which enemy type fired the bullets being made (the end screen names what got you).
+let E_SRC = '';
 const _dir = { x: 0, y: 0 };
 function towardPlayer(e) {
   const p = EP, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
@@ -166,10 +199,14 @@ function updateEnemies(dt) {
     // pick a target (nearest standing hero), re-checked twice a second so nobody jitters between two
     if ((e.tgtT -= dt) <= 0 || !e.tgt || !alive(e.tgt) || !G.players.includes(e.tgt)) { e.tgt = nearestHero(e.x, e.y); e.tgtT = 0.5; }
     const p = EP = e.tgt;
-    AI[e.type](e, dt * pace * (e.elite ? 1.25 : 1), room, p);
+    E_SRC = e.type;
+    const k = enemyStatus(e, dt);
+    if (e.dead) continue;
+    if (k === 0) continue; // asleep (SLEEPY BELL): no moves, no contact damage
+    AI[e.type](e, dt * pace * k * (e.elite ? 1.25 : 1), room, p);
     // contact damage
     if (e.passive || e.ghost || e.z >= 8) continue;
-    for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, (q.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(q, 1);
+    for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, (q.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(q, 1, e.type);
   }
   for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
 }
@@ -187,22 +224,22 @@ const AI = {
       if (e.t <= 0) {
         e.z = 0; e.state = 'land'; e.t = 0.14;
         dust(e.x, e.y, mini ? 2 : 4, mini ? 8 : 12);
-        if (e.color === 'pink' && !mini && Math.random() < 0.6) { ring(e.x, e.y - 5, 4, 60, 'pink', Math.PI / 4); Audio_.sfx('eshoot'); }
+        if (e.color === 'pink' && !mini && grand() < 0.6) { ring(e.x, e.y - 5, 4, 60, 'pink', Math.PI / 4); Audio_.sfx('eshoot'); }
       }
-    } else if (e.state === 'land' && e.t <= 0) { e.state = 'idle'; e.t = rnd(0.45, 0.9) * (mini ? 0.7 : 1); }
+    } else if (e.state === 'land' && e.t <= 0) { e.state = 'idle'; e.t = grnd(0.45, 0.9) * (mini ? 0.7 : 1); }
   },
   mini(e, dt, room, p) { AI.slime(e, dt, room, p); },
   // Golden slime: harmless, hops away from the hero and escapes after a while.
   gold(e, dt, room, p) {
     e.t -= dt; e.life -= dt;
     if (e.life <= 0 && e.state !== 'jump') {
-      e.dead = true; poof(e.x, e.y - 5); Audio_.sfx('tele'); toast('THE GOLDEN SLIME GOT AWAY!');
+      e.dead = true; poof(e.x, e.y - 5); Audio_.sfx('tele'); toast('THE GOLDEN SLIME GOT AWAY!'); noteTeam('goldx');
       return;
     }
     if (e.state === 'idle') {
       if (e.t <= 0) {
-        let a = Math.atan2(e.y - p.y, e.x - p.x) + rnd(-0.8, 0.8);
-        for (let k = 0; k < 6 && boxSolid(room, e.x + Math.cos(a) * 20, e.y + Math.sin(a) * 20, e.hw, e.hh, 'enemy'); k++) a += rnd(1, 2.5);
+        let a = Math.atan2(e.y - p.y, e.x - p.x) + grnd(-0.8, 0.8);
+        for (let k = 0; k < 6 && boxSolid(room, e.x + Math.cos(a) * 20, e.y + Math.sin(a) * 20, e.hw, e.hh, 'enemy'); k++) a += grnd(1, 2.5);
         e.vx = Math.cos(a) * 95; e.vy = Math.sin(a) * 95; e.flip = e.vx < 0;
         e.state = 'jump'; e.t = 0.34;
       }
@@ -211,7 +248,7 @@ const AI = {
       moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
       if (Math.random() < 0.4) part(e.x + rnd(-4, 4), e.y - rnd(2, 10), 0, -10, 0.4, null, { spr: 'sparkle', drag: 1 });
       if (e.t <= 0) { e.z = 0; e.state = 'land'; e.t = 0.1; dust(e.x, e.y, 3, 10); }
-    } else if (e.t <= 0) { e.state = 'idle'; e.t = rnd(0.15, 0.35); }
+    } else if (e.t <= 0) { e.state = 'idle'; e.t = grnd(0.15, 0.35); }
   },
   bee(e, dt, room, p) {
     e.t -= dt;
@@ -224,7 +261,7 @@ const AI = {
     } else if (e.state === 'aim') {
       e.vx *= 0.85; e.vy *= 0.85;
       if (e.t <= 0) { const a = Math.atan2(p.y - e.y, p.x - e.x); e.vx = Math.cos(a) * 150; e.vy = Math.sin(a) * 150; e.state = 'dash'; e.t = 0.38; }
-    } else if (e.state === 'dash' && e.t <= 0) { e.state = 'fly'; e.t = rnd(2, 3); }
+    } else if (e.state === 'dash' && e.t <= 0) { e.state = 'fly'; e.t = grnd(2, 3); }
     if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly') && e.state === 'dash') { e.vx *= -0.3; e.vy *= -0.3; }
     if (Math.abs(e.vx) > 3) e.flip = e.vx < 0;
     e.z = 6 + Math.sin(e.anim * 5) * 2;
@@ -237,7 +274,7 @@ const AI = {
       ring(e.x, e.y - 6, deep ? 10 : 8, 62, 'orange', e.n++ % 2 ? Math.PI / (deep ? 10 : 8) : 0);
       Audio_.sfx('eshoot');
       e.state = 'shoot'; e.t = 0.3;
-    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = rnd(1.8, 2.4); }
+    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = grnd(1.8, 2.4); }
   },
   flower(e, dt, room, p) {
     e.t -= dt;
@@ -249,7 +286,7 @@ const AI = {
       else fan(e.x, e.y - 8, a, 3, 0.26, 82, 'pink');
       Audio_.sfx('eshoot');
       e.state = 'shoot'; e.t = 0.25;
-    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = rnd(1.6, 2.2); }
+    } else if (e.state === 'shoot' && e.t <= 0) { e.state = 'idle'; e.t = grnd(1.6, 2.2); }
   },
   crab(e, dt, room, p) {
     e.t -= dt;
@@ -268,7 +305,7 @@ const AI = {
     } else if (e.state === 'charge') {
       if (Math.random() < 0.5) part(e.x + rnd(-5, 5), e.y - 1, 0, -10, 0.3, 'l', { size: 2 });
       if (moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy') || e.t <= 0) { e.state = 'stun'; e.t = 0.7; G.shake = Math.max(G.shake, 1); Audio_.sfx('land'); dust(e.x, e.y, 5, 12); }
-    } else if (e.state === 'stun' && e.t <= 0) { e.state = 'walk'; e.t = rnd(0.6, 1.2); }
+    } else if (e.state === 'stun' && e.t <= 0) { e.state = 'walk'; e.t = grnd(0.6, 1.2); }
   },
   wisp(e, dt, room, p) {
     e.t -= dt;
@@ -282,7 +319,7 @@ const AI = {
       if (e.t < 0.15) e.ghost = true;
       if (e.t <= 0) {
         for (let k = 0; k < 30; k++) {
-          const x = rnd(32, VW - 32), y = rnd(60, 190);
+          const x = grnd(32, VW - 32), y = grnd(60, 190);
           if (Math.hypot(x - p.x, y - p.y) > 80 && !boxSolid(room, x, y, e.hw, e.hh, 'fly')) { e.x = x; e.y = y; break; }
         }
         Audio_.sfx('tele');
@@ -293,7 +330,7 @@ const AI = {
       if (e.t <= 0) {
         fan(e.x, e.y - 8, aimAt(e.x, e.y - 8), 5, 0.22, 70, 'cyan');
         Audio_.sfx('eshoot');
-        e.state = 'float'; e.t = rnd(1.8, 2.6);
+        e.state = 'float'; e.t = grnd(1.8, 2.6);
       }
     }
   },
@@ -305,10 +342,10 @@ const AI = {
       e.state = 'drift';
       if (e.t <= 0) {
         e.state = 'pulse'; e.t = 0.25;
-        const a = Math.atan2(p.y - e.y, p.x - e.x) + rnd(-0.3, 0.3);
+        const a = Math.atan2(p.y - e.y, p.x - e.x) + grnd(-0.3, 0.3);
         e.vx = Math.cos(a) * 78; e.vy = Math.sin(a) * 78;
       }
-    } else if (e.state === 'pulse' && e.t <= 0) { e.state = 'drift'; e.t = rnd(0.9, 1.4); }
+    } else if (e.state === 'pulse' && e.t <= 0) { e.state = 'drift'; e.t = grnd(0.9, 1.4); }
     e.vx *= Math.pow(0.25, dt); e.vy *= Math.pow(0.25, dt);
     if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly')) { e.vx *= -0.5; e.vy *= -0.5; }
     e.z = 7 + Math.sin(e.anim * 2.5) * 2;
@@ -317,17 +354,17 @@ const AI = {
   bat(e, dt, room, p) {
     e.t -= dt;
     if (e.state === 'idle' || e.state === 'flutter') {
-      if (e.state === 'idle') { e.ang = Math.atan2(e.y - p.y, e.x - p.x); e.t = rnd(1.4, 2.2); }
+      if (e.state === 'idle') { e.ang = Math.atan2(e.y - p.y, e.x - p.x); e.t = grnd(1.4, 2.2); }
       e.state = 'flutter';
       e.ang += dt * 1.6;
       const tx = p.x + Math.cos(e.ang) * 58, ty = p.y - 6 + Math.sin(e.ang) * 40;
-      e.vx += ((tx - e.x) * 3 + rnd(-40, 40) - e.vx) * 4 * dt;
-      e.vy += ((ty - e.y) * 3 + rnd(-40, 40) - e.vy) * 4 * dt;
+      e.vx += ((tx - e.x) * 3 + grnd(-40, 40) - e.vx) * 4 * dt;
+      e.vy += ((ty - e.y) * 3 + grnd(-40, 40) - e.vy) * 4 * dt;
       if (e.t <= 0) { e.state = 'aim'; e.t = 0.3; }
     } else if (e.state === 'aim') {
       e.vx *= 0.8; e.vy *= 0.8;
       if (e.t <= 0) { const a = Math.atan2(p.y - e.y, p.x - e.x); e.vx = Math.cos(a) * 165; e.vy = Math.sin(a) * 165; e.state = 'swoop'; e.t = 0.5; }
-    } else if (e.state === 'swoop' && e.t <= 0) { e.state = 'flutter'; e.t = rnd(1.6, 2.4); e.ang = Math.atan2(e.y - p.y, e.x - p.x); }
+    } else if (e.state === 'swoop' && e.t <= 0) { e.state = 'flutter'; e.t = grnd(1.6, 2.4); e.ang = Math.atan2(e.y - p.y, e.x - p.x); }
     if (moveBox(room, e, e.vx * dt, e.vy * dt, 'fly') && e.state === 'swoop') { e.vx *= -0.4; e.vy *= -0.4; }
     if (Math.abs(e.vx) > 4) e.flip = e.vx < 0;
     e.z = 9 + Math.sin(e.anim * 9) * 1.5;
@@ -337,6 +374,7 @@ const AI = {
   king(e, dt, room, p) {
     e.t -= dt;
     const rage = e.hp < e.maxHp * 0.5;
+    if (rage) bossPhase2(e);
     switch (e.state) {
       case 'intro':
         e.z = Math.max(0, e.z - 260 * dt);
@@ -378,18 +416,25 @@ const AI = {
           G.shake = 7; Audio_.sfx('boom'); hapticAll('slam'); dust(e.x, e.y, 16, 34);
           ring(e.x, e.y - 6, rage ? 20 : 16, 70, 'pink', 0, true);
           burst(e.x, e.y, 16, ['G', 'h', 'H'], 120, 0.5, { g: 200 });
-          if (rage && G.enemies.length < 6) for (let i = 0; i < 2; i++) spawnEnemy('mini', e.x + (i ? 18 : -18), e.y + 4, { instant: true });
+          if (rage && !e.gentle && G.enemies.length < 6) for (let i = 0; i < 2; i++) spawnEnemy('mini', e.x + (i ? 18 : -18), e.y + 4, { instant: true });
           unstick(room, e, 'enemy');
         }
         break;
       case 'rest':
-        if (e.t <= 0) { e.state = 'pre'; e.t = 0.2; }
+        // phase 2: every other slam is followed by a spinning spray of slime
+        if (e.t <= 0) { if (e.p2 && (e.k = (e.k || 0) + 1) % 2 === 0) { e.state = 'spin'; e.t = 2; e.n = 0; Audio_.sfx('charge'); } else { e.state = 'pre'; e.t = 0.2; } }
+        break;
+      case 'spin':
+        e.n += dt;
+        if (e.n > 0.12) { e.n = 0; const b = e.t * 3.1; for (let i = 0; i < 3; i++) ebullet(e.x, e.y - 10, b + i * Math.PI * 2 / 3, 64, 'pink'); Audio_.sfx('eshoot'); }
+        if (e.t <= 0) { e.state = 'pre'; e.t = 0.4; }
         break;
     }
   },
   bcrab(e, dt, room, p) {
     e.t -= dt;
     const rage = e.hp < e.maxHp * 0.5;
+    if (rage) bossPhase2(e);
     switch (e.state) {
       case 'intro':
         if (e.t <= 0) { e.state = 'walk'; e.t = 2.4; e.n = 0; }
@@ -401,7 +446,13 @@ const AI = {
         moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
         e.n += dt;
         if (e.n > (rage ? 0.6 : 0.85)) { e.n = 0; fan(e.x, e.y - 10, aimAt(e.x, e.y - 10), rage ? 5 : 3, 0.24, 78, 'cyan'); Audio_.sfx('eshoot'); }
-        if (e.t <= 0) { e.state = Math.random() < 0.55 ? 'tele' : 'spiral'; e.t = e.state === 'tele' ? 0.7 : 2.4; e.n = 0; if (e.state === 'tele') Audio_.sfx('charge'); }
+        if (e.t <= 0) {
+          const r = grand();
+          // phase 2 adds a wall of bubbles with one gap to slip through
+          e.state = e.p2 && r < 0.3 ? 'wall' : r < 0.6 ? 'tele' : 'spiral';
+          e.t = e.state === 'tele' ? 0.7 : e.state === 'wall' ? 0.6 : 2.4; e.n = 0;
+          if (e.state !== 'spiral') Audio_.sfx('charge');
+        }
         break;
       }
       case 'tele':
@@ -415,12 +466,21 @@ const AI = {
         if (Math.random() < 0.7) part(e.x + rnd(-12, 12), e.y - 1, 0, -10, 0.4, 'A', { size: 2 });
         if (moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy') || e.t <= 0) {
           G.shake = 6; Audio_.sfx('boom'); hapticAll('slam'); dust(e.x, e.y, 12, 30);
-          ring(e.x, e.y - 10, rage ? 16 : 12, 64, 'cyan', Math.random());
+          ring(e.x, e.y - 10, rage ? 16 : 12, 64, 'cyan', grand());
           e.state = 'stun'; e.t = 0.9;
         }
         break;
       case 'stun':
         if (e.t <= 0) { e.state = 'walk'; e.t = 2.2; }
+        break;
+      case 'wall':
+        if (e.t <= 0) {
+          const gap = grndi(3, 16), down = p.y > e.y;
+          for (let i = 0; i < 20; i++) if (Math.abs(i - gap) > 1) ebullet(24 + i * 17, down ? 58 : 196, down ? Math.PI / 2 : -Math.PI / 2, 46, 'cyan', true);
+          Audio_.sfx('bubble');
+          e.w = (e.w || 0) + 1;
+          if (e.w >= 2) { e.w = 0; e.state = 'walk'; e.t = 2.2; } else e.t = 1.1;
+        }
         break;
       case 'spiral':
         e.n += dt;
@@ -437,6 +497,7 @@ const AI = {
   golem(e, dt, room, p) {
     e.t -= dt;
     const rage = e.hp < e.maxHp * 0.5;
+    if (rage) bossPhase2(e);
     switch (e.state) {
       case 'intro':
         if (e.t <= 0) { e.state = 'walk'; e.t = 1.2; }
@@ -446,8 +507,8 @@ const AI = {
         moveBox(room, e, d.x * (rage ? 34 : 26) * dt, d.y * (rage ? 34 : 26) * dt, 'enemy');
         e.flip = p.x < e.x;
         if (e.t <= 0) {
-          e.state = pick(['raise', 'rain', 'burst']);
-          e.t = e.state === 'raise' ? 0.65 : e.state === 'rain' ? 0.5 : 0; e.n = 0; e.w = 0;
+          e.state = gpick(e.p2 ? ['raise', 'rain', 'burst', 'waves'] : ['raise', 'rain', 'burst']);
+          e.t = e.state === 'raise' ? 0.65 : e.state === 'rain' ? 0.5 : e.state === 'waves' ? 0.5 : 0; e.n = 0; e.w = 0;
           if (e.state !== 'burst') Audio_.sfx('charge');
         }
         break;
@@ -465,8 +526,8 @@ const AI = {
       case 'rain':
         if (e.t <= 0) {
           for (let i = 0; i < (rage ? 8 : 6); i++) {
-            const x = i === 0 ? p.x : rnd(40, VW - 40), y = i === 0 ? p.y : rnd(60, 190);
-            G.markers.push({ x, y, t: 1 + i * 0.08, max: 1 + i * 0.08 });
+            const x = i === 0 ? p.x : grnd(40, VW - 40), y = i === 0 ? p.y : grnd(60, 190);
+            G.markers.push({ x, y, t: 1 + i * 0.08, max: 1 + i * 0.08, src: e.type });
           }
           e.state = 'walk'; e.t = rage ? 1.6 : 2.1;
         }
@@ -480,9 +541,27 @@ const AI = {
           if (e.w >= 3) { e.w = 0; e.state = 'walk'; e.t = rage ? 1 : 1.5; }
         }
         break;
+      case 'waves':
+        // phase 2: rings of crystal shards that twist a little each time
+        if (e.t <= 0) {
+          ring(e.x, e.y - 12, 12, 58 + e.w * 6, e.w % 2 ? 'cyan' : 'purple', e.w * 0.13);
+          Audio_.sfx('eshoot'); G.shake = Math.max(G.shake, 1.5);
+          e.w++; e.t = 0.32;
+          if (e.w >= 5) { e.w = 0; e.state = 'walk'; e.t = 1.2; }
+        }
+        break;
     }
   },
 };
+// Below half health a boss changes: a flash, a roar, a new attack.
+function bossPhase2(e) {
+  if (e.p2) return;
+  e.p2 = true;
+  G.flashT = 0.08; G.shake = Math.max(G.shake, 6);
+  Audio_.sfx('roar'); hapticAll('roar');
+  burst(e.x, e.y - e.h / 2, 30, enemyColors(e).concat(['w', 'Y']), 150, 0.8);
+  G.banner = { title: bossName(e.type) + ' IS FURIOUS!', sub: 'WATCH OUT FOR SOMETHING NEW', t: 2, icon: null };
+}
 
 // Falling crystals (golem): telegraph ring, then shatter into bullets.
 function updateMarkers(dt) {
@@ -491,11 +570,11 @@ function updateMarkers(dt) {
     const k = m[i];
     k.t -= dt;
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, 5, 62, 'cyan', Math.random());
+      ring(k.x, k.y - 4, 5, 62, 'cyan', grand());
       burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
-      for (const p of G.players) if (alive(p) && Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(p, 1);
+      for (const p of G.players) if (alive(p) && Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(p, 1, k.src || 'golem');
       m[i] = m[m.length - 1]; m.pop();
     }
   }
@@ -530,6 +609,8 @@ function enemySprite(e) {
     case 'king': return S('king_' + (e.state === 'hop' || e.state === 'rise' || e.state === 'fall' || e.state === 'hover' || e.state === 'intro' ? 2 : e.state === 'pre' || e.state === 'land' ? 1 : Math.floor(e.anim * 2) % 2));
     case 'bcrab': return S('bcrab_' + (e.state === 'tele' || e.state === 'charge' ? 2 : Math.floor(e.anim * (e.state === 'walk' ? 6 : 2)) % 2));
     case 'golem': return S('golem_' + (e.state === 'raise' || e.state === 'rain' ? 2 : e.state === 'walk' ? Math.floor(e.anim * 3) % 2 : 0));
+    // newer foes describe their own look in EDEF (see foes.js)
+    default: return EDEF[e.type].sprite(e);
   }
 }
 function drawEnemy(e, ox, oy) {
@@ -554,10 +635,14 @@ function drawEnemy(e, ox, oy) {
   if ((e.state === 'tele' || e.state === 'aim') && Math.floor(e.anim * 30) % 2) x += 1;
   if (e.state === 'charge' && e.type === 'shroom') x += Math.floor(e.anim * 30) % 2 ? 1 : 0;
   const fy = oy + e.y - Math.round(e.z || 0) + (hover ? 0 : 1);
+  if (EDEF[e.type].under) EDEF[e.type].under(e, ox, oy);
   if (e.elite || e.type === 'gold') drawGlow(s, ox + x - (s.w >> 1), fy - s.h, e.flip);
   drawFeet(s, ox + x, fy, v);
   const g = glintAt(e);
   if (g && Math.floor(e.anim * 16) % 2) drawS(S('sparkle_0'), ox + e.x + g[0] - 1, oy + e.y + g[1] - Math.round(e.z || 0) - 1);
+  drawEnemyStatus(e, ox, oy);
+  drawAffix(e, ox, oy);
+  drawGrudge(e, ox, oy);
 }
 // Where an enemy is about to shoot from, during the last moment before it fires.
 function glintAt(e) {
@@ -567,6 +652,6 @@ function glintAt(e) {
     case 'wisp': return e.state === 'appear' && e.t < 0.22 ? [0, -9] : null;
     case 'bcrab': return e.state === 'walk' && e.n > (e.hp < e.maxHp * 0.5 ? 0.4 : 0.62) ? [0, -12] : null;
     case 'golem': return e.state === 'burst' && e.n > 0.35 * (e.w + 1) - 0.15 ? [0, -16] : null;
-    default: return null;
+    default: return EDEF[e.type] && EDEF[e.type].glint ? EDEF[e.type].glint(e) : null;
   }
 }

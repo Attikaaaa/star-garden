@@ -10,6 +10,8 @@ const DOOR_CELLS = { u: [[11, 0], [12, 0], [11, 1], [12, 1]], d: [[11, 12], [12,
 // Where the player appears when entering through a door
 const ENTRY = { u: [192, 50], d: [192, 194], l: [26, 124], r: [358, 124] };
 
+// rnd / rndi / pick: cosmetic randomness only (particles, wobble). Anything that decides the
+// game uses the seeded grnd / grndi / gpick / pickWeighted from rng.js.
 const rnd = (a, b) => a + Math.random() * (b - a);
 const alive = (p) => !p.dead && !p.down;
 const rndi = (a, b) => Math.floor(rnd(a, b + 1));
@@ -17,7 +19,7 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 function pickWeighted(pool) {
   let sum = 0;
   for (const p of pool) sum += p[1];
-  let r = Math.random() * sum;
+  let r = grand() * sum;
   for (const p of pool) if ((r -= p[1]) < 0) return p[0];
   return pool[0][0];
 }
@@ -26,12 +28,16 @@ function newRoom(gx, gy) {
   return {
     gx, gy, type: 'normal', doors: {}, tiles: null, slots: [], dist: 0,
     cleared: false, visited: false, seen: false,
-    pickups: [], props: [], canvas: null, dirty: true, seed: (Math.random() * 1e9) | 0,
+    pickups: [], props: [], canvas: null, dirty: true, seed: (grand() * 1e9) | 0,
   };
 }
 
-function genFloor(depth) {
-  const land = LANDS[depth % LANDS.length];
+// Floors come from the run's seed: the same seed always builds the same floor.
+function genFloor(depth, land) {
+  return withSeed(hashSeed(G.run.seed, 'floor', depth), () => makeFloor(depth, land));
+}
+function makeFloor(depth, landOverride) {
+  const land = landOverride || LANDS[depth % LANDS.length];
   const target = land.rooms + Math.floor(depth / LANDS.length) * 2;
   for (let attempt = 0; attempt < 500; attempt++) {
     const map = new Map(), list = [];
@@ -40,8 +46,8 @@ function genFloor(depth) {
     const start = add(4, 4);
     start.type = 'start';
     for (let guard = 0; list.length < target && guard < 800; guard++) {
-      const base = pick(list);
-      const d = DIRS['udlr'[rndi(0, 3)]];
+      const base = gpick(list);
+      const d = DIRS['udlr'[grndi(0, 3)]];
       const nx = base.gx + d[0], ny = base.gy + d[1];
       if (nx < 0 || ny < 0 || nx > 8 || ny > 8 || at(nx, ny)) continue;
       let n = 0;
@@ -66,6 +72,8 @@ function genFloor(depth) {
     ends[1].type = 'item';
     ends[2].type = 'shop';
     if (ends[3]) ends[3].type = 'challenge';
+    addSpecialRooms(list, at, add, depth);
+    assignRewards(list);
     for (const r of list) buildRoom(r);
     return { depth, land, theme: land.theme, rooms: list, start };
   }
@@ -77,12 +85,12 @@ function buildRoom(room) {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     t[r * COLS + c] = (c === 0 || c === COLS - 1 || r <= 1 || r === ROWS - 1) ? T_WALL : T_FLOOR;
   }
-  for (const d in room.doors) for (const [c, r] of DOOR_CELLS[d]) t[r * COLS + c] = T_DOOR;
+  for (const d in room.doors) if (!hiddenDoor(room, d)) for (const [c, r] of DOOR_CELLS[d]) t[r * COLS + c] = T_DOOR;
   let layout = null;
-  if (room.type === 'normal' || room.type === 'challenge') layout = pick(LAYOUTS);
+  if (FIGHT_ROOMS.has(room.type)) layout = gpick(LAYOUTS);
   else if (room.type === 'boss' || room.type === 'arena') layout = BOSS_LAYOUT;
   if (layout) {
-    const flipX = Math.random() < 0.5, flipY = Math.random() < 0.5;
+    const flipX = grand() < 0.5, flipY = grand() < 0.5;
     for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
       const ch = layout[flipY ? 9 - y : y][flipX ? 21 - x : x];
       const i = (y + 2) * COLS + x + 1;
@@ -95,7 +103,7 @@ function buildRoom(room) {
   room.tiles = t;
   room.pits = [];
   for (let i = 0; i < t.length; i++) if (t[i] === T_PIT) room.pits.push([(i % COLS) * 16, OY + ((i / COLS) | 0) * 16, hash(i, 3, room.seed)]);
-  room.cleared = room.type !== 'normal' && room.type !== 'boss' && room.type !== 'challenge' && room.type !== 'arena';
+  room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'arena';
 }
 
 const tileAt = (room, c, r) => (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? T_WALL : room.tiles[r * COLS + c];
@@ -291,8 +299,9 @@ function renderRoomStatic(room, theme) {
 function doorKind(room, d) {
   const o = room.doors[d];
   if (room.type === 'boss' || o.type === 'boss') return 'b';
-  if (room.type === 'challenge' || o.type === 'challenge') return 'c';
-  if (room.type === 'item' || o.type === 'item' || room.type === 'shop' || o.type === 'shop') return 't';
+  if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion') return 'c';
+  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret'];
+  if (T.includes(room.type) || T.includes(o.type)) return 't';
   return 'n';
 }
 // room.doorT animates 0 (shut) .. 1 (open); values above 1 hold the doors open briefly.
@@ -300,6 +309,7 @@ function drawDoors(room, ox, oy, forceOpen) {
   const t = forceOpen ? 1 : room.doorT;
   const st = t > 0.66 ? 'open' : t > 0.33 ? 'mid' : 'shut';
   for (const d in room.doors) {
+    if (hiddenDoor(room, d)) continue;
     const k = doorKind(room, d);
     if (d === 'u') drawS(S('door_t_' + k + '_' + st), ox + 176, oy + OY + 8);
     else if (d === 'd') drawS(S('door_b_' + k + '_' + st), ox + 176, oy + OY + 192);

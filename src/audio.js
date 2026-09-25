@@ -95,6 +95,9 @@ const Audio_ = (() => {
     potion() { [0, 0.07, 0.14].forEach((t, i) => osc('triangle', 300 + i * 120, 600 + i * 200, 0.07, 0.12, t)); osc('p25', 784, 1568, 0.25, 0.08, 0.2); },
     turret() { osc('square', 200, 120, 0.12, 0.12); [523, 784, 1047].forEach((f, i) => osc('p25', f, f, 0.08, 0.09, 0.1 + i * 0.05)); },
     tshoot() { osc('p12', 1200, 1800, 0.05, 0.05); },
+    graze() { osc('p25', 1760, 2349, 0.05, 0.06); osc('triangle', 2637, 2637, 0.08, 0.05, 0.03); },
+    quest() { [659, 880, 1109, 1319].forEach((f, i) => osc('triangle', f, f, 0.16, 0.13, i * 0.07)); osc('p25', 1760, 1760, 0.3, 0.07, 0.28); },
+    star() { [1047, 1319, 1568, 2093].forEach((f, i) => osc('p25', f, f * 1.005, 0.12, 0.09, i * 0.05)); },
   };
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;
@@ -139,6 +142,13 @@ const Audio_ = (() => {
         'F#5 A5 D6 F#6 E6 D6 C#6 D6 B5 - D6 - F#6 - . . G5 B5 E6 G6 F#6 E6 D6 C#6 A5 - - - E5 - A5 - ' +
         'D6 - B5 - G5 - B5 D6 C#6 - A5 - E5 - A5 C#6 A5 - F#5 - C#6 - A5 - B5 - D6 - F#6 - E6 D6 ' +
         'G6 - F#6 - E6 - D6 - E6 - D6 - C#6 - A5 - D6 - F#6 - A6 - F#6 - D6 - - - . . . .',
+    },
+    // the Star Well: slow and starry
+    well: {
+      bpm: 104, wave: 'p12', drum: 'k . . h s . h .',
+      chords: 'Em C G D Em Am Bm Em',
+      lead: 'E5 - G5 - B5 - A5 G5 E5 - - - . . G5 A5 B5 - D6 - B5 - G5 - A5 - F#5 - D5 - . . ' +
+        'E5 - B5 - E6 - D6 B5 C6 - A5 - E5 - . . D6 - B5 - F#5 - A5 B5 G5 - E5 - - - . .',
     },
     boss: {
       bpm: 152, wave: 'p25', drum: 'k h s h k k s h', drive: true,

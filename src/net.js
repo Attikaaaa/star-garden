@@ -26,16 +26,21 @@ const NET_ICE = [
 // TURN relays make the direct link work on every network (mobile data, strict routers).
 // NET_TURN: servers with fixed credentials; NET_TURN_API: an address that hands out
 // fresh ones (fetched when a game is hosted or joined).
-const NET_TURN = [];
+const NET_TURN = [
+  // ExpressTURN free plan (the game's own account): UDP, and TCP for networks that block UDP
+  { urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'], username: '000000002105610232', credential: 'X0TxOR8q4C+RyBDnkbNR6yekU4o=' },
+];
 const NET_TURN_API = '';
 let _turn = null;
 const iceServers = () => NET_ICE.concat(NET_TURN, _turn || []);
 function fetchTurn() {
-  if (!NET_TURN_API || _turn) return;
-  fetch(NET_TURN_API).then(r => r.json()).then(a => { if (Array.isArray(a)) _turn = a; }).catch(() => {});
+  const u = NET_TURN_API || (ONLINE.url ? ONLINE.url + '/api/ice' : '');
+  if (!u || _turn) return;
+  fetch(u).then(r => r.json()).then(a => { if (Array.isArray(a) && a.length) _turn = a; }).catch(() => {});
 }
 const NET_MAX = 4, NET_RATE = 1 / 30;
 const NET = {
+  parked: {}, // host: heroes of dropped players, by their rejoin id
   role: null, code: '', status: '', err: '', q: [],
   peers: [],   // host: one link per client { pid, cid, ri, r, u, pc, wand, up, heard, ... }
   host: null,  // client: the link to the host
@@ -61,9 +66,9 @@ function sendU(L, msg) {
 }
 function closeLink(L) {
   if (!L) return;
-  clearTimeout(L.helloT); clearTimeout(L.altT);
+  clearTimeout(L.helloT);
   if (L.own) L.own.close();
-  if (L.alt) { L.alt.close(); L.alt = null; }
+  if (L.conns) { for (const M of L.conns) M.close(); L.conns = []; }
   try { L.r && L.r.close(); L.u && L.u.close(); L.pc && L.pc.close(); } catch (e) { /* already closed */ }
   L.r = L.u = L.pc = null;
 }
@@ -209,7 +214,11 @@ function hostDrop(L, why) {
   if (why !== 'quiet') toast(L.name + ' LEFT THE GAME');
   if (G.players.length && NET.playing) {
     const p = G.players.find(q => q.pid === L.pid);
-    if (p) { poof(p.x, p.y - 8); G.players.splice(G.players.indexOf(p), 1); flowKey = -1; }
+    if (p) {
+      poof(p.x, p.y - 8); G.players.splice(G.players.indexOf(p), 1); flowKey = -1;
+      // keep the hero's seat: the same player can come back into the running game
+      if (L.rj && why !== 'left') NET.parked[L.rj] = { p, pid: L.pid, name: L.name, skin: L.skin, wand: L.wand, up: L.up, cos: L.cos };
+    }
   }
   netLobbySync();
 }
@@ -218,7 +227,13 @@ function hostMessage(L, m) {
   if (m.t === 'hello') {
     if (L.pid >= 0) { sendR(L, { t: 'hi', pid: L.pid }); netLobbySync(); return; } // our answer got lost
     if (m.v !== NET_PROTO) { sendR(L, { t: 'no', why: 'PLEASE RELOAD THE PAGE: NEW VERSION' }); return; }
+    // back before we noticed the old link was gone (a reload): free that seat first
+    const old = NET.playing && m.rj && NET.peers.find(q => q !== L && q.rj === m.rj && q.pid >= 0);
+    if (old) hostDrop(old, 'quiet');
+    const seat = NET.playing && m.rj && NET.parked[m.rj];
+    if (seat) { hostRejoin(L, m.rj, seat); return; }
     if (NET.playing) { sendR(L, { t: 'no', why: 'THAT GAME HAS ALREADY STARTED' }); return; }
+    L.rj = typeof m.rj === 'string' ? m.rj.slice(0, 20) : '';
     const used = new Set(NET.peers.map(q => q.pid));
     let pid = 1;
     while (used.has(pid)) pid++;
@@ -248,6 +263,20 @@ function hostMessage(L, m) {
   } else if (m.t === 'offer') hostOffer(L, m);
   else if (m.t === 'resync' && L.pid >= 0) hostResync(L, m);
   else if (m.t === 'bye') hostDrop(L, 'left');
+}
+// A dropped player comes back: the same hero, next to a friend, with the whole picture.
+function hostRejoin(L, rj, seat) {
+  delete NET.parked[rj];
+  Object.assign(L, { pid: seat.pid, rj, name: seat.name, skin: seat.skin, wand: seat.wand, up: seat.up, cos: seat.cos });
+  const p = seat.p, near = G.players.find(alive) || G.player;
+  if (near) { p.x = near.x; p.y = near.y; }
+  p.tpN++; p.in = newInput();
+  G.players.push(p); flowKey = -1;
+  sendR(L, { t: 'hi', pid: L.pid });
+  sendR(L, startMsg()); sendR(L, floorMsg()); sendR(L, roomFullMsg());
+  if (G.state === 'over' || G.state === 'win') sendR(L, stateMsg(G.state));
+  poof(p.x, p.y - 8);
+  toast(L.name + ' IS BACK!');
 }
 // A client missed something (a lost message on a broker): send it the whole picture again.
 function hostResync(L, m) {
@@ -299,7 +328,7 @@ function netRoster() {
 }
 function netLobbySync() {
   if (NET.role !== 'host') return;
-  NET.lobby.players = netRoster().map(r => ({ pid: r.pid, wand: r.wand, name: r.name, skin: r.skin }));
+  NET.lobby.players = netRoster().map(r => ({ pid: r.pid, wand: r.wand, name: r.name, skin: r.skin, cos: r.pid === 0 ? myCos() : r.cos }));
   const msg = { t: 'lobby', code: NET.code, mode: NET.lobby.mode, diff: NET.lobby.diff, players: NET.lobby.players };
   for (const L of NET.peers) if (L.pid >= 0) sendR(L, msg);
 }
@@ -328,7 +357,7 @@ function sprName(s) {
 
 const startMsg = () => ({ t: 'start', mode: G.mode, diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
 function netStartRun() {
-  NET.playing = true;
+  NET.playing = true; NET.parked = {};
   hostAll(startMsg());
 }
 function floorMsg() {
@@ -417,7 +446,7 @@ function propsSig() {
 function netHostTick(dt) {
   if (NET.role !== 'host') return;
   const now = performance.now();
-  for (const L of NET.peers.slice()) if (now - L.heard > 15000) hostDrop(L, 'left');
+  for (const L of NET.peers.slice()) if (now - L.heard > 15000) hostDrop(L, 'lost');
   if ((NET.sendT += dt) < NET_RATE) return;
   NET.sendT = 0;
   const room = G.room, A = G.arena;
@@ -470,56 +499,52 @@ function netJoin(code) {
   NET.role = 'client'; NET.code = code; NET.status = 'CONNECTING...'; NET.err = '';
   NET.joinT = performance.now(); NET.linked = false;
   fetchTurn();
-  joinVia(code, 0, 'c' + netRandom(12, RND_ID));
+  joinAll(code, 'c' + netRandom(12, RND_ID));
 }
 function joinFail(why) { if (NET.role === 'client' && !NET.linked) { NET.err = why; NET.status = ''; netReset(); NET.role = null; } }
-function joinVia(code, i, cid) {
-  if (NET.role !== 'client' || NET.linked) return;
-  if (i >= NET_RELAYS.length) { joinFail(NET.reached ? 'NO GAME WITH THIS CODE' : 'NO CONNECTION. CHECK YOUR INTERNET'); return; }
-  const old = NET.host;
-  NET.host = null;
-  if (old && old.own) old.own.close();
+// Knock on every broker at once: the first place the host answers wins, so one broker
+// being down costs nothing. Once joined, two of them carry every message (numbered, so
+// the copies are dropped): if one stalls for a moment, the other keeps the game moving.
+function joinAll(code, cid) {
   const hostT = NET_TOPIC + code + '/h', inbox = NET_TOPIC + code + '/c/' + cid;
-  const L = { cid, ri: i, open: true, sq: 0, inbox };
+  const L = { cid, open: true, sq: 0, inbox, conns: [] };
+  const up = () => L.conns.filter(M => M.up);
   L.send = (str) => {
     const out = '{"f":"' + cid + '","q":' + (++L.sq) + ',"m":' + str + '}';
-    if (L.own) L.own.pub(hostT, out);
-    if (L.alt) L.alt.pub(hostT, out);
+    for (const M of up()) M.pub(hostT, out);
   };
   L.take = (payload) => {
     let d;
     try { d = JSON.parse(payload); } catch (e) { return; }
     if (d && d.m && d.q !== undefined) { if (fresh(L, d.q)) NET.q.push([L, d.m]); } else if (d) NET.q.push([L, d]);
   };
-  const connect = () => {
-    if (L.own) L.own.close();
-    L.own = mqttOpen(NET_RELAYS[i], inbox, L.take, (up) => {
-      if (NET.host !== L) return;
-      if (up) {
+  const hello = () => sendR(L, { t: 'hello', v: NET_PROTO, rj: Save.anonId(), wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin, cos: myCos() });
+  const open = (i) => {
+    const M = mqttOpen(NET_RELAYS[i], inbox, L.take, (ok) => {
+      if (NET.host !== L) { M.close(); return; }
+      if (ok) {
         NET.reached = true;
-        if (NET.linked) { sendR(L, { t: 'ping' }); return; } // back after a drop: the host still knows us
-        sendR(L, { t: 'hello', v: NET_PROTO, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin, cos: myCos() });
-        clearTimeout(L.helloT);
-        L.helloT = setTimeout(() => { if (NET.host === L && !NET.linked) joinVia(code, i + 1, cid); }, 5000);
-      } else if (NET.linked) setTimeout(() => { if (NET.host === L && !(L.own && L.own.up)) connect(); }, 1500); // keep the game going
-      else joinVia(code, i + 1, cid);
+        if (NET.linked && up().length > 2) { M.close(); L.conns.splice(L.conns.indexOf(M), 1); return; } // two are plenty
+        if (NET.linked) sendR(L, { t: 'ping', ts: Math.round(performance.now()) }); // back after a drop
+        else hello();
+        return;
+      }
+      L.conns.splice(L.conns.indexOf(M), 1);
+      // in a game, keep two brokers going
+      if (NET.linked && NET.host === L) setTimeout(() => { if (NET.host === L && up().length < 2) open(i); }, 2000);
     });
+    L.conns.push(M);
   };
-  L.reconnect = connect;
+  L.reconnect = () => { for (const M of L.conns) M.close(); L.conns = []; NET_RELAYS.forEach((u, i) => open(i)); };
+  L.trim = () => { const u = up(); for (const M of u.slice(2)) { M.close(); L.conns.splice(L.conns.indexOf(M), 1); } };
   NET.host = L;
-  connect();
-}
-// Once joined, a second broker carries every message too: if one of them stalls for a
-// moment, the other one keeps the game moving.
-function clientAlt(L, n) {
-  if (NET.host !== L || n > NET_RELAYS.length) return;
-  const j = (L.ri + n) % NET_RELAYS.length;
-  if (j === L.ri) return;
-  const M = L.alt = mqttOpen(NET_RELAYS[j], L.inbox, L.take, (up) => {
-    if (NET.host !== L || L.alt !== M) return;
-    if (up) sendR(L, { t: 'ping', ts: Math.round(performance.now()) });
-    else { M.close(); L.alt = null; L.altT = setTimeout(() => clientAlt(L, n + 1), 3000); }
-  });
+  NET_RELAYS.forEach((u, i) => open(i));
+  L.helloT = setTimeout(function wait() {
+    if (NET.host !== L || NET.linked) return;
+    if (performance.now() - NET.joinT > 12000) { joinFail(NET.reached ? 'NO GAME WITH THIS CODE' : 'NO CONNECTION. CHECK YOUR INTERNET'); return; }
+    if (up().length) hello(); // ask again: a message may have been lost
+    L.helloT = setTimeout(wait, 2500);
+  }, 2500);
 }
 // After joining: try a direct link; the game keeps running through the broker meanwhile.
 function clientUpgrade(L) {
@@ -533,8 +558,15 @@ function clientUpgrade(L) {
     .then(() => { if (L.pc === pc) sendR(L, { t: 'offer', sdp: pc.localDescription }); })
     .catch(() => {});
 }
+// The last game this device played in as a client: offered as REJOIN for a few minutes.
+const REJOIN_KEY = 'csk_rejoin', REJOIN_MS = 10 * 60000;
+function rejoinNote(code) { try { if (code) localStorage.setItem(REJOIN_KEY, JSON.stringify({ code, t: Date.now() })); else localStorage.removeItem(REJOIN_KEY); } catch (e) { /* no storage */ } }
+function rejoinCode() {
+  try { const r = JSON.parse(localStorage.getItem(REJOIN_KEY) || 'null'); return r && Date.now() - r.t < REJOIN_MS ? r.code : ''; } catch (e) { return ''; }
+}
 function clientLost(why) {
   if (NET.role !== 'client') return;
+  if (NET.playing || G.state === 'play' || G.state === 'pause') rejoinNote(NET.code);
   netReset(); NET.role = null;
   G.players = []; G.player = null;
   wipe(() => { setState('title'); toast(why); });
@@ -545,13 +577,14 @@ function netReset() {
   for (const M of NET.relays) if (M) M.close();
   clearTimeout(NET.slowT);
   NET.relays = []; NET.linked = false; NET.reached = false;
+  NET.parked = {};
   NET.q = []; NET.fx = []; NET.status = ''; NET.sendT = 0; NET.song = null; NET.playing = false; NET.heard = 0;
   NET.gaps = []; NET.offs = []; NET.off = 0; NET.delay = 0; NET.lastHt = 0; NET.lastRecv = 0; NET.rtt = 0; NET.gone = null;
 }
 // Leave or end the game (host: everyone goes back to the title).
 function netLeave() {
   if (NET.role === 'host') hostAll({ t: 'bye' });
-  else if (NET.role === 'client') sendR(NET.host, { t: 'bye' });
+  else if (NET.role === 'client') { sendR(NET.host, { t: 'bye' }); rejoinNote(''); }
   const was = NET.role;
   setTimeout(netReset, 150);
   NET.role = null;
@@ -590,7 +623,7 @@ function clientMessage(m) {
       clearTimeout(NET.host.helloT);
       setState('lobby'); Audio_.sfx('confirm');
       clientUpgrade(NET.host);
-      clientAlt(NET.host, 1);
+      NET.host.trim();
       break;
     case 'pong': if (m.ts) { const rt = performance.now() - m.ts; NET.rtt = NET.rtt ? NET.rtt * 0.7 + rt * 0.3 : rt; } break;
     case 'answer': if (NET.host && NET.host.pc) NET.host.pc.setRemoteDescription(m.sdp).catch(() => {}); break;
@@ -599,7 +632,7 @@ function clientMessage(m) {
       NET.lobby = { mode: m.mode, diff: m.diff, players: m.players };
       if (G.state !== 'lobby' && G.state !== 'entry' && Wipe.t < 0) wipe(() => setState('lobby')); // the host went back to the lobby
       break;
-    case 'bye': clientLost('THE HOST ENDED THE GAME'); break;
+    case 'bye': clientLost('THE HOST ENDED THE GAME'); rejoinNote(''); break;
     case 'start': clientStart(m); break;
     case 'floor': clientFloor(m); break;
     case 'room': clientRoom(m); break;
@@ -614,10 +647,12 @@ function clientMessage(m) {
   }
 }
 function clientStart(m) {
+  rejoinNote(NET.code);
   G.mode = m.mode; G.diff = m.diff;
   G.players = m.roster.map(r => {
     const p = newPlayer(r.pid);
     p.wand = r.wand; p.name = r.name; p.skin = r.skin; p.remote = r.pid !== NET.me;
+    if (r.cos && r.cos.hero) p.hero = r.cos.hero;
     if (typeof applyCosmetics === 'function') applyCosmetics(p, p.remote ? r.cos : myCos());
     return p;
   });
@@ -977,12 +1012,13 @@ function clientHits(me) {
 })();
 
 // ---------- Screens: co-op menu, text entry (codes, names), the lobby ----------
-const COOP_ITEMS = ['HOST A GAME', 'JOIN A GAME', 'BACK'];
+const coopItems = () => (rejoinCode() ? ['REJOIN ' + rejoinCode()] : []).concat(['HOST A GAME', 'JOIN A GAME', 'BACK']);
 function updateCoop() {
-  const c = menu(COOP_ITEMS, 110, 16);
-  if (pressed(...K_BACK) || c === 2) { Audio_.sfx('select'); titleReturn('CO-OP'); }
-  else if (c === 0) { Audio_.sfx('confirm'); netHost(); }
-  else if (c === 1) { Audio_.sfx('confirm'); openJoin(''); }
+  const items = coopItems(), c = menu(items, 110, 16), id = items[c];
+  if (pressed(...K_BACK) || id === 'BACK') { Audio_.sfx('select'); titleReturn('CO-OP'); }
+  else if (id === 'HOST A GAME') { Audio_.sfx('confirm'); netHost(); }
+  else if (id === 'JOIN A GAME') { Audio_.sfx('confirm'); openJoin(''); }
+  else if (id) { Audio_.sfx('confirm'); openJoin(rejoinCode()); netJoin(rejoinCode()); }
 }
 function drawCoop() {
   drawTitleBg();
@@ -992,7 +1028,7 @@ function drawCoop() {
   text('PLAY TOGETHER ONLINE, UP TO FOUR HEROES', VW / 2, 70, 'w', 1, 1);
   text('THE HOST SHARES A CODE, FRIENDS JOIN WITH IT', VW / 2, 81, 'c', 1, 1);
   text('MORE HEROES, TOUGHER FOES: HELP FALLEN FRIENDS UP!', VW / 2, 92, 'c', 1, 1);
-  drawMenu(COOP_ITEMS, 110, 16);
+  drawMenu(coopItems(), 110, 16);
 }
 
 // Text entry: type on a keyboard, or tap / pick letters on the pixel keypad.
@@ -1153,7 +1189,8 @@ function drawLobby() {
     rect(x, y, 60, 32, me ? 'Y' : '0'); rect(x + 1, y + 1, 58, 30, pl ? '2' : '1');
     if (pl) {
       const skin = me ? Save.skin : pl.skin;
-      drawFeet(S('hero_d0' + (Math.floor(G.time * 1.3 + i * 0.7) % 4 ? '' : 'b') + SKIN[skin]), x + 13, y + 29);
+      const hero = me ? Save.hero : pl.cos && pl.cos.hero, pre = typeof heroPre === 'function' ? heroPre(hero || 'pip') : 'hero_';
+      drawFeet(S(pre + 'd0' + (Math.floor(G.time * 1.3 + i * 0.7) % 4 ? '' : 'b') + SKIN[skin]) || S('hero_d0' + SKIN[skin]), x + 13, y + 29);
       drawS(S('wand_' + (me ? Save.wand : pl.wand)), x + 26, y + 13);
       text(me && NET.role === 'host' ? Save.name : pl.name, x + 30, y + 3, TAG_COL[skin], 2, 1);
     } else text(i ? 'OPEN' : '', x + 30, y + 13, '3', 1, 1);

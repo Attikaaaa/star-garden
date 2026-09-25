@@ -70,4 +70,12 @@ const THEMES = {
     'e': '0', 'f': '1', 'g': '2', 'h': 'Y',
   },
 };
-const THEME_ORDER = ['meadow', 'beach', 'crystal'];
+// The Star Well: the hidden fourth land (a night sky under your feet).
+THEMES.well = {
+  name: 'THE STAR WELL',
+  '1': '1', '2': '2', '3': '3', '4': 'Y', '5': 'w', '6': 'c',
+  '7': '1', '8': '2', '9': '3',
+  'a': '1', 'b': '2', 'c': '4', 'i': 'Y', 'j': 'C',
+  'e': '0', 'f': '1', 'g': '2', 'h': 'Y',
+};
+const THEME_ORDER = ['meadow', 'beach', 'crystal', 'well'];

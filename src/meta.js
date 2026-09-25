@@ -9,6 +9,7 @@ const keepPct = () => 0.1 + 0.1 * upLevel('bank');
 function addVault(n) {
   if (n <= 0) return;
   G.run.vault += n; Save.vault += n;
+  maxCnt('vaultmax', Save.vault);
   G.hud.vaultT = 0.6;
 }
 // Team bonuses (cleared rooms, bosses, waves): every hero in the game gets them.
@@ -34,7 +35,7 @@ function applyUpgrades(p, up) {
   p.luck += 0.5 * lv('luck');
   p.chargeMul = 1 + 0.25 * lv('charge');
   p.beltMax = 2 + lv('belt');
-  for (let i = 0; i < lv('belt'); i++) p.belt.push(i ? pick(['haste', 'power', 'guard']) : 'regen');
+  for (let i = 0; i < lv('belt'); i++) p.belt.push(i ? gpick(['haste', 'power', 'guard']) : 'regen');
 }
 
 // ---------- Garden screen: UPGRADES and WANDS tabs ----------
@@ -76,11 +77,15 @@ function updateKert() {
       if (lv >= u.cost.length) { Audio_.sfx('deny'); return false; }
       if (Save.vault < u.cost[lv]) { Audio_.sfx('deny'); toast('NOT ENOUGH VAULT COINS'); return false; }
       Save.vault -= u.cost[lv]; Save.up[u.id] = lv + 1;
+      note('garden', u.id, u.cost[lv]);
+      Save.flags.guide = false; G.kertGuide = false;
     } else {
       const id = WAND_IDS[i];
+      if (!Save.wands.includes(id) && !wandReady(id)) { Audio_.sfx('deny'); toast('FIRST: ' + WAND_REQ[id].text); return false; }
       if (!Save.wands.includes(id)) {
         if (Save.vault < WANDS[id].cost) { Audio_.sfx('deny'); toast('NOT ENOUGH VAULT COINS'); return false; }
         Save.vault -= WANDS[id].cost; Save.wands.push(id);
+        note('wand', id, WANDS[id].cost);
       } else if (Save.wand === id) { Audio_.sfx('select'); return false; }
       Save.wand = id;
     }
@@ -126,9 +131,15 @@ function drawKert() {
       text(wd.name, x + 28, y + 7, on ? 'Y' : own ? 'w' : 'l', 1);
       if (Save.wand === id) text('EQUIPPED', x + 28, y + 20, 'h', 1);
       else if (own) text('OWNED', x + 28, y + 20, 'c', 1);
+      else if (!wandReady(id)) text('LOCKED', x + 28, y + 20, 'l', 1);
       else { const c = String(wd.cost); drawS(S('coin_0'), x + 28, y + 19); text(c, x + 39, y + 20, Save.vault >= wd.cost ? 'Y' : 'R', 1); }
     }
   });
+  // after the first run: point at the upgrade the frog's gift can buy
+  if (G.kertGuide && G.gTab === 0 && cells[sel] && Math.floor(G.time * 4) % 2) {
+    const [cx, cy, cw, ch] = cells[sel];
+    rect(cx - 3, cy - 3, cw + 6, 1, 'Y'); rect(cx - 3, cy + ch + 2, cw + 6, 1, 'Y'); rect(cx - 3, cy - 3, 1, ch + 6, 'Y'); rect(cx + cw + 2, cy - 3, 1, ch + 6, 'Y');
+  }
   // footer: what the selected card does
   panel(22, 168, 340, 28);
   if (sel < cells.length) {
@@ -139,8 +150,9 @@ function drawKert() {
       sub = u.id === 'bank' ? 'KEEP ' + Math.round(keepPct() * 100) + '% OF ALL COINS FOREVER' + (lv < 3 ? ' (NEXT: ' + Math.round(keepPct() * 100 + 10) + '%)' : '') : u.desc;
     } else {
       const id = WAND_IDS[sel], wd = WANDS[id], own = Save.wands.includes(id);
-      title = wd.name; sub = wd.desc + (own ? Save.wand === id ? '' : '  -  PICK TO EQUIP' : '  -  UNLOCK FOREVER');
+      title = wd.name; sub = !own && !wandReady(id) ? 'TO UNLOCK: ' + WAND_REQ[id].text : wd.desc + (own ? Save.wand === id ? '' : '  -  PICK TO EQUIP' : '  -  UNLOCK FOREVER');
     }
+    if (G.kertGuide && G.gTab === 0) title = 'RIBBIT! YOUR COINS BUY THIS ONE';
     text(title, VW / 2, 173, 'Y', 1, 1);
     text(sub, VW / 2, 184, 'w', 1, 1);
   } else text('EARN VAULT COINS IN EVERY RUN, SPEND THEM HERE', VW / 2, 179, 'l', 1, 1);
@@ -150,25 +162,7 @@ function drawKert() {
 }
 
 // ---------- Before a run: pick a wand and the difficulty ----------
-const PREP_ROWS = ['wand', 'robe', 'diff', 'start', 'back'], PREP_Y = [66, 110, 144, 172, 186];
 function cycle(list, cur, dir) { return list[(list.indexOf(cur) + dir + list.length) % list.length]; }
-function prepAdjust(row, dir) {
-  if (row === 'wand') { const owned = WAND_IDS.filter(id => Save.wands.includes(id)); if (owned.length > 1) { Save.wand = cycle(owned, Save.wand, dir); Audio_.sfx('select'); } }
-  else if (row === 'robe') { Save.skin = (Save.skin + dir + ROBES.length) % ROBES.length; Audio_.sfx('select'); }
-  else if (row === 'diff') { Save.settings.diff = (Save.settings.diff + dir + DIFFS.length) % DIFFS.length; Audio_.sfx('select'); }
-}
-function updatePrep() {
-  menuNav(PREP_ROWS.length);
-  let click = -1;
-  PREP_ROWS.forEach((r, i) => { if (hoverRow(i, VW / 2 - 130, PREP_Y[i] - (i < 3 ? 18 : 5), 260, i < 3 ? 34 : 13)) click = i; });
-  const row = PREP_ROWS[G.menuSel];
-  const dir = pressed(...K_RIGHT) ? 1 : pressed(...K_LEFT) ? -1 : 0;
-  if (dir) prepAdjust(row, dir);
-  if (click >= 0 && click < 3 && Input.mouseHit) prepAdjust(row, Input.mx < VW / 2 ? -1 : 1);
-  if (pressed(...K_BACK) || ((pressed(...K_OK) || (click === 4 && Input.mouseHit)) && row === 'back')) { Save.write(); return 'back'; }
-  if ((pressed(...K_OK) && row !== 'back') || (click === 3 && Input.mouseHit)) { G.diff = Save.settings.diff; Save.write(); return 'start'; }
-  return null;
-}
 // One "< value >" row with a label and a line of description (also used by the lobby).
 function pickRow(y, label, value, desc, sel, icon, ly) {
   text(label, VW / 2, y - (ly || 14), sel ? 'Y' : 'l', 1, 1);
@@ -180,19 +174,6 @@ function pickRow(y, label, value, desc, sel, icon, ly) {
   text('>', VW / 2 + w / 2 + 7 + bob, y, sel ? 'Y' : '3', 2);
   if (desc) text(desc, VW / 2, y + 12, 'c', 1, 1);
 }
-function drawPrep() {
-  drawTitleBg();
-  dim(0.5);
-  panel(VW / 2 - 136, 30, 272, 168);
-  text(G.prep.mode === 'arena' ? 'THE ARENA' : 'ADVENTURE', VW / 2, 37, 'Y', 2, 1);
-  const sel = PREP_ROWS[G.menuSel], w = WANDS[Save.wand], d = DIFFS[Save.settings.diff];
-  pickRow(PREP_Y[0], 'WAND', w.name, w.desc, sel === 'wand', 'wand_' + Save.wand);
-  pickRow(PREP_Y[1], 'ROBE', ROBES[Save.skin], null, sel === 'robe', 'hero_d0' + SKIN[Save.skin], 19);
-  pickRow(PREP_Y[2], 'DIFFICULTY', d.name, d.desc + (d.vault !== 1 ? '  VAULT X' + d.vault : ''), sel === 'diff');
-  drawMenu(['START!', 'BACK'], PREP_Y[3], PREP_Y[4] - PREP_Y[3], G.menuSel - 3);
-  if (Save.wands.length < 2 && sel === 'wand') text('UNLOCK MORE WANDS IN THE GARDEN', VW / 2, 204, 'c', 2, 1);
-}
-
 // ---------- Run save / resume (solo adventure) ----------
 // Saved only while standing in a cleared room, so a resumed run never starts mid-fight.
 const RUN_KEY = 'csk_run';
@@ -200,7 +181,7 @@ function hasRun() { try { return !!localStorage.getItem(RUN_KEY); } catch (e) { 
 function clearRun() { try { localStorage.removeItem(RUN_KEY); } catch (e) { /* no storage */ } }
 function saveRun() {
   const p = G.player, room = G.room;
-  if (NET.role || G.mode !== 'adv' || !p || p.dead || !room || !room.cleared || G.state === 'over') return;
+  if (NET.role || couchOn() || G.mode !== 'adv' || G.daily || !p || p.dead || !room || !room.cleared || G.state === 'over') return;
   const rooms = G.floor.rooms;
   const player = {};
   for (const k in p) if (k !== 'orbitHit' && k !== 'in') player[k] = p[k];
@@ -209,9 +190,9 @@ function saveRun() {
     rooms: rooms.map(r => ({
       gx: r.gx, gy: r.gy, type: r.type, dist: r.dist, cleared: r.cleared, visited: r.visited, seen: r.seen,
       stocked: r.stocked, seed: r.seed, tiles: Array.from(r.tiles), slots: r.slots, pits: r.pits,
-      pickups: r.pickups, props: r.props,
+      pickups: r.pickups, props: r.props, reward: r.reward, skull: r.skull, hidden: r.hidden, keyRoom: r.keyRoom,
     })),
-    player, stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff,
+    player, stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff, mods: G.mods || [], boss: G.floor.boss,
   };
   try { localStorage.setItem(RUN_KEY, JSON.stringify(data)); } catch (e) { /* no storage */ }
   Save.write();
@@ -223,15 +204,17 @@ function loadRun() {
   const rooms = d.rooms.map(r => Object.assign(newRoom(r.gx, r.gy), r, { tiles: Uint8Array.from(r.tiles), doors: {}, dirty: true, canvas: null }));
   const at = (x, y) => rooms.find(r => r.gx === x && r.gy === y);
   for (const r of rooms) for (const k in DIRS) { const o = at(r.gx + DIRS[k][0], r.gy + DIRS[k][1]); if (o) r.doors[k] = o; }
-  const land = LANDS[d.depth % LANDS.length];
-  G.mode = 'adv'; G.arena = null;
+  const land = d.run && d.run.well && d.depth === LANDS.length ? WELL : LANDS[d.depth % LANDS.length];
+  G.mode = 'adv'; G.arena = null; G.daily = null;
   G.diff = d.diff !== undefined ? d.diff : 1;
-  G.floor = { depth: d.depth, land, theme: land.theme, rooms, start: rooms[d.start] };
+  setMods(d.mods);
+  G.floor = { depth: d.depth, land, theme: land.theme, rooms, start: rooms[d.start], boss: d.boss || land.boss };
   const p = Object.assign(newPlayer(0), d.player, { orbitHit: new Map(), in: newInput(), inv: 1, dashT: 0, cool: 0, hurtT: 0, remote: false, down: false });
   G.players = [p]; G.player = p;
   G.coins = d.coins !== undefined ? d.coins : d.player.coins || 0;
   G.stats = d.stats; G.won = d.won; G.bestBefore = d.bestBefore;
   G.run = d.run && d.run.vault !== undefined ? d.run : { vault: 0, keep: 0 };
+  if (!G.run.seed) G.run.seed = newSeed();
   resetRunFx();
   const room = rooms[d.cur];
   const px = p.x, py = p.y;

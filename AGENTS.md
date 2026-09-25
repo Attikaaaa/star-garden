@@ -16,9 +16,10 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   (sprite strings), all audio is Web Audio synthesis. Keep it that way.
 - **Classic `<script>` tags**, not ES modules, so the game runs from `file://`. The files
   share one global scope: top-level names must not collide. Load order is fixed in
-  `index.html` (palette → save → gfx → font → art → audio → input → data → level →
-  entities → enemies → fx → ui → meta → main → net). `net.js` loads last because it wraps
-  a few functions of the others (see *Co-op* below).
+  `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
+  data → level → entities → enemies → fx → ui → meta → the progress and content files →
+  couch → cloud → yard → events → main → net). `net.js` loads last because it wraps a few
+  functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
 ## File map (`src/`)
@@ -42,7 +43,28 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `ui.js` | HUD, minimap, banners, menus, settings, collection, pause, end screens, touch overlay |
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
-| `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, co-op menu, text entry, lobby |
+| `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
+| `rng.js` | seeded random streams for everything that decides the game (`grnd`, `gpick`, `withSeed`, `hashSeed`) |
+| `online.js` | consent-gated stats (`track`), error reports, `live.json`, the optional game server (`api`, `online()`), install and storage |
+| `lang.js`, `lang_hu.js` | languages: `tr()` looks up whole on-screen strings (`#` numbers, `*` words); one table per language |
+| `progress.js` | the event bus (`note`, `onNote`, `noteFor`, `noteTeam`), counters (`cnt`, `bump`), unlocks and NEW badges, the run log |
+| `firstrun.js` | the tutorial room, the curated first run, the first gift, naming |
+| `screens.js` | modals (`openModal`), the what's-new list (`NEWS`), title notices, the end screen and its next goal |
+| `quests.js`, `stars.js`, `book.js`, `mail.js` | quests; Constellations (achievements); the Book (items, bestiary, combos, runs, stats); the frog's letters and daily gifts |
+| `hub.js`, `yard.js` | the Garden's menus and cosmetics (trails, pets, titles); the walkable Garden, plants and seed plots |
+| `items2.js`, `loot.js`, `affix.js`, `mods.js` | more items, rarity and sets; door rewards, skull rooms, star scrolls; elite affixes and the nemesis; run modifiers |
+| `foes.js`, `bosses.js`, `rooms.js`, `story.js` | the second wave of foes; alternate bosses, the Star Well and Big Stars; special rooms; the frog's lines and the ending |
+| `heroes.js`, `options.js` | the four heroes; wand aspects, Star Trials, Quick Run, assist, bullet shapes, key remapping, the arena save |
+| `daily.js`, `events.js` | the Daily Star Run, Weekly Challenge and share card; the sky calendar (Star Rain, Moon Night), seasons, Boss of the Week |
+| `couch.js`, `cloud.js` | couch co-op (extra controllers); save codes, cloud backup, leaderboards and friend codes, the community goal, bloom reminders |
+| `art_heroes/more/items/foes/bosses/rooms/garden.js` | art for the content added after the first release |
+
+`server/server.js` is the optional game server (Node 18+, no dependencies, JSON files in
+`DATA_DIR`): stats, cloud saves and transfer codes, leaderboards with friend codes, the
+weekly community goal, TURN credentials (`/api/ice`), payload-free web push for bloom
+reminders and a retention dashboard (`/admin?key=ADMIN_KEY`). The game finds it through
+`"server"` in `live.json` or `<meta name="sg-server">`; with neither, every online extra
+stays hidden and the game is complete offline.
 
 ## Pixel-art rules (mandatory)
 
@@ -136,6 +158,23 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 - **Robe:** a legend in `SKINS` (`art_chars.js`), a name in `ROBES` and a tag colour in
   `TAG_COL` that exists in `FONT_COLORS` (text in other colours does not render).
 
+## Live ops, languages, couch co-op
+
+- Events come from the device's clock (`events.js`): meteor showers (`SHOWERS`), the
+  moon's age, seasons (`SEASONS`), Halloween (`holiday()`). `live.json` can add
+  `events` (`kind: "rain" | "moon"`, `from`/`to` dates), `news` and `tuning` without a
+  release; the service worker fetches it network-first.
+- Daily and weekly runs stay deterministic: event effects must never draw from the seeded
+  streams (use `rnd`, not `grnd`), and a twist that depends on the date is chosen from the
+  run's key, not from `Date.now()`.
+- Text goes through `tr()` inside `text()`, `textW()` and `wrapText()`. New on-screen
+  strings need an entry in every `lang_*.js` (a missing one simply shows in English);
+  build dynamic strings so a `#`/`*` key can match them, and check that the longer
+  translation still fits.
+- Couch co-op: extra controllers join on the pre-run screen (`G.couch`); their heroes
+  carry `p.pad` and read `PADS` in `readCouchInput`. A claimed controller no longer drives
+  player one (`couchPad`). Couch runs are not saved.
+
 ## Co-op (`net.js`)
 
 - The host simulates everything; clients only move their own hero (so it feels instant),
@@ -169,6 +208,9 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   them (`ps`) are left out of its snapshots. A client judges bullets, touches and falling
   crystals on its own hero (`clientHits`, message `hit`); on the host those sources are
   wrapped (`NET.judged`) so they do not hurt remote heroes a second time.
+- Rejoin: `hello` carries the player's anonymous id (`rj`). When a client drops during a
+  run, the host parks its hero in `NET.parked`; the same player coming back (the co-op
+  menu offers `REJOIN <code>` for ten minutes) gets that hero again.
 - Test co-op with two separate browsers (two profiles): the host must stay in the
   foreground, a hidden tab stops the game for everyone.
 

@@ -26,6 +26,7 @@ function beltSlotAt(x, y) {
 const BUFF_IDS = ['regen', 'haste', 'power', 'guard'];
 function drawHUD() {
   const p = G.player;
+  hudOn();                           // the corner HUD has its own, finer canvas on desktop
   ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins, meter and belt hug the screen corner
   const hearts = Math.ceil(p.maxHp / 2);
   const low = p.hp <= 2 && p.maxHp > 2 && alive(p), beat = low && (G.beatT || 0) > 0.95;
@@ -56,7 +57,12 @@ function drawHUD() {
     const x = L.x + i * 15, it = p.belt[i], pop = i === p.belt.length - 1 && G.hud.beltT > 0;
     rect(x, L.y, 14, 16, '0');
     rect(x + 1, L.y + 1, 12, 14, pop ? '3' : it ? '2' : '1');
-    if (it) drawS(S('pot_' + it), x + 2, L.y + 2 - (pop ? 1 : 0));
+    if (it) {
+      // a charm that is recharging shows grey with the rooms it still needs
+      const cd = POTIONS[it].charm && p.charmCd ? p.charmCd[it] || 0 : 0;
+      drawS(S('pot_' + it), x + 2, L.y + 2 - (pop ? 1 : 0), cd ? 4 : 0);
+      if (cd) text(String(cd), x + 7, L.y + 5, 'w', 2, 1);
+    }
   }
   let bx = L.x + L.n * 15 + 2;
   if (p.belt.length && Input.lastAim !== 'touch') { text(Input.lastAim === 'pad' ? 'Y' : 'R', bx, L.y + 5, 'Y', 2); bx += 10; }
@@ -70,9 +76,10 @@ function drawHUD() {
   }
   if (G.players.length > 1) drawTeam(L.y + 22);
   ctx.translate(SCR.ox, SCR.oy);
-  drawCombo();
   const right = G.mode === 'arena' ? drawWave() : drawMinimap();
   drawKills(right);
+  hudOff();
+  drawCombo();
   if (G.boss && !G.boss.dead && G.boss.state !== 'intro') {
     const b = G.boss, w = 120, x = (VW - w) / 2, y = 15;
     rect(x - 1, y - 1, w + 2, 6, '0');
@@ -80,14 +87,15 @@ function drawHUD() {
     const f = Math.max(0, Math.round(w * b.hp / b.maxHp));
     rect(x, y, f, 4, 'P');
     rect(x, y, f, 1, 'q');
-    text(G.floor.land.bossName, VW / 2, 3, 'w', 2, 1);
+    text(curBossName(), VW / 2, 3, 'w', 2, 1);
   }
   G.tipRect = null;
   if (G.state !== 'play') return;
   const o = nearestProp(p);
   if (o && !G.trans && !G.warp) drawPropTip(o);
+  if (G.tut) drawTutorialPrompt();
   if (G.banner) drawBanner();
-  if (G.floorBanner) {
+  if (G.floorBanner && !G.tut) {
     const b = G.floorBanner, a = Math.min(1, b.t * 2, (2.8 - b.t) * 3);
     if (a > 0.05) {
       const y = 70 - Math.round((1 - a) * 8);
@@ -182,8 +190,9 @@ function drawTouch() {
     tCircle(s.ox + dx * k, s.oy + dy * k, 8, T_KNOB);
   };
   const e = screenEdges();
-  stick(T.move, e.l + 48, e.b - 46);
-  stick(T.aim, e.r - 110, e.b - 50);
+  const L = !!Save.settings.lefty;
+  stick(T.move, L ? e.r - 48 : e.l + 48, e.b - 46);
+  stick(T.aim, L ? e.l + 110 : e.r - 110, e.b - 50);
   const b = touchBtns(), p = G.player;
   tCircle(b.dash[0], b.dash[1], b.dash[2], T_BTN);
   drawS(S('icon_speed'), b.dash[0] - 8, b.dash[1] - 8, p.dashCool > 0 ? 4 : 0);
@@ -287,8 +296,16 @@ function keyCap(x, y) {
 
 // ---------- Title ----------
 const TITLE_Y = 116, TITLE_GAP = 11;
+// The title menu grows as the player gets to things: a first launch shows just PLAY.
+const TITLE_BADGE = { ARENA: 'menu:arena', 'CO-OP': 'menu:coop', 'DAILY STAR RUN': 'menu:daily' };
 function titleItems() {
-  return (hasRun() ? ['CONTINUE', 'NEW ADVENTURE'] : ['ADVENTURE']).concat(['ARENA', 'CO-OP', 'THE GARDEN', 'COLLECTION', 'SETTINGS']);
+  const first = Save.stats.runs === 0 && !hasRun();
+  const out = first ? ['PLAY'] : hasRun() ? ['CONTINUE', 'NEW ADVENTURE'] : ['ADVENTURE'];
+  if (typeof dailyReady === 'function' && menuOpen('daily')) out.push('DAILY STAR RUN');
+  if (menuOpen('arena')) { if (hasArena()) out.push('CONTINUE ARENA'); out.push('ARENA'); }
+  if (menuOpen('coop')) out.push('CO-OP');
+  if (menuOpen('garden')) out.push('THE GARDEN');
+  return out.concat(['SETTINGS']);
 }
 function drawTitleBg() {
   const t = G.time;
@@ -315,7 +332,8 @@ function drawTitle() {
   text('THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', VW / 2, 52, 'Y', 2, 1);
   const hx = VW / 2, hy = 110;
   shadow(hx, hy, 12);
-  drawFeet(S('hero_d' + HERO_WALK[Math.floor(t / 0.14) % 4] + SKIN[Save.skin]), hx, hy + 1);
+  drawFeet(S(heroPre(heroUnlocked(Save.hero) ? Save.hero : 'pip') + 'd' + HERO_WALK[Math.floor(t / 0.14) % 4] + SKIN[Save.skin]), hx, hy + 1);
+  if (Save.pet) { shadow(hx + 17, hy, 8); drawFeet(S('pet_' + Save.pet + '_' + Math.floor(t * (Save.pet === 'bee' ? 14 : 2)) % 2), hx + 17, hy + 1 - (Save.pet === 'bee' ? 7 : 0), 1); }
   const sx = hx - 44, sy = 108;
   const sj = Math.max(0, Math.sin(t * 5)) * 6;
   shadow(sx, sy, 14);
@@ -325,14 +343,19 @@ function drawTitle() {
   drawFeet(S('bee_' + Math.floor(t * 16) % 2), bx, by, 1);
   const items = titleItems();
   drawMenu(items, TITLE_Y, TITLE_GAP);
+  drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it]);
   const gi = items.indexOf('THE GARDEN'), vs = String(Save.vault);
+  // THE GARDEN shows its vault on the right, so its NEW sits on the left
+  if (gi >= 0 && hubBadge() && Math.floor(G.time * 3) % 3) text('NEW', VW / 2 - textW('THE GARDEN') / 2 - (G.menuSel === gi ? 16 : 8) - textW('NEW'), TITLE_Y + gi * TITLE_GAP, 'P', 2);
   if (Save.vault) {
     const x = VW / 2 + textW('THE GARDEN') / 2 + 16 + (G.menuSel === gi ? 6 : 0), y = TITLE_Y + gi * TITLE_GAP;
     drawS(S('coin_0'), x, y - 1);
     text(vs, x + 11, y, 'Y', 2);
   }
   const how = Input.lastAim;
-  if (!G.toast) {
+  const why = Save.stats.runs >= 3 ? comeBackLine() : '';
+  if (!G.toast && why) text(why, VW / 2, 196, 'Y', 2, 1);
+  else if (!G.toast) {
     text(how === 'pad' ? 'L STICK MOVE   R STICK SHOOT   A ROLL   RB STARFALL   Y POTION'
       : how === 'touch' ? 'LEFT SIDE: MOVE   RIGHT SIDE: SHOOT   BUTTONS: ROLL, STARFALL, POTION'
       : 'WASD MOVE   MOUSE SHOOT   SPACE ROLL   Q STARFALL   R POTION', VW / 2, 196, 'w', 2, 1);
@@ -355,14 +378,20 @@ function settingsRows() {
   ];
   if (!IS_IOS) rows.push(['vibe', IS_TOUCH ? 'VIBRATION' : 'RUMBLE', VIBE[s.vibe]]);
   if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
-  rows.push(['back', 'BACK', null]);
+  rows.push(['assist', 'ASSIST MODE', s.assist ? 'ON' : 'OFF'], ['cb', 'BULLET SHAPES', s.cb ? 'ON' : 'OFF']);
+  if (IS_TOUCH) rows.push(['lefty', 'LEFT-HANDED', s.lefty ? 'ON' : 'OFF']);
+  else rows.push(['keys', 'KEYS', '>']);
+  if (ONLINE.url) rows.push(['share', 'PLAY STATS', s.share ? 'ON' : 'OFF']);
+  rows.push(['lang', 'LANGUAGE', (LANGS.find(l => l[0] === langId()) || LANGS[0])[1]], ['save', 'SAVE CODE', '>'], ['back', 'BACK', null]);
   return rows;
 }
+const setGap = (rows) => (rows.length > 10 ? 10 : rows.length > 9 ? 11 : rows.length > 7 ? 13 : 16);
+const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE' };
 function updateSettings() {
-  const s = Save.settings, rows = settingsRows();
+  const s = Save.settings, rows = settingsRows(), gap = setGap(rows);
   menuNav(rows.length);
   let click = false;
-  rows.forEach((r, i) => { if (hoverRow(i, SET_X - 12, SET_Y + i * 16 - 4, 184, 15)) click = true; });
+  rows.forEach((r, i) => { if (hoverRow(i, SET_X - 12, SET_Y + i * gap - 4, 184, gap - 1)) click = true; });
   const dir = pressed(...K_RIGHT) ? 1 : pressed(...K_LEFT) ? -1 : 0;
   const id = rows[G.menuSel][0], ok = pressed(...K_OK) || click;
   if (pressed(...K_BACK, 'KeyP') || (ok && id === 'back')) { Save.write(); Audio_.sfx('select'); return true; }
@@ -374,16 +403,21 @@ function updateSettings() {
   } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
   else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
+  else if ((id === 'assist' || id === 'cb' || id === 'lefty') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
+  else if (id === 'keys' && ok) { Audio_.sfx('confirm'); setState('keys'); }
+  else if (id === 'share' && (dir || ok)) { setShare(!s.share); Audio_.sfx('select'); }
+  else if (id === 'save' && ok) { Audio_.sfx('confirm'); openSaveMenu(); }
+  else if (id === 'lang' && (dir || ok)) { const i = LANGS.findIndex(l => l[0] === langId()); s.lang = LANGS[(i + (dir || 1) + LANGS.length) % LANGS.length][0]; Audio_.sfx('select'); Save.write(); }
   return false;
 }
 function drawSettings() {
   if (G.back === 'title') drawTitleBg();
   dim(0.5);
-  const rows = settingsRows(), h = rows.length * 16 + 36;
+  const rows = settingsRows(), gap = setGap(rows), h = rows.length * gap + 36;
   panel(VW / 2 - 104, 40, 208, h + 10);
   text('SETTINGS', VW / 2, 48, 'Y', 2, 1);
   rows.forEach(([, label, val, v], i) => {
-    const y = SET_Y + i * 16, sel = i === G.menuSel;
+    const y = SET_Y + i * gap, sel = i === G.menuSel;
     if (sel) pointer(SET_X - 10, y);
     text(label, SET_X, y, sel ? 'Y' : 'l', 1);
     if (val === 'bar') {
@@ -392,66 +426,17 @@ function drawSettings() {
     } else if (val) text(val, BAR_X + 69, y, sel ? 'Y' : 'w', 1, 2);
   });
   const fi = rows.findIndex(r => r[0] === 'full');
-  G.tapFull = fi < 0 ? null : [SET_Y + fi * 16 - 4, SET_Y + fi * 16 + 11];
-  const ly = SET_Y + rows.length * 16 - 2;
+  G.tapFull = fi < 0 ? null : [SET_Y + fi * gap - 4, SET_Y + fi * gap + gap - 5];
+  const ly = SET_Y + rows.length * gap - 2, help = SET_HELP[rows[G.menuSel] && rows[G.menuSel][0]];
   rect(VW / 2 - 92, ly, 184, 1, '2');
-  text(Input.lastAim === 'pad' ? 'LEFT / RIGHT: ADJUST    B: BACK' : 'LEFT / RIGHT: ADJUST    ESC: BACK', VW / 2, ly + 6, 'c', 1, 1);
-}
-
-// ---------- Collection ----------
-const COL_PER = 6, COL_CELL = 22, COL_X = 30, COL_Y = 56;
-function updateCollection() {
-  const n = Object.keys(ITEMS).length;
-  let s = G.menuSel;
-  if (s < n) {
-    if (pressed(...K_RIGHT)) s = Math.min(n - 1, s + 1);
-    if (pressed(...K_LEFT)) s = Math.max(0, s - 1);
-    if (pressed(...K_UP)) s = Math.max(0, s - COL_PER);
-  }
-  if (pressed(...K_DOWN)) s = s + COL_PER < n ? s + COL_PER : n;
-  if (s === n && pressed(...K_UP)) s = n - 1;
-  if (s !== G.menuSel) { G.menuSel = s; Audio_.sfx('select'); }
-  for (let i = 0; i < n; i++) hoverRow(i, COL_X + (i % COL_PER) * COL_CELL, COL_Y + Math.floor(i / COL_PER) * COL_CELL, COL_CELL, COL_CELL);
-  const w = textW('BACK') + 20;
-  const click = hoverRow(n, VW / 2 - w / 2, 199, w, 13);
-  return pressed(...K_BACK) || click || (G.menuSel === n && pressed(...K_OK));
-}
-function drawCollection() {
-  drawTitleBg();
-  dim(0.5);
-  const ids = Object.keys(ITEMS), found = new Set(Save.found);
-  panel(20, 34, 152, 130);
-  text('MAGIC ITEMS', 96, 41, 'Y', 1, 1);
-  ids.forEach((id, i) => {
-    const x = COL_X + (i % COL_PER) * COL_CELL, y = COL_Y + Math.floor(i / COL_PER) * COL_CELL;
-    rect(x, y, 20, 20, '0'); rect(x + 1, y + 1, 18, 18, '2');
-    drawS(S('icon_' + id), x + 2, y + 2, found.has(id) ? 0 : 4);
-    if (i === G.menuSel) { rect(x - 1, y - 1, 22, 1, 'Y'); rect(x - 1, y + 20, 22, 1, 'Y'); rect(x - 1, y, 1, 20, 'Y'); rect(x + 20, y, 1, 20, 'Y'); }
-  });
-  text(found.size + ' / ' + ids.length, 96, 128, 'c', 1, 1);
-  const st = Save.stats;
-  panel(180, 34, 184, 130);
-  text('STATISTICS', 272, 41, 'Y', 1, 1);
-  [['RUNS', st.runs], ['WINS', st.wins], ['ENEMIES DEFEATED', st.kills], ['BEST LAND', st.bestDepth || '-'],
-    ['BEST ARENA WAVE', st.bestWave || '-'], ['FASTEST WIN', st.bestTime ? fmtTime(st.bestTime) : '-'], ['VAULT', Save.vault]].forEach(([k, v], i) => {
-    text(k, 190, 56 + i * 14, 'l', 1); text(String(v), 354, 56 + i * 14, 'w', 1, 2);
-  });
-  const sel = ids[G.menuSel];
-  panel(20, 168, 344, 28);
-  if (sel) {
-    const has = found.has(sel);
-    text(has ? ITEMS[sel].name : '???', VW / 2, 173, has ? 'Y' : 'l', 1, 1);
-    text(has ? ITEMS[sel].desc : 'NOT FOUND YET', VW / 2, 184, 'w', 1, 1);
-  } else text('PICK AN ITEM TO READ ABOUT IT', VW / 2, 179, 'l', 1, 1);
-  const back = G.menuSel === ids.length;
-  text('BACK', VW / 2, 202, back ? 'Y' : 'l', 2, 1);
-  if (back) pointer(VW / 2 - textW('BACK') / 2 - 10, 202);
+  if (help) text(help, VW / 2, ly + 6, 'c', 1, 1);
+  else text(Input.lastAim === 'pad' ? 'LEFT / RIGHT: ADJUST    B: BACK' : 'LEFT / RIGHT: ADJUST    ESC: BACK', VW / 2, ly + 6, 'c', 1, 1);
 }
 
 // ---------- Pause / game over / win ----------
 function pauseItems() {
   if (NET.role) return ['CONTINUE', 'SETTINGS', NET.role === 'host' ? 'END GAME' : 'LEAVE GAME'];
-  return ['CONTINUE', 'SETTINGS', G.mode === 'arena' ? 'QUIT' : 'SAVE AND QUIT'];
+  return ['CONTINUE', 'SETTINGS'].concat(G.tut ? ['SKIP TUTORIAL'] : [], [G.mode === 'arena' || G.daily ? 'QUIT' : 'SAVE AND QUIT']);
 }
 function drawPause() {
   dim(0.6);
@@ -489,44 +474,15 @@ function drawPause() {
   if (host) text('CODE: ' + NET.code, VW / 2, 182, 'l', 1, 1);
 }
 function fmtTime(s) { s = Math.floor(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
-function drawStats(y) {
-  const s = G.stats, arena = G.mode === 'arena', team = G.players.length > 1;
-  const rows = [arena ? ['WAVE', String(Math.max(1, G.arena.wave))] : ['LAND', String(G.floor.depth + 1)], ['DEFEATED', String(s.kills)], ['COINS', String(s.coins)]];
-  if (!team) rows.push(['MAGIC ITEMS', String(s.items)]);
-  rows.push(['TIME', fmtTime(s.time)], ['VAULT', '+' + G.run.vault]);
-  const gap = team ? 10 : 11;
-  rows.forEach(([k, v], i) => { text(k, VW / 2 - 76, y + i * gap, 'l', 1); text(v, VW / 2 + 76, y + i * gap, k === 'VAULT' ? 'c' : 'Y', 1, 2); });
-  if (!team) return;
-  // co-op: every hero's defeated enemies, two per row, in their robe colours
-  G.players.forEach((p, i) => {
-    const x = VW / 2 + (i % 2 ? 4 : -76), yy = y + rows.length * gap + 2 + Math.floor(i / 2) * 10;
-    text(p.name, x, yy, TAG_COL[p.skin], 1);
-    text(String(p.kills), x + 72, yy, 'w', 1, 2);
-  });
-}
 function endItems() {
   if (NET.role === 'client') return ['LEAVE'];
-  const mid = NET.role === 'host' ? ['LOBBY'] : [];
+  if (G.daily) return ['PRACTICE'].concat(G.daily.key === dailyKeyOf(G.daily.kind) ? ['SHARE'] : [], ['MENU']);
+  const mid = NET.role === 'host' ? ['LOBBY'] : !NET.role && menuOpen('garden') ? ['GARDEN'] : [];
   return (G.state === 'win' ? ['KEEP GOING: ENDLESS MODE'] : ['AGAIN!']).concat(mid, ['MENU']);
 }
-// Shared layout for the end screens: big panel, title, line, stats, menu.
-function endScreen(title, col, sub) {
-  dim(0.55);
-  const x = VW / 2 - 92, y = 22, w = 184, h = 172;
-  panel(x, y, w, h);
-  const bob = Math.round(Math.sin(G.time * 3) * 1.5);
-  text(title, VW / 2, y + 9 + bob, col, 2, 1);
-  if (G.record) text(G.mode === 'arena' ? 'NEW RECORD: WAVE ' + (G.arena.wave - 1) + '!' : 'NEW RECORD: LAND ' + (G.floor.depth + 1) + '!', VW / 2, y + 25, 'c', 1, 1);
-  else text(sub, VW / 2, y + 25, 'w', 1, 1);
-  rect(x + 12, y + 38, w - 24, 1, '2');
-  drawStats(y + 44);
-  rect(x + 12, y + 117, w - 24, 1, '2');
-  drawMenu(endItems(), y + 127);
-  if (NET.role === 'client') text('WAITING FOR THE HOST...', VW / 2, y + 156, 'c', 1, 1);
-}
-function drawOver() { endScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }
+function drawOver() { drawEndScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }
 function drawWin() {
-  endScreen('VICTORY!', 'Y', 'THE STAR GARDEN SHINES AGAIN!');
+  drawEndScreen('VICTORY!', 'Y', 'THE STAR GARDEN SHINES AGAIN!');
   for (let i = 0; i < 10; i++) {
     const a = G.time * 0.7 + i * 0.63;
     drawS(S(i % 2 ? 'sparkle_0' : 'sparkle_1'), VW / 2 + Math.cos(a) * 116 - 1, 108 + Math.sin(a) * 92 - 1);

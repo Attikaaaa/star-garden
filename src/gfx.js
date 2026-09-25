@@ -8,7 +8,8 @@ const SCR = { w: VW, h: VH, ox: 0, oy: 0 };
 function fillScreen(style) { ctx.fillStyle = style; ctx.fillRect(-SCR.ox, -SCR.oy, SCR.w, SCR.h); }
 
 const cv = document.getElementById('game');
-const ctx = cv.getContext('2d', { alpha: false });
+// `let`: the corner HUD swaps in its own canvas while it draws (hudOn / hudOff in main.js)
+let ctx = cv.getContext('2d', { alpha: false });
 cv.width = VW; cv.height = VH;
 ctx.imageSmoothingEnabled = false;
 

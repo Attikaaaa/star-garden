@@ -54,8 +54,8 @@ function drawParts(ox, oy) {
 // Up to four heroes. G.player is the one this device controls; the others are driven by
 // the network (p.remote on the host). Each hero reads its controls from p.in.
 // Robes the player picks: sprite suffix, name and the colour of their name tag.
-const ROBES = ['SKY', 'ROSE', 'MINT', 'PLUM', 'SUN', 'CORAL', 'SEA', 'SNOW'];
-const SKIN = ROBES.map((r, k) => (k ? '#' + k : '')), TAG_COL = ['c', 'P', 'h', '3', 'Y', 'R', 'T', 'w'];
+const ROBES = ['SKY', 'ROSE', 'MINT', 'PLUM', 'SUN', 'CORAL', 'SEA', 'SNOW'].concat(MEME_SKINS.map(m => m.name));
+const SKIN = ROBES.map((r, k) => (k ? '#' + k : '')), TAG_COL = ['c', 'P', 'h', '3', 'Y', 'R', 'T', 'w'].concat(MEME_SKINS.map(m => m.tag));
 const newInput = () => ({ mx: 0, my: 0, ax: 0, ay: 0, aim: false, pad: false, dash: false, star: false, belt: -1, use: false });
 function newPlayer(pid) {
   return {
@@ -92,15 +92,15 @@ function nearestHero(x, y) {
 function readLocalInput(p) {
   const I = p.in, pad = Input.pad, tch = Input.touch;
   if (G.state !== 'play') { Object.assign(I, newInput()); Input.touchSlot = -1; return; }
-  let mx = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0) + pad.mx + tch.mx;
-  let my = (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0) + pad.my + tch.my;
+  let mx = (key(keyOf('right')) ? 1 : 0) - (key(keyOf('left')) ? 1 : 0) + pad.mx + tch.mx;
+  let my = (key(keyOf('down')) ? 1 : 0) - (key(keyOf('up')) ? 1 : 0) + pad.my + tch.my;
   const ml = Math.hypot(mx, my);
   if (ml > 1) { mx /= ml; my /= ml; }
   I.mx = mx; I.my = my;
-  I.dash = pressed('Space', 'ShiftLeft', 'ShiftRight', 'PadA', 'PadLB', 'PadLT', 'TouchDash');
-  I.star = pressed('KeyQ', 'Mouse2', 'PadRB', 'PadRT', 'TouchStar');
-  I.use = pressed('KeyE', 'Enter', 'PadX', 'TouchUse');
-  I.belt = pressed('KeyR', 'PadY', 'TouchBelt') ? 0 : -1;
+  I.dash = pressed(keyOf('roll'), 'ShiftLeft', 'ShiftRight', 'PadA', 'PadLB', 'PadLT', 'TouchDash');
+  I.star = pressed(keyOf('star'), 'Mouse2', 'PadRB', 'PadRT', 'TouchStar');
+  I.use = pressed(keyOf('use'), 'Enter', 'PadX', 'TouchUse');
+  I.belt = pressed(keyOf('potion'), 'PadY', 'TouchBelt') ? 0 : -1;
   for (let i = 0; i < p.beltMax; i++) if (pressed('Digit' + (i + 1))) I.belt = i;
   if (Input.touchSlot >= 0) { I.belt = Input.touchSlot; Input.touchSlot = -1; }
   // Aim: arrow keys, right stick, right touch stick or the held mouse button.
@@ -115,7 +115,7 @@ function readLocalInput(p) {
     const a0 = Math.atan2(ay, ax);
     let best = null, bd = 0.38;
     for (const e of G.enemies) {
-      if (e.dead || e.spawnT > 0 || e.ghost || e.passive && e.type !== 'gold') continue;
+      if (e.dead || e.spawnT > 0 || e.ghost || (e.passive && e.type !== 'gold' && e.type !== 'dummy')) continue;
       const ex = e.x - p.x, ey = e.y - e.h / 2 - (p.y - 8), dist = Math.hypot(ex, ey);
       if (dist > p.range + 20) continue;
       let da = Math.abs(Math.atan2(ey, ex) - a0);
@@ -135,14 +135,17 @@ function movePlayer(p, dt) {
   p.moving = !!(mx || my);
   if (p.moving) { const l = Math.hypot(mx, my); p.dx = mx / l; p.dy = my / l; }
   if (I.dash && p.dashCool <= 0 && p.dashT <= 0) {
-    p.dashT = 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, 0.28); p.dashN++;
+    const mv = heroOf(p).move;
+    p.dashT = mv === 'leap' ? 0.3 : 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, mv === 'leap' ? 0.4 : 0.28); p.dashN++;
+    if (p === G.player) note('roll');
     dust(p.x, p.y, 6, 8);
-    Audio_.sfx('dash'); haptic('dash');
+    Audio_.sfx(mv === 'blink' ? 'tele' : 'dash'); haptic('dash');
+    if (mv === 'blink') heroBlink(p);
   }
   let vx, vy;
   if (p.dashT > 0) {
     p.dashT -= dt;
-    const k = p.speed * 2.6 * (p.buff.haste > 0 ? 1.15 : 1);
+    const k = p.speed * (heroOf(p).move === 'leap' ? 2 : 2.6) * (p.buff.haste > 0 ? 1.15 : 1);
     vx = p.dx * k; vy = p.dy * k;
     if (Math.random() < 0.6) part(p.x + rnd(-4, 4), p.y - rnd(0, 3), -vx * 0.1, -vy * 0.1, 0.3, 'w', { size: 2 });
   } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1); vx = mx * sp; vy = my * sp; }
@@ -154,7 +157,8 @@ function movePlayer(p, dt) {
     if (vx < 0 && p.x < 40 && room.doors.l && Math.abs(p.y - 123) < 16) p.y += Math.sign(123 - p.y) * Math.min(Math.abs(123 - p.y), 60 * dt);
     if (vx > 0 && p.x > 344 && room.doors.r && Math.abs(p.y - 123) < 16) p.y += Math.sign(123 - p.y) * Math.min(Math.abs(123 - p.y), 60 * dt);
   }
-  moveBox(room, p, vx * dt, vy * dt, 'player');
+  moveBox(room, p, vx * dt, vy * dt, heroMoveMode(p));
+  heroLeapEnd(p, dt);
   if (p.moving) {
     const f0 = Math.floor(p.walkT / 0.11);
     p.walkT += dt * (p.dashT > 0 ? 2 : 1);
@@ -189,6 +193,8 @@ function updatePlayer(p, dt) {
   if (I.aim && p.cool <= 0 && p.dashT <= 0) playerShoot(p, I.ax, I.ay);
   if (I.star) useStarfall(p);
   if (I.belt >= 0) useBelt(p, I.belt);
+  itemTick(p, dt);
+  heroTick(p, dt);
 
   // Orbiting moons: hurt enemies, eat bullets.
   if (p.orbitals) {
@@ -197,7 +203,7 @@ function updatePlayer(p, dt) {
       const o = orbitPos(p, i);
       for (const e of G.enemies) {
         if (e.spawnT > 0 || e.dead || p.orbitHit.has(e)) continue;
-        if (Math.hypot(e.x - o.x, e.y - e.h / 2 - o.y) < e.r + 4) { hurtEnemy(e, p.dmg * 0.8, o.x, o.y, false, p); p.orbitHit.set(e, 0.3); }
+        if (Math.hypot(e.x - o.x, e.y - e.h / 2 - o.y) < e.r + 4) { hurtEnemy(e, p.dmg * 0.8 * (p.moonDmg || 1), o.x, o.y, false, p); p.orbitHit.set(e, 0.3); }
       }
       for (const b of EBULLETS) if (b.life > 0 && Math.hypot(b.x - o.x, b.y - o.y) < b.r + 3) { b.life = 0; burst(b.x, b.y, 3, ['Y', 'w'], 40, 0.2); }
     }
@@ -218,7 +224,10 @@ function updateDowned(p, dt) {
   for (const q of G.players) if (q !== p && alive(q) && Math.hypot(q.x - p.x, q.y - p.y) < 22) help = true;
   p.revive = help ? p.revive + dt : Math.max(0, p.revive - dt * 0.6);
   if (help && Math.random() < 0.3) part(p.x + rnd(-8, 8), p.y - rnd(0, 12), 0, -30, 0.5, null, { spr: 'sparkle', drag: 1 });
-  if (p.revive >= REVIVE_T) revivePlayer(p, 2);
+  if (p.revive >= REVIVE_T) {
+    revivePlayer(p, 2);
+    for (const q of G.players) if (q !== p && alive(q) && Math.hypot(q.x - p.x, q.y - p.y) < 22) noteFor(q, 'revive');
+  }
 }
 function revivePlayer(p, hp) {
   p.down = false; p.revive = 0; p.hp = Math.min(p.maxHp, hp); p.inv = 1.5;
@@ -230,21 +239,24 @@ const teamDown = () => G.players.every(p => !alive(p));
 
 // Personal feedback for one hero: runs here for our own hero, is sent to a remote one.
 const YOU_FX = {
-  hurt() { G.hurtT = 0.25; G.shake = Math.max(G.shake, 4); haptic('hurt'); },
-  death() { G.hurtT = 0.3; haptic('death'); },
+  hurt() { G.hurtT = 0.25; G.shake = Math.max(G.shake, 4); haptic('hurt'); note('hurt'); },
+  death() { G.hurtT = 0.3; haptic('death'); note('hurt'); },
   heart() { G.hud.heartT = 0.4; },
   item() { haptic('item'); },
-  potion() { haptic('potion'); },
-  kill() { haptic('kill'); },
-  elite() { haptic('elite'); },
+  potion(kind) { haptic('potion'); note('potion', kind); },
+  kill(type) { haptic('kill'); note('kill', type, false); },
+  elite(type) { haptic('elite'); note('kill', type, true); },
   ready() { G.hud.readyT = 1; haptic('tick'); },
-  starfall() { haptic('starfall'); },
+  starfall() { haptic('starfall'); note('starfall'); },
   belt() { G.hud.beltT = 0.4; },
   got(id) {
     haptic('item');
     G.banner = { title: ITEMS[id].name, sub: ITEMS[id].desc, t: 2.6, icon: id };
-    if (!Save.found.includes(id)) { Save.found.push(id); Save.write(); }
+    if (!Save.found.includes(id)) { Save.found.push(id); Save.write(); logNews('item', 'NEW: ' + ITEMS[id].name, 'icon_' + id); }
+    note('item', id);
   },
+  // progress events from the host: [event, a, b] (see progress.js)
+  note(arr) { if (Array.isArray(arr)) note(arr[0], arr[1], arr[2]); },
 };
 function youFx(p, kind, arg) {
   if (p === G.player) YOU_FX[kind](arg);
@@ -257,19 +269,20 @@ const WAND_SFX = { wand: 'shoot', scatter: 'scatter', bubble: 'bubble', boomer: 
 function playerShoot(p, ax, ay) {
   const base = Math.atan2(ay, ax), dmg = dmgOf(p), w = p.wand;
   if (w === 'scatter') {
-    const n = p.shots + WANDS.scatter.fan;
-    for (let i = 0; i < n; i++) fireShot(p, base + (i / (n - 1) - 0.5) * 0.62 + rnd(-0.04, 0.04), dmg, rnd(0.85, 1.1));
+    const n = Math.max(2, p.shots + WANDS.scatter.fan + (p.fanX || 0));
+    for (let i = 0; i < n; i++) fireShot(p, base + (i / (n - 1) - 0.5) * 0.62 + grnd(-0.04, 0.04), dmg, grnd(0.85, 1.1));
   } else {
-    const n = p.shots, spread = w === 'bubble' ? 0.14 : 0.2, jit = w === 'bubble' ? rnd(-0.09, 0.09) : 0;
+    const n = p.shots, spread = w === 'bubble' ? 0.14 : 0.2, jit = w === 'bubble' ? grnd(-0.09, 0.09) : 0;
     for (let i = 0; i < n; i++) fireShot(p, base + jit + (i - (n - 1) / 2) * spread, dmg);
   }
-  if (p.backshot) fireShot(p, base + Math.PI, dmg);
+  if (p.backshot) { if (p.backTriple) for (let i = -1; i <= 1; i++) fireShot(p, base + Math.PI + i * 0.2, dmg); else fireShot(p, base + Math.PI, dmg); }
   part(p.x + Math.cos(base) * 7, p.y - 9 + Math.sin(base) * 5, 0, 0, 0.12, null, { spr: 'sparkle', drag: 1 });
   p.cool = p.fireDelay * (p.buff.haste > 0 ? 0.6 : 1);
   Audio_.sfx(WAND_SFX[w]);
 }
 
-function hurtPlayer(p, n) {
+// src: the enemy type that did it (remembered for the end screen and the nemesis)
+function hurtPlayer(p, n, src) {
   if (!alive(p) || G.state === 'over' || G.state === 'win') return;
   if (p.buff.guard > 0) { part(p.x + rnd(-6, 6), p.y - rnd(4, 14), 0, -20, 0.3, null, { spr: 'sparkle', drag: 1 }); return; }
   if (p.inv > 0) return;
@@ -277,9 +290,13 @@ function hurtPlayer(p, n) {
     p.shieldUp = false; p.inv = 0.8;
     burst(p.x, p.y - 8, 14, ['C', 'c', 'w'], 90, 0.5);
     Audio_.sfx('shield');
+    itemShieldPop(p);
     return;
   }
+  if (p.hp - n <= 0 && itemSaveLife(p)) return;
   p.hp -= n; p.inv = 1.1; p.hurtT = 0.35;
+  itemHurt(p);
+  if (src) p.lastHit = src;
   youFx(p, p.hp <= 0 ? 'death' : 'hurt');
   G.hitstop = Math.max(G.hitstop, G.players.length > 1 ? 0.03 : 0.07);
   burst(p.x, p.y - 8, 10, ['R', 'r', 'w'], 80, 0.5);
@@ -296,6 +313,17 @@ function hurtPlayer(p, n) {
   } else { p.dead = true; p.deadT = 0; G.slowmo = 1; Audio_.stop(); Audio_.sfx('over'); }
 }
 
+// Rolling right through an enemy bullet: a sparkle, a chime and a little Starfall charge.
+function grazeBullet(p, b) {
+  if (!b.soft) addCharge(p, 0.035);
+  part(b.x, b.y - 2, 0, -14, 0.35, null, { spr: 'sparkle', drag: 1 });
+  burst(b.x, b.y, 3, ['Y', 'w'], 40, 0.2);
+  if (p === G.player) Audio_.sfx('graze');
+  noteFor(p, 'graze');
+  if (G.tut && b.soft) G.tut.grazed++;
+  itemGraze(p, b);
+}
+
 function healPlayer(p, n) {
   p.hp = Math.min(p.maxHp, p.hp + n);
   youFx(p, 'heart');
@@ -304,17 +332,17 @@ function healPlayer(p, n) {
 
 const HERO_WALK = [1, 0, 2, 0];
 function drawPlayer(p, ox, oy) {
-  const sk = SKIN[p.skin];
+  const sk = SKIN[p.skin], hp = heroPre(p.hero), ly = Math.round(p.leapZ || 0);
   if (p.dead) {
     if (p.deadT < 0.9) {
       const f = ['d', 's', 'u', 's'][Math.floor(p.deadT * 12) % 4];
-      drawFeet(S('hero_' + f + '0' + sk), ox + p.x, oy + p.y - Math.sin(Math.min(1, p.deadT / 0.9) * Math.PI) * 10, (Math.floor(p.deadT * 12) % 4 === 3 ? 1 : 0) + 2 * (Math.floor(p.deadT * 20) % 2));
+      drawFeet(S(hp + '' + f + '0' + sk), ox + p.x, oy + p.y - Math.sin(Math.min(1, p.deadT / 0.9) * Math.PI) * 10, (Math.floor(p.deadT * 12) % 4 === 3 ? 1 : 0) + 2 * (Math.floor(p.deadT * 20) % 2));
     }
     return;
   }
   if (p.down) {
     shadow(ox + p.x, oy + p.y, 12);
-    drawFeet(S('hero_d0h' + sk), ox + p.x, oy + p.y + 1 + (Math.floor(G.time * 3) % 2), Math.floor(G.time * 6) % 5 ? 0 : 2);
+    drawFeet(S(hp + 'd0h' + sk), ox + p.x, oy + p.y + 1 + (Math.floor(G.time * 3) % 2), Math.floor(G.time * 6) % 5 ? 0 : 2);
     const w = 16, k = Math.min(1, p.revive / REVIVE_T), x = Math.round(ox + p.x - w / 2), y = Math.round(oy + p.y - 27);
     if (k > 0) { rect(x - 1, y - 1, w + 2, 4, '0'); rect(x, y, Math.round(w * k), 2, 'Y'); }
     return;
@@ -323,11 +351,11 @@ function drawPlayer(p, ox, oy) {
   if (p.hurtT <= 0 && p.inv > 0 && p.dashT <= 0 && p.buff.guard <= 0 && Math.floor(p.inv * 16) % 2 === 0) return;
   shadow(ox + p.x, oy + p.y, 12);
   const v = p.face === 's' && p.flip ? 1 : 0;
-  if (p.hurtT > 0) drawFeet(S(p.face === 'u' ? 'hero_u0' + sk : 'hero_' + p.face + '0h' + sk), ox + p.x, oy + p.y + 1, v + (p.hurtT > 0.27 ? 2 : 0));
+  if (p.hurtT > 0) drawFeet(S(p.face === 'u' ? hp + 'u0' + sk : hp + p.face + '0h' + sk), ox + p.x, oy + p.y + 1 - ly, v + (p.hurtT > 0.27 ? 2 : 0));
   else {
     const frame = p.moving ? HERO_WALK[Math.floor(p.walkT / 0.11) % 4] : 0;
     const blink = !p.moving && p.face !== 'u' && (p.idleT || 0) % 3.2 > 3.05;
-    drawFeet(S('hero_' + p.face + frame + (blink ? 'b' : '') + sk), ox + p.x, oy + p.y + 1, v);
+    drawFeet(S(hp + p.face + frame + (blink ? 'b' : '') + sk), ox + p.x, oy + p.y + 1 - ly, v);
   }
   if (p.buff.guard > 0 && (p.buff.guard > 1.2 || Math.floor(G.time * 10) % 2)) {
     const r = ringSprite(12, Math.floor(G.time * 8) % 2 ? 'y' : 'Y');
@@ -336,6 +364,7 @@ function drawPlayer(p, ox, oy) {
     const r = ringSprite(11, Math.floor(G.time * 6) % 2 ? 'c' : 'C');
     ctx.drawImage(r, Math.round(ox + p.x - 11), Math.round(oy + p.y - 20));
   }
+  drawBuddies(p, ox, oy);
 }
 // Co-op: every hero's name over their head, in their robe colour.
 // Words over the heroes' heads: co-op names (or HELP! when down) and short potion / item
@@ -407,6 +436,7 @@ function updateShots(dt) {
     const s = SHOTS[i];
     s.t += dt;
     s.life -= dt;
+    itemShotMove(s, dt);
     if (s.homing) {
       let best = null, bd = 110;
       for (const e of G.enemies) {
@@ -430,6 +460,7 @@ function updateShots(dt) {
       s.vx += (dx / d * sp - s.vx) * Math.min(1, dt * 7); s.vy += (dy / d * sp - s.vy) * Math.min(1, dt * 7);
     }
     const px = s.x, py = s.y;
+    if (G.wind && !s.ret) s.vx += G.wind * dt; // WINDY
     s.x += s.vx * dt; s.y += s.vy * dt;
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: s.kind === 'comet' && Math.random() < 0.4 ? 2 : 1, drag: 1 });
     // enemies first, so nothing hugging a wall is immune
@@ -437,12 +468,17 @@ function updateShots(dt) {
       if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
       if (s.hitList && s.hitList.includes(e)) continue;
       if (Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y) < e.r + s.r) {
-        hurtEnemy(e, s.dmg, px, py, false, s.own);
+        // shells and hiding crabs: the shot glances off
+        const bl = EDEF[e.type].block;
+        if (bl && bl(e, s)) { s.life = 0; burst(s.x, s.y, 4, ['w', 'l'], 60, 0.2); Audio_.sfx('pop'); break; }
+        hurtEnemy(e, shotHitDmg(s), px, py, false, s.own);
+        itemOnHit(s, e);
         if (s.kind === 'chain') chainFrom(e, s.dmg * 0.6, s.own);
         if (s.fw) {
           for (let k = 0; k < 3 * s.fw; k++) {
-            const m = newShot(s.x, s.y, Math.random() * Math.PI * 2, 140, 0.25, s.dmg * 0.4, 'wand', s.own);
+            const m = newShot(s.x, s.y, grand() * Math.PI * 2, 140, 0.25, s.dmg * 0.4, 'wand', s.own);
             m.r = 2; m.mini = true; m.hitList = [e];
+            if (s.own && s.own.swarm) { m.homing = 1.5; m.life = 0.5; } // FIREFLY SWARM
             SHOTS.push(m);
           }
           burst(s.x, s.y, 8, ['y', 'O', 'P', 'w'], 90, 0.35);
@@ -454,6 +490,7 @@ function updateShots(dt) {
     if (s.life > 0 && !s.ret && solidPx(room, s.x, s.y + 4, 'shot')) {
       const c = Math.floor(s.x / 16), r = Math.floor((s.y + 4 - OY) / 16);
       if (tileAt(room, c, r) === T_BRK) breakTile(room, c, r);
+      else if (room.hidden) shotWall(room, c, r);
       if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
       else if (s.bounce > 0) {
         s.bounce--;
@@ -462,12 +499,12 @@ function updateShots(dt) {
         if (by || !bx) s.vy = -s.vy;
         s.x = px; s.y = py;
         Audio_.sfx('pop');
-      } else s.life = 0;
+      } else { itemWall(s); s.life = 0; }
     }
     if (s.life <= 0 && s.kind === 'boomer' && !s.ret) { s.ret = true; s.life = 4; s.hitList = null; }
     if (s.life <= 0) {
       if (s.kind === 'comet') cometBlast(s);
-      else burst(s.x, s.y, s.mini ? 2 : 4, s.kind === 'bubble' ? ['C', 'c', 'w'] : s.kind === 'chain' ? ['C', 'w', 'c'] : ['Y', 'w', 'y'], 50, 0.25);
+      else if (!s.silent) burst(s.x, s.y, s.mini ? 2 : 4, s.kind === 'bubble' ? ['C', 'c', 'w'] : s.kind === 'chain' ? ['C', 'w', 'c'] : ['Y', 'w', 'y'], 50, 0.25);
       if (s.kind === 'bubble') Audio_.sfx('pop');
       SHOTS[i] = SHOTS[SHOTS.length - 1]; SHOTS.pop();
     }
@@ -491,7 +528,7 @@ const BOOM_FR = ['shotboom_d', 'shotboom_s', 'shotboom_u', 'shotboom_s'];
 
 // Comet Staff: the comet bursts and hurts everything around it.
 function cometBlast(s) {
-  const R = 26;
+  const R = s.own && s.own.bigBlast ? 36 : 26; // BIG BANG
   for (const e of G.enemies) {
     if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
     if (Math.hypot(e.x - s.x, (e.y - e.h / 2 - s.y) * 1.2) < R + e.r) hurtEnemy(e, s.dmg * 0.7, s.x, s.y, true, s.own);
@@ -506,7 +543,7 @@ const BOLTS = [];
 function chainFrom(e0, dmg, own) {
   let from = e0;
   const done = [e0];
-  for (let j = 0; j < 2; j++) {
+  for (let j = 0; j < (own && own.chain3 ? 3 : 2); j++) {
     let best = null, bd = 72;
     for (const e of G.enemies) {
       if (e.dead || e.spawnT > 0 || e.ghost || e.passive || done.includes(e)) continue;
@@ -548,6 +585,7 @@ const POT_FX = { regen: ['P', 'q', 'w'], haste: ['y', 'Y', 'w'], power: ['R', 'r
 function useBelt(p, i) {
   const kind = p.belt[i];
   if (!kind || !alive(p) || G.warp) { if (!kind) Audio_.sfx('deny'); return; }
+  if (POTIONS[kind].charm) { useCharm(p, kind); return; }
   if (kind === 'turret') { if (!placeTurret(p)) { Audio_.sfx('deny'); return; } Audio_.sfx('turret'); }
   else {
     p.buff[kind] = POTIONS[kind].t;
@@ -557,7 +595,7 @@ function useBelt(p, i) {
   p.belt.splice(i, 1);
   say(p, POTIONS[kind].name + '!');
   burst(p.x, p.y - 10, 14, POT_FX[kind], 90, 0.6, { g: -40 });
-  youFx(p, 'potion');
+  youFx(p, 'potion', kind);
 }
 function updateBuffs(p, dt) {
   const b = p.buff;
@@ -620,24 +658,25 @@ function breakTile(room, c, r) {
   poof(x, y - 2);
   burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
-  if (Math.random() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6);
+  noteTeam('brk');
+  if (grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6);
 }
 
 // ---------- Pickups ----------
 function spawnPickup(type, x, y) {
-  const a = Math.random() * Math.PI * 2;
-  G.room.pickups.push({ type, x, y, z: 0, vz: rnd(70, 110), vx: Math.cos(a) * rnd(10, 40), vy: Math.sin(a) * rnd(8, 30), t: Math.random() * 3 });
+  const a = grand() * Math.PI * 2;
+  G.room.pickups.push({ type, x, y, z: 0, vz: grnd(70, 110), vx: Math.cos(a) * grnd(10, 40), vy: Math.sin(a) * grnd(8, 30), t: Math.random() * 3 });
 }
 function spawnPotion(x, y, kind) {
   spawnPickup('pot', x, y);
   const k = G.room.pickups[G.room.pickups.length - 1];
-  k.pot = kind || pick(POTION_IDS);
+  k.pot = kind || gpick(POTION_IDS);
 }
 // Random drop; bias < 1 makes hearts rarer.
 function dropLoot(x, y, bias) {
-  const r = Math.random(), hurt = G.players.some(p => alive(p) && p.hp < p.maxHp);
+  const r = grand(), hurt = G.players.some(p => alive(p) && p.hp < p.maxHp);
   const heartChance = (hurt ? 0.22 : 0.08) * (bias || 1);
-  if (r < heartChance) spawnPickup(Math.random() < 0.3 ? 'heart' : 'half', x, y);
+  if (r < heartChance) spawnPickup(grand() < 0.3 ? 'heart' : 'half', x, y);
   else if (r < heartChance + 0.07 + teamLuck() * 0.03) spawnPickup('gem', x, y);
   else spawnPickup('coin', x, y);
 }
@@ -677,12 +716,13 @@ function settlePickup(room, k) {
   }
   if (best < 0) return;
   for (let j = 0; j < 3; j++) part(k.x + rnd(-4, 4), k.y - rnd(2, 8), 0, -20, 0.4, null, { spr: 'sparkle', drag: 1 });
-  k.x = (best % COLS) * 16 + 8 + rnd(-3, 3); k.y = OY + ((best / COLS) | 0) * 16 + 10 + rnd(-2, 2);
+  k.x = (best % COLS) * 16 + 8 + grnd(-3, 3); k.y = OY + ((best / COLS) | 0) * 16 + 10 + grnd(-2, 2);
   k.z = 10; k.vz = 60; k.vx = k.vy = 0;
 }
 const teamLuck = () => G.players.reduce((m, p) => Math.max(m, p.luck), 0);
 // Coins go into the team purse; a share of every coin is also kept forever (the vault).
 function gainCoins(n) {
+  n = purseCoins(n) * coinMul();
   G.coins = Math.min(999, G.coins + n);
   G.stats.coins += n;
   G.hud.coinT = 0.25;
@@ -714,9 +754,23 @@ function updatePickups(dt) {
       if (k.type === 'pot') {
         if (!addBelt(p, k.pot)) continue;
         say(p, POTIONS[k.pot].name);
+      } else if (k.type === 'key') {
+        G.run.key = true;
+        toast('THE STAR KEY! THE VAULT CAN BE OPENED');
+        Audio_.sfx('chest');
+        burst(k.x, k.y - 6, 14, ['Y', 'y', 'w'], 90, 0.5, { g: -30 });
+      } else if (k.type === 'stardrop') {
+        noteFor(p, 'stardrop');
+        Audio_.sfx('item');
+        burst(k.x, k.y - 6, 12, ['Y', 'y', 'w'], 90, 0.5, { g: -30 });
+      } else if (k.type === 'scroll') {
+        noteFor(p, 'scroll');
+        Audio_.sfx('item');
+        burst(k.x, k.y - 6, 14, ['Y', 'A', 'w'], 90, 0.5, { g: -30 });
       } else if (isHeart) {
         if (p.hp >= p.maxHp) continue;
         healPlayer(p, k.type === 'heart' ? 2 : 1);
+        noteFor(p, 'heart');
         Audio_.sfx('heart');
       } else {
         gainCoins(PICK_VAL[k.type]);
@@ -734,6 +788,9 @@ function drawPickup(k, ox, oy) {
   shadow(ox + k.x, oy + k.y, 7);
   let s, v = 0;
   if (k.type === 'coin') { const f = Math.floor(k.t * 8) % 4; s = S(COIN_FR[f]); v = f === 3 ? 1 : 0; }
+  else if (k.type === 'scroll') s = S('scroll_' + (Math.floor(k.t * 3) % 2));
+  else if (k.type === 'key') s = S('key');
+  else if (k.type === 'stardrop') s = S('stardrop');
   else s = S(k.type === 'pot' ? 'pot_' + k.pot : k.type === 'gem' ? 'gem' : k.type === 'heart' ? 'heart' : 'heart_half');
   drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - bob + 1, v);
 }
@@ -744,24 +801,37 @@ function nearestProp(p) {
   let best = null, bd = 18;
   if (!alive(p)) return null;
   for (const o of G.room.props) {
-    if (o.kind !== 'ped' && o.kind !== 'portal') continue;
+    if (o.kind !== 'ped' && o.kind !== 'portal' && !ROOM_PROPS.has(o.kind)) continue;
+    if (o.kind === 'cage' && o.open) continue;
     if (o.group && o.took && o.took.includes(p.pid)) continue;
     const d = Math.hypot(o.x - p.x, o.y - p.y);
     if (d < bd) { bd = d; best = o; }
   }
   return best;
 }
-function priceOf(o) { return Math.max(1, Math.round(o.price * (1 - 0.15 * Math.min(3, teamLuck())))); }
+function priceOf(o) { return Math.max(1, Math.round(o.price * (1 - 0.15 * Math.min(3, teamLuck())) * wishDiscount() * (modOn('t_price') ? 1.5 : 1))); }
 
 function interact(o, p) {
   const room = G.room;
   if (o.kind === 'portal') { if (G.players.length > 1) nextFloor(); else startWarp(o); return; }
+  if (roomInteract(o, p)) return;
+  // the Moon Altar: an item for a heart
+  if (o.heart) {
+    if (p.maxHp <= o.heart) { Audio_.sfx('deny'); say(p, 'NOT ENOUGH HEARTS'); return; }
+    p.maxHp -= o.heart; p.hp = Math.min(p.hp, p.maxHp);
+    burst(p.x, p.y - 10, 14, ['R', 'r', 'P'], 90, 0.5);
+    Audio_.sfx('hurt');
+    giveItem(o.item, p);
+    G.room.props.splice(G.room.props.indexOf(o), 1);
+    G.propsN++;
+    return;
+  }
   const pot = POTIONS[o.item];
   const frog = room.props.find(q => q.kind === 'frog');
   // co-op: whatever is bought goes to the whole team (items to everyone, hearts heal
   // everyone who is hurt, potions and turret kits fill every belt with room)
   const team = o.price && G.players.length > 1 ? G.players.filter(q => !q.dead) : [p];
-  const wants = (q) => (pot ? q.belt.length < q.beltMax : o.item === 'hp' ? alive(q) && q.hp < q.maxHp : true);
+  const wants = (q) => (pot ? q.belt.length < q.beltMax && !(pot.charm && q.belt.includes(o.item)) : o.item === 'hp' ? alive(q) && q.hp < q.maxHp : true);
   if (!team.some(wants)) {
     Audio_.sfx('deny');
     const msg = pot ? (team.length > 1 ? 'EVERY BELT IS FULL!' : 'YOUR BELT IS FULL!') : team.length > 1 ? 'EVERYONE IS HEALTHY!' : null;
@@ -773,6 +843,7 @@ function interact(o, p) {
     if (G.coins < cost) { Audio_.sfx('deny'); G.shake = Math.max(G.shake, 1); if (frog) frog.say = { msg: 'NOT ENOUGH COINS!', until: frog.t + 1.3 }; else say(p, 'NOT ENOUGH COINS'); return; }
     if (frog) frog.say = { msg: 'THANKS! RIBBIT!', until: frog.t + 1.6, happy: true };
     G.coins -= cost;
+    noteFor(p, 'buy', o.item, cost);
   }
   for (const q of team) {
     if (!wants(q)) continue;
@@ -798,20 +869,14 @@ function giveItem(id, p) {
   p.items.push(id);
   G.stats.items++;
   youFx(p, 'got', id);
+  checkSynergies(p);
   if (G.players.length > 1 && p !== G.player) say(p, ITEMS[id].name);
   Audio_.sfx('item');
   burst(p.x, p.y - 10, 16, ['Y', 'y', 'w', 'P', 'c'], 110, 0.7);
 }
-// Random items the player can still get.
-function itemPool(n) {
-  const owned = new Set([].concat(...G.players.map(p => p.items)));
-  const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)));
-  const out = [];
-  while (out.length < n && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  return out;
-}
 
 function drawProp(o, ox, oy) {
+  if (drawRoomProp(o, ox, oy)) return;
   if (o.kind === 'ped') {
     shadow(ox + o.x, oy + o.y, 16);
     drawS(S('pedestal'), ox + o.x - 8, oy + o.y - 12);
@@ -820,6 +885,7 @@ function drawProp(o, ox, oy) {
     if (o.took && o.took.includes(G.player.pid)) { drawS(s, ox + o.x - (s.w >> 1), oy + o.y - 14 - s.h, 4); return; }
     drawS(s, ox + o.x - (s.w >> 1), oy + o.y - 14 - s.h + bob);
     if (Math.floor(o.t * 3) % 4 === 0) drawS(S('sparkle_0'), ox + o.x + 6, oy + o.y - 28 + bob);
+    if (o.heart) { drawS(S('heart'), ox + o.x - 9, oy + o.y + 2); text('-1', ox + o.x + 1, oy + o.y + 4, 'R', 2); }
     if (o.price) {
       const cost = priceOf(o);
       drawS(S('coin_0'), ox + o.x - 9, oy + o.y + 3);
@@ -854,11 +920,13 @@ function drawProp(o, ox, oy) {
 
 function openChest(o) {
   o.open = true; o.t = 0;
+  noteTeam('chest');
   const luck = teamLuck();
-  for (let i = 0, n = rndi(3, 5) + luck; i < n; i++) spawnPickup('coin', o.x, o.y - 6);
-  if (Math.random() < 0.35 + luck * 0.1) spawnPickup('gem', o.x, o.y - 6);
-  if (Math.random() < 0.3) spawnPickup(Math.random() < 0.4 ? 'heart' : 'half', o.x, o.y - 6);
-  if (Math.random() < 0.35 + luck * 0.05) spawnPotion(o.x, o.y - 6);
+  for (let i = 0, n = grndi(3, 5) + luck; i < n; i++) spawnPickup('coin', o.x, o.y - 6);
+  if (grand() < 0.35 + luck * 0.1) spawnPickup('gem', o.x, o.y - 6);
+  if (grand() < 0.3) spawnPickup(grand() < 0.4 ? 'heart' : 'half', o.x, o.y - 6);
+  if (grand() < 0.35 + luck * 0.05) spawnPotion(o.x, o.y - 6);
+  maybeScroll(o.x, o.y - 6, 0.12);
   burst(o.x, o.y - 8, 14, ['Y', 'y', 'w'], 90, 0.5, { g: 120 });
   Audio_.sfx('chest');
 }
@@ -902,6 +970,7 @@ function updateCombo(dt) {
       const bonus = Math.floor(n / 3) + (n >= 8 ? 2 : 0) + (n >= 15 ? 3 : 0);
       gainCoins(bonus);
       if (n >= 6) earnVault(2);
+      noteTeam('combo', n);
       G.comboPop = { n, bonus, t: 1.6 };
       Audio_.sfx('coin');
     }
@@ -917,14 +986,15 @@ function addCharge(p, v) {
   if (p.charge >= 1) { if (p === G.player) Audio_.sfx('ready'); youFx(p, 'ready'); }
 }
 function useStarfall(p) {
+  if (heroOf(p).ult !== 'starfall') { if (p.charge < 1) { if (p === G.player) Audio_.sfx('deny'); return; } heroUlt(p); return; }
   if (p.charge < 1 || G.fall) { if (p.charge < 1 && p === G.player) Audio_.sfx('deny'); return; }
   p.charge = 0; p.inv = Math.max(p.inv, 1.1);
   for (const b of EBULLETS) if (b.life > 0) { b.life = 0; part(b.x, b.y, 0, 0, 0.25, null, { spr: 'sparkle', drag: 1 }); }
   const targets = G.enemies.filter(e => !e.dead && e.spawnT <= 0);
   const drops = [];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < (p.nova ? 20 : 14); i++) {
     const e = targets.length && i < targets.length * 2 ? targets[i % targets.length] : null;
-    drops.push({ x: e ? e.x + rnd(-6, 6) : rnd(40, VW - 40), y: e ? e.y + rnd(-4, 4) : rnd(60, 190), t: -i * 0.055, hit: false });
+    drops.push({ x: e ? e.x + grnd(-6, 6) : grnd(40, VW - 40), y: e ? e.y + grnd(-4, 4) : grnd(60, 190), t: -i * 0.055, hit: false });
   }
   G.fall = { t: 0, drops, own: p };
   youFx(p, 'starfall');
@@ -944,14 +1014,14 @@ function updateStarfall(dt) {
     d.hit = true;
     for (const e of G.enemies) {
       if (e.dead || e.spawnT > 0) continue;
-      if (Math.hypot(e.x - d.x, (e.y - d.y) * 1.3) < 20 + e.r) hurtEnemy(e, 5 + f.own.dmg * 2, d.x, d.y, true, f.own);
+      if (Math.hypot(e.x - d.x, (e.y - d.y) * 1.3) < 20 + e.r) { hurtEnemy(e, 5 + f.own.dmg * 2, d.x, d.y, true, f.own); if (e.dead && !e.boss) f.kills = (f.kills || 0) + 1; }
     }
     poof(d.x, d.y - 4); dust(d.x, d.y, 6, 12);
     burst(d.x, d.y - 4, 10, ['Y', 'w', 'y', 'c'], 110, 0.45);
     G.shake = Math.max(G.shake, 2.5);
     Audio_.sfx('boom');
   }
-  if (!live && f.drops.every(d => d.hit)) G.fall = null;
+  if (!live && f.drops.every(d => d.hit)) { G.fall = null; if (f.kills) noteFor(f.own, 'sfkills', f.kills); }
   if (G.fall) G.fall.own = f.own;
 }
 function drawStarfall(ox, oy) {
@@ -992,7 +1062,7 @@ function drawWarp(p, ox, oy) {
     rect(ox + w.x - Math.max(1, Math.round(col / 4)) / 2, y, Math.max(1, Math.round(col / 4)), h, 'w');
   }
   const f = ['d', 's', 'u', 's'][Math.floor(Math.max(0, t - 0.3) * (8 + t * 10)) % 4];
-  const s = S('hero_' + f + '0');
+  const s = S(heroPre(p.hero) + f + '0');
   const lift = Math.max(0, t - 0.3) * 16, keep = t < 0.75 ? 1 : Math.max(0, 1 - (t - 0.75) / 0.4);
   if (keep <= 0) return;
   shadow(ox + p.x, oy + p.y, Math.max(4, 12 - lift));

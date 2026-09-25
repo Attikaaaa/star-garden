@@ -142,6 +142,51 @@ You also pick your **robe** colour before a run, and your **name** for co-op.
   enemies glide steadily even when the connection hiccups. The number in the bottom-left
   corner is the connection's round trip in milliseconds (green is great).
 
+### Every day, every week
+
+- **Daily Star Run:** one short run that is the same for everyone today (land, wand, hero,
+  items and a twist). Only the first try counts; it pays a Star Seed and vault coins, and
+  a streak counter forgives a missed day. **Weekly Challenge:** all three lands with two
+  twists. Share your score as a picture, or send the seed to a friend.
+- **Quests:** three small goals a day (one swap) and a bigger one each week.
+- **Mister Ribbit** writes letters with a gift on your first days, and gives a small
+  present on every day you play. Nothing ever resets or withers.
+
+### The sky (live events, worked out on your device)
+
+- **Star Rain:** during the real big meteor showers (Quadrantids, Lyrids, Eta Aquariids,
+  Perseids, Orionids, Leonids, Geminids) shooting stars fall in your runs. Catch
+  stardrops for the Meteor trail and the Stargazer title.
+- **Moon Night:** under a real full moon the Daily Star Run gives every hero a little moon
+  and pays an extra seed.
+- **Seasons:** seven a year, each with a featured twist in the Weekly Challenge and a free
+  reward track filled by clearing rooms and beating bosses.
+- **Boss of the Week:** one boss, 40% tougher, in a short run; the first win each week
+  pays a seed and vault coins. Halloween week dresses the meadow slimes as pumpkins.
+
+All of it is on the **Sky** tab of the Daily Star Run screen.
+
+### The Garden
+
+Between runs you walk around the Garden: the Star Gate starts runs, upgrades grow as
+plants, Star Seeds grow into flowers in real time (cleared rooms water them), and the
+frog's stall, the wardrobe, the wand rack, the mailbox, the telescope (Constellations:
+about 100 goals that light up the sky) and the Book (items, foes, combos, your last runs)
+are all there. Star Scrolls found in runs teach new magic items.
+
+### Heroes, trials and more ways to play
+
+- **Four heroes** with their own stats, roll and ult: Pip, Luma the Moon Witch, Coral the
+  Sea Sprite and Bramble the Frog Knight (unlocked by beating bosses and befriending the frog).
+- **Wand aspects:** three ways to use every wand, unlocked by mastering it.
+- **Star Trials 1–20** after your first win, each adding one more twist and paying more.
+- **Quick Run:** one land and its boss, about five minutes.
+- **The true ending:** return all seven Big Stars to open the Star Well.
+- **Couch co-op:** plug in more controllers; on the pre-run screen each friend presses A
+  to join (B to leave) and you play together on one screen.
+- **Co-op rejoin:** if your connection drops, *Co-op → Rejoin* puts you back into the
+  running game with the same hero.
+
 ## Magic items
 
 | Item | Effect |
@@ -168,10 +213,32 @@ Items stack and combine well; your shots change colour with the items you carry.
 
 ## Saving
 
-Solo adventures save automatically in cleared rooms. Use *Save and quit* in the pause menu
+Solo adventures and Arena runs save automatically. Use *Save and quit* in the pause menu
 and *Continue* on the title screen. The vault, upgrades, wands, records and your collection
-are always saved. **Collection** and lifetime **statistics** are on the title screen;
-**Settings** has music and effect volume, screen shake, vibration and fullscreen.
+are always saved.
+
+**Moving your garden:** *Settings → Save code* copies your whole garden as a code; paste it
+on another device with *Load*. On iPhone, Safari deletes the data of sites you have not
+opened for seven days, so add the game to your Home Screen (it is then kept), or keep a
+save code.
+
+**Settings** has music and effect volume, screen shake, vibration, fullscreen, an assist
+mode (slower game, two more hearts), bullet shapes for colour-blind players, key remapping
+or a left-handed touch layout, and the language (English or Magyar).
+
+## The optional game server
+
+The game is complete without any server. `server/server.js` (Node 18+, no dependencies)
+adds cloud saves with short transfer codes, leaderboards with friend codes, a weekly
+community goal, TURN credentials for co-op, bloom reminders (web push) and a retention
+dashboard:
+
+```
+ADMIN_KEY=secret node server/server.js      # PORT (8787), DATA_DIR, GOAL_TARGET, TURN_URLS, TURN_USER, TURN_PASS, PUSH_SUBJECT
+```
+
+Then put its address into `live.json` (`"server": "https://your.server"`). Anonymous play
+stats are only sent after the player agrees.
 
 ## Tips
 

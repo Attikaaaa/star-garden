@@ -66,7 +66,7 @@ function spawnAmbient(theme, anywhere) {
     amb('mote', rnd(16, VW - 16), anywhere ? rnd(40, 200) : rnd(120, 205), rnd(-3, 3), rnd(-9, -4), rnd(3, 6));
   }
 }
-const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4 };
+const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, well: 4 };
 let ambAcc = 0;
 function resetAmbient(theme) {
   for (const a of AMB) a.life = 0;
@@ -108,7 +108,7 @@ function drawAmbient(ox, oy) {
 // ---------- Moving water / twinkling void in pits ----------
 function drawPitLife(room, theme, ox, oy) {
   if (!room.pits) return;
-  const crystal = theme === 'crystal', key = crystal ? 'Y' : THEMES[theme].h;
+  const crystal = theme === 'crystal' || theme === 'well', key = crystal ? 'Y' : THEMES[theme].h;
   for (const [x, y, h] of room.pits) {
     if (crystal) {
       if (Math.floor(G.time * 2 + (h % 7)) % 4 === 0) rect(ox + x + 3 + (h % 10), oy + y + 6 + ((h >> 4) % 7), 1, 1, key);
