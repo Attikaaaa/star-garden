@@ -637,6 +637,7 @@ function update(dt) {
       else if (id === 'QUIT' && G.daily) { setState('play'); endRun(); }
       else if (id === 'QUIT' && G.mode === 'arena' && hasArena()) { saveBest(); Save.write(); wipe(() => { setState('title'); toast('CONTINUE FROM WAVE ' + (G.arena.savedW + 1) + ' LATER'); }); }
       else if (id === 'QUIT') { saveBest(); Save.write(); wipe(() => setState('title')); }
+      else if (id === 'BACK TO THE LOBBY') { Audio_.sfx('confirm'); netToLobby(); }
       else if (id === 'LEAVE GAME' || id === 'END GAME') { Audio_.sfx('confirm'); netLeave(); }
       break;
     }
@@ -646,7 +647,7 @@ function update(dt) {
       else if (id === 'PRACTICE') { Audio_.sfx('confirm'); const D = G.daily; wipe(() => startDaily(D.kind, D.key === dailyKeyOf(D.kind) ? undefined : D.key)); }
       else if (id === 'SHARE') { Audio_.sfx('confirm'); shareDaily(G.daily.kind); }
       else if (id === 'KEEP GOING: ENDLESS MODE') { Audio_.sfx('confirm'); wipe(() => { setState('play'); loadFloor(G.floor.depth + 1); if (mp) netState('play'); }); }
-      else if (id === 'LOBBY') { Audio_.sfx('confirm'); netState('lobby'); wipe(() => { setState('lobby'); netLobbySync(); }); }
+      else if (id === 'LOBBY') { Audio_.sfx('confirm'); netToLobby(); }
       else if (id === 'GARDEN') { Audio_.sfx('confirm'); if (G.mode === 'adv') clearRun(); Save.write(); wipe(() => openGarden()); }
       else if (id === 'MENU') { if (G.mode === 'adv') clearRun(); Save.write(); if (mp) netLeave(); else wipe(() => setState('title')); }
       else if (id === 'LEAVE') netLeave();

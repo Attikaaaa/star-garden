@@ -174,17 +174,26 @@ function pickRow(y, label, value, desc, sel, icon, ly) {
   text('>', VW / 2 + w / 2 + 7 + bob, y, sel ? 'Y' : '3', 2);
   if (desc) text(desc, VW / 2, y + 12, 'c', 1, 1);
 }
-// ---------- Run save / resume (solo adventure) ----------
+// ---------- Run save / resume (solo adventure, and co-op for the host) ----------
 // Saved only while standing in a cleared room, so a resumed run never starts mid-fight.
-const RUN_KEY = 'csk_run';
+// A co-op host keeps its last three co-op runs (one per run seed), to resume from the lobby.
+const RUN_KEY = 'csk_run', COOP_KEY = 'csk_coop';
+let coopCache = null;
+function coopRuns() {
+  if (!coopCache) { try { coopCache = JSON.parse(localStorage.getItem(COOP_KEY)) || []; } catch (e) { coopCache = []; } }
+  return coopCache;
+}
+function coopWrite(a) { coopCache = a; try { localStorage.setItem(COOP_KEY, JSON.stringify(a)); } catch (e) { /* no storage */ } }
 function hasRun() { try { return !!localStorage.getItem(RUN_KEY); } catch (e) { return false; } }
-function clearRun() { try { localStorage.removeItem(RUN_KEY); } catch (e) { /* no storage */ } }
+function clearRun() {
+  if (NET.role) { if (NET.role === 'host' && G.run) coopWrite(coopRuns().filter(r => r.run.seed !== G.run.seed)); return; }
+  try { localStorage.removeItem(RUN_KEY); } catch (e) { /* no storage */ }
+}
 function saveRun() {
-  const p = G.player, room = G.room;
-  if (NET.role || couchOn() || G.mode !== 'adv' || G.daily || !p || p.dead || !room || !room.cleared || G.state === 'over') return;
+  const p = G.player, room = G.room, coop = NET.role === 'host';
+  if ((NET.role && !coop) || couchOn() || G.mode !== 'adv' || G.daily || !p || G.players.some(q => q.dead) || !room || !room.cleared || G.state === 'over') return;
   const rooms = G.floor.rooms;
-  const player = {};
-  for (const k in p) if (k !== 'orbitHit' && k !== 'in') player[k] = p[k];
+  const strip = (q) => { const o = {}; for (const k in q) if (k !== 'orbitHit' && k !== 'in') o[k] = q[k]; return o; };
   const data = {
     v: 2, depth: G.floor.depth, cur: rooms.indexOf(room), start: rooms.indexOf(G.floor.start),
     rooms: rooms.map(r => ({
@@ -192,14 +201,19 @@ function saveRun() {
       stocked: r.stocked, seed: r.seed, tiles: Array.from(r.tiles), slots: r.slots, pits: r.pits,
       pickups: r.pickups, props: r.props, reward: r.reward, skull: r.skull, hidden: r.hidden, keyRoom: r.keyRoom,
     })),
-    player, stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff, mods: G.mods || [], boss: G.floor.boss,
+    player: strip(p), stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff, mods: G.mods || [], boss: G.floor.boss,
   };
-  try { localStorage.setItem(RUN_KEY, JSON.stringify(data)); } catch (e) { /* no storage */ }
+  if (coop) {
+    // each hero goes back to the same player (their anonymous id) when the run is resumed
+    const rj = netRoster();
+    data.players = G.players.map(q => Object.assign(strip(q), { rj: (rj.find(r => r.pid === q.pid) || {}).rj }));
+    coopWrite([data].concat(coopRuns().filter(r => r.run.seed !== G.run.seed)).slice(0, 3));
+  } else try { localStorage.setItem(RUN_KEY, JSON.stringify(data)); } catch (e) { /* no storage */ }
   Save.write();
 }
-function loadRun() {
-  let d;
-  try { d = JSON.parse(localStorage.getItem(RUN_KEY)); } catch (e) { d = null; }
+// d: a co-op save from coopRuns() (the host, in the lobby), or nothing for the solo save.
+function loadRun(d) {
+  if (!d) { try { d = JSON.parse(localStorage.getItem(RUN_KEY)); } catch (e) { d = null; } }
   if (!d || (d.v !== 1 && d.v !== 2)) { clearRun(); return false; }
   const rooms = d.rooms.map(r => Object.assign(newRoom(r.gx, r.gy), r, { tiles: Uint8Array.from(r.tiles), doors: {}, dirty: true, canvas: null }));
   const at = (x, y) => rooms.find(r => r.gx === x && r.gy === y);
@@ -209,17 +223,28 @@ function loadRun() {
   G.diff = d.diff !== undefined ? d.diff : 1;
   setMods(d.mods);
   G.floor = { depth: d.depth, land, theme: land.theme, rooms, start: rooms[d.start], boss: d.boss || land.boss };
-  const p = Object.assign(newPlayer(0), d.player, { orbitHit: new Map(), in: newInput(), inv: 1, dashT: 0, cool: 0, hurtT: 0, remote: false, down: false });
-  G.players = [p]; G.player = p;
+  const fresh = { orbitHit: new Map(), in: newInput(), inv: 1, dashT: 0, cool: 0, hurtT: 0, down: false };
+  if (d.players) {
+    // today's team: a saved hero goes to the same player, the rest by order, newcomers start fresh
+    const roster = netRoster(), pool = d.players.slice();
+    const mine = roster.map(r => { const i = pool.findIndex(s => r.rj && s.rj === r.rj); return i < 0 ? null : pool.splice(i, 1)[0]; });
+    makePlayers(roster);
+    G.players = G.players.map((q, i) => { const s = mine[i] || pool.shift(); return s ? Object.assign(q, s, fresh, { pid: q.pid, remote: q.remote, name: q.name, skin: q.skin }) : Object.assign(q, { x: G.players[0].x, y: G.players[0].y }); });
+    G.player = G.players.find(q => !q.remote);
+  } else {
+    const p = Object.assign(newPlayer(0), d.player, fresh, { remote: false });
+    G.players = [p]; G.player = p;
+  }
   G.coins = d.coins !== undefined ? d.coins : d.player.coins || 0;
   G.stats = d.stats; G.won = d.won; G.bestBefore = d.bestBefore;
   G.run = d.run && d.run.vault !== undefined ? d.run : { vault: 0, keep: 0 };
   if (!G.run.seed) G.run.seed = newSeed();
   resetRunFx();
   const room = rooms[d.cur];
-  const px = p.x, py = p.y;
+  const at0 = G.players.map(q => [q.x, q.y]);
+  if (d.players) { netStartRun(); netFloor(); }
   enterRoom(room, null);
-  p.x = px; p.y = py;
+  G.players.forEach((q, i) => { q.x = at0[i][0]; q.y = at0[i][1]; q.tpN++; });
   G.floorBanner = { t: 2.4, text: THEMES[G.floor.theme].name, small: 'CONTINUE: LAND ' + (d.depth + 1) };
   setState('play');
   Audio_.play(land.song);

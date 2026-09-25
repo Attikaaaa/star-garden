@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.5.1', lines: ['CO-OP: RUNS ARE SAVED, CONTINUE THEM FROM THE LOBBY', 'CO-OP: THE HOST CAN GO BACK TO THE LOBBY FROM THE PAUSE MENU'] },
   { v: '1.5.0', lines: ['A NEW BOSS ON THE SHORE: THE TIDE TURTLE'] },
   { v: '1.4.0', lines: ['A NEW BOSS IN THE MEADOW: THE MOLE MAYOR', 'EVERY BOSS SHOWS ITS ATTACKS BEFORE IT STRIKES', 'HIT A DIZZY BOSS FOR EXTRA DAMAGE'] },
   { v: '1.3.1', lines: ['YOUR GARDEN IS SAVED WHEN YOU CLOSE THE GAME', 'IPHONE: THE HOME SCREEN APP TAKES YOUR SAVE ALONG'] },

@@ -439,7 +439,7 @@ function drawSettings() {
 
 // ---------- Pause / game over / win ----------
 function pauseItems() {
-  if (NET.role) return ['CONTINUE', 'SETTINGS', NET.role === 'host' ? 'END GAME' : 'LEAVE GAME'];
+  if (NET.role) return NET.role === 'host' ? ['CONTINUE', 'SETTINGS', 'BACK TO THE LOBBY', 'END GAME'] : ['CONTINUE', 'SETTINGS', 'LEAVE GAME'];
   return ['CONTINUE', 'SETTINGS'].concat(G.tut ? ['SKIP TUTORIAL'] : [], [G.mode === 'arena' || G.daily ? 'QUIT' : 'SAVE AND QUIT']);
 }
 function drawPause() {

@@ -323,8 +323,8 @@ function netClearPresses() {
   for (const p of G.players) if (p.remote) { p.in.star = false; p.in.use = false; p.in.belt = -1; }
 }
 function netRoster() {
-  return [{ pid: 0, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin }]
-    .concat(NET.peers.filter(L => L.pid >= 0 && L.open).map(L => ({ pid: L.pid, wand: L.wand, up: L.up, name: L.name, skin: L.skin, cos: L.cos, remote: true })));
+  return [{ pid: 0, wand: Save.wand, up: Save.up, name: Save.name, skin: Save.skin, rj: Save.anonId() }]
+    .concat(NET.peers.filter(L => L.pid >= 0 && L.open).map(L => ({ pid: L.pid, wand: L.wand, up: L.up, name: L.name, skin: L.skin, cos: L.cos, remote: true, rj: L.rj })));
 }
 function netLobbySync() {
   if (NET.role !== 'host') return;
@@ -355,7 +355,8 @@ function sprName(s) {
   return _rev.get(s);
 }
 
-const startMsg = () => ({ t: 'start', mode: G.mode, duel: isDuel(), diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
+// tv / sc / kills: what was already earned (a resumed run, a rejoin), so a client does not count it twice
+const startMsg = () => ({ t: 'start', mode: G.mode, duel: isDuel(), diff: G.diff, tv: G.run.team || 0, sc: G.stats.coins, roster: G.players.map(p => ({ pid: p.pid, kills: p.kills, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
 function netStartRun() {
   NET.playing = true; NET.parked = {};
   hostAll(startMsg());
@@ -384,6 +385,14 @@ function netRoom() {
 function netTrans(dir) { hostAll(Object.assign({ t: 'trans', dir }, roomMsg(G.room.doors[dir]))); }
 const stateMsg = (s) => ({ t: 'state', s, record: G.record, stats: G.stats, won: G.won, wave: G.arena && G.arena.wave, depth: G.floor && G.floor.depth, kills: G.players.map(p => [p.pid, p.kills]), tv: G.run.team || 0 });
 function netState(s) { if (NET.role === 'host') hostAll(stateMsg(s)); }
+// The host takes everyone back to the lobby (a run ended, or the wrong mode was picked):
+// the run is saved if it can be, and friends may join again.
+function netToLobby() {
+  saveBest(); saveRun(); Save.write();
+  NET.playing = false; NET.parked = {};
+  netState('lobby');
+  wipe(() => { setState('lobby'); G.menuSel = 0; netLobbySync(); });
+}
 function netTell(pid, k, a) {
   const L = NET.peers.find(q => q.pid === pid);
   if (L) sendR(L, { t: 'you', k, a });
@@ -662,7 +671,7 @@ function clientStart(m) {
   G.coins = 0; G.won = false; G.record = false; G.arena = m.mode === 'arena' ? { wave: 0, phase: 'break', t: 3, left: 0 } : null;
   G.bestBefore = m.mode === 'arena' ? Save.stats.bestWave : Save.stats.bestDepth;
   resetRunFx();
-  NET.kills = 0; NET.coinsSeen = 0; NET.tvSeen = 0;
+  NET.kills = (m.roster.find(r => r.pid === NET.me) || {}).kills || 0; NET.coinsSeen = m.sc || 0; NET.tvSeen = m.tv || 0;
   Save.stats.runs++; Save.write();
   NET.starting = true; // the game shows once the first room has arrived
 }
@@ -1121,8 +1130,9 @@ function netMe() {
 }
 
 // The lobby. Everyone sets their name, robe and wand; the host picks the mode and difficulty.
-function lobbyRows() { return ['name', 'robe', 'wand'].concat(NET.role === 'host' ? ['mode', 'diff', 'invite', 'start', 'leave'] : ['leave']); }
-const LOBBY_Y = { name: 100, robe: 112, wand: 124, mode: 136, diff: 148, invite: 164, start: 176, leave: 188 };
+function lobbyRows() { return ['name', 'robe', 'wand'].concat(NET.role === 'host' ? ['mode', 'diff', 'invite', 'start'].concat(coopRuns().length ? ['resume'] : [], ['leave']) : ['leave']); }
+const LOBBY_Y = { name: 100, robe: 112, wand: 124, mode: 136, diff: 148, invite: 164, start: 176, resume: 188, leave: 200 };
+const coopSlot = () => coopRuns()[NET.lobby.slot || 0] || coopRuns()[0];
 const lobbyY = (row) => (NET.role !== 'host' && row === 'leave' ? 176 : LOBBY_Y[row]);
 const PICK_ROWS = new Set(['robe', 'wand', 'mode', 'diff']);
 function lobbyBack() { setState('lobby'); G.menuSel = 0; }
@@ -1161,6 +1171,10 @@ function updateLobby() {
     else if (pickClick || dir) toast('UNLOCK MORE WANDS IN THE GARDEN');
   }
   if (dir && row === 'mode') { NET.lobby.mode = cycle(['adv', 'arena', 'duel'], NET.lobby.mode, dir); Audio_.sfx('select'); netLobbySync(); }
+  if (dir && row === 'resume' && coopRuns().length > 1) {
+    NET.lobby.slot = ((NET.lobby.slot || 0) + dir + coopRuns().length) % coopRuns().length;
+    Audio_.sfx('select'); toast(coopSlot().players.map(p => p.name).join(' '));
+  }
   if (dir && row === 'diff') {
     // skip difficulty levels that are still locked (if the game locks any)
     let d = NET.lobby.diff;
@@ -1171,6 +1185,14 @@ function updateLobby() {
   if (pressed(...K_BACK) || (ok && row === 'leave')) { Audio_.sfx('select'); netLeave(); return; }
   if (ok && row === 'name') { Audio_.sfx('confirm'); openName(lobbyBack); }
   if (ok && row === 'invite') { Audio_.sfx('confirm'); NET.qr = true; }
+  if (ok && row === 'resume' && NET.status === '') {
+    // a saved co-op run: every hero goes back to the same player
+    const d = coopSlot();
+    Audio_.sfx('confirm'); NET.playing = true;
+    hostAll({ t: 'state', s: 'wipe', stats: null });
+    wipe(() => loadRun(d));
+    return;
+  }
   if (ok && row === 'start' && NET.status === '' && duelLocked()) { Audio_.sfx('confirm'); openDuelCode(); return; }
   if (ok && row === 'start' && NET.status === '') {
     Audio_.sfx('confirm');
@@ -1198,7 +1220,7 @@ function netInvite() {
 function drawLobby() {
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 134, 26, 268, 176);
+  panel(VW / 2 - 134, 26, 268, 184);
   text('CO-OP LOBBY', VW / 2, 32, 'Y', 2, 1);
   if (NET.status || NET.err) text(NET.err || NET.status, VW / 2, 46, NET.err ? 'R' : 'c', 1, 1);
   else {
@@ -1226,7 +1248,7 @@ function drawLobby() {
     text(label, VW / 2 - 116, y, on ? 'Y' : 'l', 1);
     if (on) pointer(VW / 2 - 126, y);
     text(value, vx, y, on ? 'Y' : 'w', 1, 1);
-    if (PICK_ROWS.has(id)) {
+    if (PICK_ROWS.has(id) || (id === 'resume' && coopRuns().length > 1)) {
       const w = textW(value), bob = on ? Math.floor(G.time * 4) % 2 : 0;
       text('<', vx - w / 2 - 10 - bob, y, on ? 'Y' : '3', 1);
       text('>', vx + w / 2 + 6 + bob, y, on ? 'Y' : '3', 1);
@@ -1248,6 +1270,7 @@ function drawLobby() {
   if (host) {
     menuRow('invite', 'INVITE FRIENDS (QR CODE)', 'c');
     menuRow('start', L.length > 1 ? 'START WITH ' + L.length + ' HEROES!' : 'START ALONE (OR WAIT FOR FRIENDS)', 'h');
+    if (rows.includes('resume')) line('resume', 'SAVED RUN', 'LAND ' + (coopSlot().depth + 1));
   }
   menuRow('leave', host ? 'CLOSE THE GAME' : 'LEAVE');
   if (NET.qr) drawQR();
