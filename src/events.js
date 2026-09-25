@@ -134,7 +134,7 @@ onNote((ev) => {
 });
 
 // ---------- Boss of the Week: a stronger boss at the end of its land ----------
-const BOW_BOSSES = [['king', 0], ['bcrab', 1], ['golem', 2], ['queen', 0], ['octo', 1], ['cmoth', 2], ['mayor', 0, '2026-W40'], ['turtle', 1, '2026-W41']];
+const BOW_BOSSES = [['king', 0], ['bcrab', 1], ['golem', 2], ['queen', 0], ['octo', 1], ['cmoth', 2], ['mayor', 0, '2026-W40'], ['turtle', 1, '2026-W41'], ['geode', 2, '2026-W42']];
 const BOW_HP = 1.4;
 function bossOfWeek(key) {
   key = key || utcWeek();

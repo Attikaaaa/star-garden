@@ -18,11 +18,16 @@ Object.assign(EDEF, {
   turtle: { hp: 520, r: 14, h: 22, hw: 14, hh: 7, sw: 38, boss: true, intro: 'RIDES THE TIDE', phases: [0.66, 0.33], colors: ['R', 'T', 'o'],
     sprite: (e) => (e.state === 'spin' || e.state === 'bank' ? S('turtle_shell_' + (Math.floor(e.anim * 10) % 2)) : bossFrame(e, { tuck: 'tell', horn: 'tell', swirl: 'atk', walk: bob(e, 3, 'move', 0) }[e.state] || bob(e, 2, 1, 0))),
     glint: (e) => (e.state === 'walk' && e.n > turtleGap(e) - 0.45 ? [0, -22] : null) },
+  geode: { hp: 600, r: 14, h: 26, hw: 13, hh: 7, sw: 36, boss: true, intro: 'SPINS THE DARK', phases: [0.66, 0.33], colors: ['2', '3', 'C'],
+    sprite: (e) => (e.stag > 0 || !GEODE_WALK[e.state] ? bossFrame(e, { web: 'tell', skittell: 'tell', climb: 'tell', charge: 'tell', hop: 'move', hang: 'move', beam: 'atk' }[e.state] || bob(e, 2, 1, 0), geodeSet(e))
+      : S(geodeSet(e) + (e.p2 ? '_pwalk' : '_walk') + (Math.floor(e.anim * GEODE_WALK[e.state]) % 4))),
+    glint: (e) => (e.state === 'walk' && e.n > geodeGap(e) - 0.45 ? [0, -28] : null),
+    under: (e, ox, oy) => EDEF.spider.under(e, ox, oy) },
   hill: { hp: 10, r: 7, h: 11, hw: 7, hh: 4, sw: 18, still: true, colors: ['N', 'n', 'h'], sprite: (e) => S(e.state === 'aim' ? 'mhill_1' : 'mhill_0'),
     glint: (e) => (e.state === 'aim' ? [0, -10] : null) },
 });
-Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE' });
-LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = ['octo', 'turtle']; LANDS[2].alt = 'cmoth';
+Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE', geode: 'GEODE SPIDER' });
+LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = ['octo', 'turtle']; LANDS[2].alt = ['cmoth', 'geode'];
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
 const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
@@ -355,6 +360,102 @@ Object.assign(AI, {
         break;
     }
   },
+  // Geode Spider: skitters about flicking crystal shards. It strings webs across the cave (one
+  // lane always stays clear) and runs along one; from phase 2 it drops from the ceiling onto a
+  // hero's spot; in phase 3 its cracked geode sweeps a beam round the room (rocks give shade).
+  geode(e, dt, room, p) {
+    e.t -= dt; e.beamCd -= dt;
+    if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+    if (e.hp < e.maxHp * 0.33) bossPhase(e, 3);
+    switch (e.state) {
+      case 'intro': if (e.t <= 0) { e.state = 'walk'; e.t = 2; e.n = 0; e.beamCd = 0; e.w = 0; } break;
+      case 'walk': {
+        const d = Math.hypot(p.x - e.x, p.y - e.y), v = towardPlayer(e), sp = d > 120 ? 45 : d < 80 ? -45 : 0;
+        moveBox(room, e, (v.x * sp + Math.cos(e.anim * 1.3) * 30) * dt, v.y * sp * dt, 'enemy');
+        e.flip = p.x < e.x;
+        if ((e.n += dt) > geodeGap(e)) { e.n = 0; fan(e.x, e.y - 14, aimAt(e.x, e.y - 14), e.phase > 1 ? 5 : 3, 0.28, 66, 'geode'); Audio_.sfx('eshoot'); }
+        if (e.t > 0) break;
+        e.n = 0;
+        if (e.phase > 2 && e.beamCd <= 0) { e.state = 'center'; e.t = 3; }
+        else if (e.phase > 1 && e.w++ % 2) { e.state = 'climb'; e.t = 0.6; Audio_.sfx('charge'); }
+        else {
+          // two webs on four lanes: one through the hero, one elsewhere
+          e.state = 'web'; e.t = 0.9; e.wa = grand() < 0.5 ? 1 : 0;
+          const ls = GEODE_LANES[e.wa], mine = ls.reduce((b, v, i) => (Math.abs(v - (e.wa ? p.x : p.y)) < Math.abs(ls[b] - (e.wa ? p.x : p.y)) ? i : b), 0);
+          let o = Math.floor(grand() * 3); if (o >= mine) o++;
+          e.webs = [ls[mine], ls[o]];
+          for (const v of e.webs) G.markers.push({ kind: 'web', x: e.wa ? v : 0, y: e.wa ? 0 : v, a: e.wa, t: 0.9, max: 0.9 });
+          Audio_.sfx('tele');
+        }
+        break;
+      }
+      case 'web':
+        if (e.t <= 0) {
+          // hop onto the nearest web, then run along it towards its far end
+          e.gx = e.webs.reduce((b, v) => (Math.abs(v - (e.wa ? e.x : e.y)) < Math.abs(b - (e.wa ? e.x : e.y)) ? v : b));
+          e.state = 'hop'; e.t = 0.35; e.hx = e.x; e.hy = e.y;
+        }
+        break;
+      case 'hop': {
+        const k = 1 - Math.max(0, e.t) / 0.35;
+        e.z = Math.sin(k * Math.PI) * 14;
+        if (e.wa) e.x = e.hx + (e.gx - e.hx) * k; else e.y = e.hy + (e.gx - e.hy) * k;
+        if (e.t <= 0) {
+          e.z = 0; unstick(room, e, 'enemy'); dust(e.x, e.y, 6, 16);
+          e.state = 'skittell'; e.t = 0.5;
+          lane(e, e.wa ? { x: e.x, y: e.y < 120 ? 999 : -999 } : { x: e.x < VW / 2 ? 999 : -999, y: e.y });
+          Audio_.sfx('charge');
+        }
+        break;
+      }
+      case 'skittell': if (e.t <= 0) { e.state = 'skit'; e.t = 2.4; } break;
+      case 'skit':
+        if (Math.random() < 0.5) part(e.x + rnd(-10, 10), e.y - 1, 0, -6, 0.4, Math.random() < 0.5 ? 'w' : 'C', { size: 2 });
+        if (moveBox(room, e, Math.cos(e.la) * 170 * dt, Math.sin(e.la) * 170 * dt, 'enemy') || e.t <= 0) {
+          G.shake = Math.max(G.shake, 3); Audio_.sfx('boom'); dust(e.x, e.y, 8, 22);
+          ring(e.x, e.y - 12, e.phase > 1 ? 8 : 6, 58, 'geode', grand());
+          e.state = 'walk'; e.t = 2.2; e.n = 0;
+        }
+        break;
+      case 'climb':
+        // up on its thread, out of reach; drops where the hero stood
+        e.z = (1 - Math.max(0, e.t) / 0.6) * 200; e.ghost = e.z > 12;
+        if (e.t <= 0) {
+          e.x = Math.max(40, Math.min(VW - 40, p.x)); e.y = Math.max(56, Math.min(190, p.y)); unstick(room, e, 'enemy');
+          G.markers.push({ x: e.x, y: e.y, t: 1.1, max: 1.1, src: 'geode', fall: '', n: 8 });
+          e.state = 'hang'; e.t = 1.1;
+        }
+        break;
+      case 'hang':
+        e.z = Math.min(200, Math.max(0, e.t) / 0.4 * 200);
+        if (e.t <= 0) {
+          e.z = 0; e.ghost = false; dust(e.x, e.y, 14, 26); G.shake = Math.max(G.shake, 5); hapticAll('slam');
+          stagger(e); e.state = 'walk'; e.t = 1.8; e.n = 0;
+        }
+        break;
+      case 'center':
+        // the beam: to the middle, aim away from every hero, then one slow turn
+        moveBox(room, e, Math.sign(192 - e.x) * Math.min(60, Math.abs(192 - e.x) * 4) * dt, Math.sign(124 - e.y) * Math.min(60, Math.abs(124 - e.y) * 4) * dt, 'enemy');
+        if (e.t <= 0 || Math.hypot(192 - e.x, 124 - e.y) < 3) {
+          let best = 0, far = -1;
+          for (let i = 0; i < 16; i++) {
+            const a = i * Math.PI / 8, m = Math.min(...G.players.filter(alive).map(q => Math.abs(Math.atan2(Math.sin(Math.atan2(q.y - e.y, q.x - e.x) - a), Math.cos(Math.atan2(q.y - e.y, q.x - e.x) - a)))));
+            if (m > far) { far = m; best = a; }
+          }
+          e.state = 'charge'; e.t = 1.2; e.la = best; e.sd = grand() < 0.5 ? 1 : -1;
+          G.markers.push({ kind: 'lane', x: e.x, y: e.y - 10, a: best, t: 1.2, max: 1.2 });
+          Audio_.sfx('charge');
+        }
+        break;
+      case 'charge':
+        if (e.t <= 0) { e.state = 'beam'; e.t = Math.PI * 2 / 0.7; e.bm = { kind: 'beam', x: e.x, y: e.y - 10, a: e.la, t: 1, max: 1 }; G.markers.push(e.bm); Audio_.sfx('boom'); }
+        break;
+      case 'beam':
+        e.bm.a += e.sd * 0.7 * dt; e.bm.t = 1; // the marker hurts (updateMarkers) while the spider keeps it alive
+        if (e.t <= 0) { e.bm.t = 0; e.bm = null; e.beamCd = 14; stagger(e); e.state = 'walk'; e.t = 2; e.n = 0; }
+        break;
+    }
+  },
   // A molehill: in turn, lobs a clod at a hero; the ring shows where it lands.
   hill(e, dt, room, p) {
     e.t -= dt;
@@ -370,6 +471,10 @@ Object.assign(AI, {
 const mayorSet = (e) => (e.phase > 2 ? 'mayor3' : 'mayor');
 const turtleGap = (e) => (e.phase > 1 ? 1.7 : 1.3);
 const turtleSides = (e) => (e.phase > 2 ? [0, 1] : [e.side]);
+const geodeSet = (e) => (e.phase > 2 ? 'geode3' : 'geode');
+const geodeGap = (e) => (e.phase > 1 ? 1.7 : 1.4);
+const GEODE_WALK = { walk: 8, skit: 16, center: 8 };
+const GEODE_LANES = [[60, 100, 140, 180], [60, 148, 236, 324]]; // rows (y) for sideways webs, columns (x) for upright ones
 const mayorGap = (e) => (e.phase > 1 ? 1.8 : 1.4);
 // A floor tile can sink if nobody stands on it, it keeps clear of the doors and the rest of
 // the floor stays in one piece.
@@ -410,5 +515,6 @@ BEASTS.push(
   { t: 'cmoth', spr: 'cmoth_0', boss: true, lore: ['THE CRYSTAL MOTH LIVES DEEP IN THE CAVE.', 'ITS WINGS SHED GLOWING DUST.', 'IT CARRIES A BIG STAR FOR THE NIGHT MOTH.'] },
   { t: 'mayor', spr: 'mayor_0', boss: true, lore: ['THE MOLE MAYOR RUNS THE MEADOW FROM BELOW.', 'WHEN THE GROUND BULGES, HE IS RIGHT UNDER IT.', 'HE LOST HIS HAT ONCE, AND NEVER GOT OVER IT.'] },
   { t: 'turtle', spr: 'turtle_0', boss: true, lore: ['THE TIDE TURTLE HAS SWUM EVERY SEA.', 'WHEN SHE BLOWS HER HORN, THE TIDE COMES IN.', 'THE PEARL ON HER SHELL IS A BIG STAR.'] },
+  { t: 'geode', spr: 'geode_0', boss: true, lore: ['THE GEODE SPIDER HANGS IN THE DARK OF THE CAVE.', 'ITS WEBS GLOW JUST BEFORE THEY SNAP TIGHT.', 'THE GEODE ON ITS BACK HOLDS A BIG STAR.'] },
   { t: 'nmoth', spr: 'nmoth_0', boss: true, lore: ['THE NIGHT MOTH ATE THE STARLIGHT.', 'IN ITS DARK, ONLY YOUR OWN GLOW IS SAFE.', 'IT WAS ONCE A LITTLE MOTH THAT FEARED THE DARK.'] },
 );

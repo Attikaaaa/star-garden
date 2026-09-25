@@ -4,7 +4,7 @@
 // (live.json: events, news, tuning), the install prompt, persistent storage and the
 // optional game server (cloud save, leaderboards, push). With no server configured the
 // game is complete offline; online features simply stay hidden.
-const GAME_VERSION = '1.5.1';
+const GAME_VERSION = '1.6.0';
 
 const ONLINE = {
   url: '',            // game server base URL: <meta name="sg-server"> or live.json "server"

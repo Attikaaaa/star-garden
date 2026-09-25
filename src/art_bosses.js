@@ -214,6 +214,71 @@
   }
   // the tide's tell: arrows along the wall the wave comes from
   def('tide_arrow', ['00.....', '0w00...', '0wCC00.', '0CCCTT0', '0CTT00.', '0T00...', '00.....'], { flip: true });
+
+  // ---------- Geode Spider (Crystal Cave) ----------
+  // A dark-purple spider with crystal legs and six eyes, its back a broken geode. In phase 3
+  // (the 'geode3' set) the geode has cracked wide open and glows.
+  // legs per side, back to front: [hip, knee, tip]; walk frames lift every other leg
+  const LEGS = [[[13, 10], [5, 3], [1, 10]], [[12, 14], [3, 10], [0, 19]], [[12, 19], [4, 18], [1, 27]], [[14, 23], [8, 25], [6, 31]]];
+  const legs = (f) => {
+    const g = grid(40, 32);
+    LEGS.forEach(([h, k, t], i) => {
+      for (const s of [0, 1]) {
+        const up = f.leg % 2 === 0 && (i + s + f.leg / 2) % 2 === 0 ? 2 : 0;
+        let kx = k[0], ky = k[1] - up, tx = t[0], ty = t[1] - up;
+        if (f.tl && i === 3) { kx = 4; ky = 21; tx = 5; ty = 11; } // rears its front legs
+        if (f.a) { kx -= 1; tx -= 1; ky += 1; }
+        if (f.st || f.d) { kx += 3; ky += 4; tx = kx + 3; ty = ky - 3; } // curled up
+        const X = (x) => (s ? 39 - x : x);
+        g.line(X(h[0]) + 1, h[1] + 1, X(kx) + 1, ky + 1, 'B').line(X(kx) + 1, ky + 1, X(tx) + 1, ty, 'B');
+        g.line(X(h[0]), h[1], X(kx), ky, 'c').line(X(kx), ky, X(tx), ty, 'c');
+        g.px(X(kx), ky, 'C').px(X(tx), ty, 'w');
+      }
+    });
+    return g.rows();
+  };
+  const geode = (f, open) => {
+    const dy = f.st || f.d ? 3 : f.tl ? -1 : f.a ? 1 : f.b ? 1 : 0;
+    let r = sculpt(40, 32, [
+      { e: [20, 10 + dy, 9.5, 8], ramp: '1223' },
+      { e: [20, 21 + dy, 8, 6.5], ramp: '1234' },
+    ]);
+    r = rim(r, { 1: 'p', 2: 'p' });
+    // the geode: a jagged break in the back, crystals inside; wide open and glowing in phase 3
+    r = open ? stamp(r, 14, dy, `
+      ...0...0....
+      ..0w0.0C0.0.
+      .0CwC0CwC0w0
+      0cCwwCCwwCc0
+      0BcCw${f.p || f.st ? 'P' : 'Y'}wCcBB0
+      .0BccPccBB0.
+      ..00000000..`) : stamp(r, 16, 4 + dy, `
+      ..0..0..
+      .0w00C0.
+      0cwCcCC0
+      0BcCwcB0
+      .0BccB0.
+      ..0000..`);
+    // two big eyes, four small ones above them
+    const ey = 19 + dy;
+    r = bossEyes(r, 14, ey, 8, f.face);
+    if (!f.d && !f.st) r = stamp(r, 15, ey - 3, 'w0....w0\n00....00');
+    // crystal fangs; the mouth between them
+    r = stamp(r, 16, ey + 5, f.a || f.face === 'mad' ? '0.0000.0\nC0wqqw0C\n0..00..0' : '0......0\nC0....0C\n0......0');
+    if (!(f.a || f.face === 'mad')) r = stamp(r, 18, ey + 5, MOUTH[f.face]);
+    // legs go behind the body
+    const L = legs(f);
+    r = autoOutline(r.map((row, y) => row.split('').map((c, x) => (c === '.' ? L[y][x] : c)).join('')));
+    return r;
+  };
+  for (const [t, open] of [['geode', false], ['geode3', true]]) {
+    bossFrames(t, (f) => geode(f, open), o);
+    // four walk frames, calm and angry
+    for (let k = 0; k < 4; k++) {
+      def(t + '_walk' + k, geode({ face: 'calm', m: 1, leg: k }, open), o);
+      def(t + '_pwalk' + k, geode({ face: 'mad', m: 1, leg: k, p: 1 }, open), o);
+    }
+  }
 })();
 
 // The Star Well's rocks (dark stone with a star) and breakable star lanterns.
@@ -238,6 +303,7 @@
     dust: [['.C..', 'C43.', '.332', '..2.'], ['..C...', '.C43..', 'C4433.', '.43322', '..322.', '...2..']],
     clod: [['.hG.', 'aNNn', 'NNnn', '.nn.'], ['.h.G..', 'aNhNN.', 'aNNNNn', 'NNNnnn', 'NNnnnn', '.nnnn.']],
     foam: [['.wC.', 'wCTT', 'CTTt', '.Tt.'], ['.wwCC.', 'wwCCTT', 'wCCTTT', 'CCTTTt', 'CTTTtt', '.TTtt.']],
+    geode: [['..w..', '.wCc.', 'wCcBB', '.cBB.', '..B..'], ['...w...', '..wCc..', '.wCCcB.', 'wCCPcBB', '.cCcBB.', '..cBB..', '...B...']],
     nstar: [['..q..', 'qqwPP', '.qPp.', '.P.p.'], ['...q...', '..qqP..', 'qqqwPPp', '.qqPPp.', '..qPp..', '.qp.pp.', '.p...p.']],
   };
   for (const k in B) {

@@ -1001,6 +1001,8 @@ function clientHits(me) {
   }
   if (!hit) for (const k of G.markers) {
     if (!k.done && !k.kind && k.t <= 0.05 && Math.hypot(me.x - k.x, (me.y - k.y) * 1.6) < 10) { k.done = true; hit = true; break; }
+    if (!k.done && k.kind === 'web' && k.t <= 0.05 && webHit(k, me)) { k.done = true; hit = true; break; }
+    if (k.kind === 'beam' && beamHit(k, me)) { hit = true; break; }
   }
   if (!hit) return;
   sendR(NET.host, { t: 'hit', b: bullet });

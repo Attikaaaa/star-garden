@@ -584,9 +584,15 @@ function updateMarkers(dt) {
   for (let i = m.length - 1; i >= 0; i--) {
     const k = m[i];
     k.t -= dt;
+    if (k.kind === 'beam') for (const p of G.players) if (alive(p) && beamHit(k, p)) hurtPlayer(p, 1, 'geode');
+    if (k.t <= 0 && k.kind === 'web') {
+      // the web snaps tight: it hurts along its line and hangs there as silk for a while
+      for (const p of G.players) if (alive(p) && webHit(k, p)) hurtPlayer(p, 1, 'geode');
+      m.push({ kind: 'silk', x: k.x, y: k.y, a: k.a, t: 2.6, max: 2.6 }); Audio_.sfx('eshoot');
+    }
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod' }[k.src] || 'shard', grand());
+      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode' }[k.src] || 'shard', grand());
       burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
@@ -595,10 +601,31 @@ function updateMarkers(dt) {
     }
   }
 }
+// The Geode Spider's web lines (sideways at y, or upright at x when a) and its beam, which
+// rocks stop. Shared with net.js, where a client judges its own hero.
+const webHit = (k, p) => Math.abs(k.a ? p.x - k.x : p.y - k.y) < 6;
+function beamLen(k) {
+  let d = 8;
+  while (d < 420 && !solidPx(G.room, k.x + Math.cos(k.a) * d, k.y + Math.sin(k.a) * d, 'shot')) d += 4;
+  return d;
+}
+function beamHit(k, p) {
+  const dx = p.x - k.x, dy = p.y - 6 - k.y, along = dx * Math.cos(k.a) + dy * Math.sin(k.a);
+  return along > 8 && along < beamLen(k) && Math.abs(dy * Math.cos(k.a) - dx * Math.sin(k.a)) < 6;
+}
 function drawMarkers(ox, oy) {
   for (const k of G.markers) {
     if (k.kind === 'lane') { if (Math.floor(k.t * 8) % 2) for (let d = 20; d < 400; d += 14) drawS(S('sparkle_c'), ox + k.x + Math.cos(k.a) * d - 1, oy + k.y + Math.sin(k.a) * d - 1); continue; }
     if (k.kind === 'tide') { if (Math.floor(k.t * 8) % 2) for (let y = 36; y <= 190; y += 14) if (Math.abs(y - k.y) > 14) { const l = k.x < VW / 2; drawS(S('tide_arrow'), ox + k.x + (l ? 4 : -10), oy + y - 3, l ? 0 : 1); drawS(S('sparkle_c'), ox + k.x + (l ? 22 : -24), oy + y - 1); } continue; }
+    if (k.kind === 'web') { if (Math.floor(k.t * 8) % 2) for (let d = 24; d < (k.a ? 200 : 368); d += 14) drawS(S('sparkle_c'), ox + (k.a ? k.x : d) - 1, oy + (k.a ? d : k.y) - 1); continue; }
+    if (k.kind === 'silk') { if (k.t > 0.6 || Math.floor(k.t * 10) % 2) rect(Math.round(ox + (k.a ? k.x : 16)), Math.round(oy + (k.a ? 36 : k.y)), k.a ? 1 : VW - 32, k.a ? 166 : 1, 'l'); continue; }
+    if (k.kind === 'beam') {
+      const len = beamLen(k), c = Math.cos(k.a), s = Math.sin(k.a), w = Math.floor(G.time * 20) % 2;
+      for (let d = 8; d < len; d += 2) rect(Math.round(ox + k.x + c * d) - 3, Math.round(oy + k.y + s * d) - 3, 7, 7, '0');
+      for (let d = 8; d < len; d += 2) rect(Math.round(ox + k.x + c * d) - 2, Math.round(oy + k.y + s * d) - 2, 5, 5, w ? 'B' : 'C');
+      for (let d = 8; d < len; d += 1) rect(Math.round(ox + k.x + c * d) - 1, Math.round(oy + k.y + s * d) - 1, 2, 2, 'w');
+      continue;
+    }
     if (k.kind === 'line') { if (Math.floor(k.t * 8) % 2) for (let i = 0; i < 20; i++) if (Math.abs(i - k.x) > 1) drawS(S('sparkle_c'), ox + 23 + i * 17, oy + k.y - 1); continue; }
     const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
     ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));
@@ -642,7 +669,7 @@ function drawEnemy(e, ox, oy) {
     }
     return;
   }
-  if (e.ghost && e.type !== 'mayor' && Math.floor(e.anim * 20) % 2) return;
+  if (e.ghost && e.type !== 'mayor' && e.type !== 'geode' && Math.floor(e.anim * 20) % 2) return;
   if (e.state === 'fade' && Math.floor(e.anim * 20) % 2) return;
   const s = enemySprite(e);
   const hover = e.fly || e.boss;
