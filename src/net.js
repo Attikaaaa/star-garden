@@ -1298,3 +1298,4 @@ function netAutoJoin() {
 }
 
 netAutoJoin();
+window.SG_READY = true; // every script has loaded (index.html repairs a broken offline copy until then)

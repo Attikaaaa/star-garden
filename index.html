@@ -40,6 +40,19 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<script>
+// A broken offline copy (files from two releases) stops the game while it loads:
+// throw the offline copy away once and load everything fresh.
+window.addEventListener('error', function () {
+  if (window.SG_READY) return;
+  try { if (sessionStorage.getItem('sgHeal')) return; sessionStorage.setItem('sgHeal', '1'); } catch (e) { return; }
+  var sw = navigator.serviceWorker, go = function () { location.reload(); };
+  Promise.all([
+    sw ? sw.getRegistrations().then(function (l) { return Promise.all(l.map(function (r) { return r.unregister(); })); }) : 0,
+    window.caches ? caches.keys().then(function (k) { return Promise.all(k.map(function (n) { return caches.delete(n); })); }) : 0,
+  ]).then(go, go);
+});
+</script>
 <script src="src/palette.js"></script>
 <script src="src/save.js"></script>
 <script src="src/online.js"></script>
