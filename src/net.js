@@ -355,7 +355,7 @@ function sprName(s) {
   return _rev.get(s);
 }
 
-const startMsg = () => ({ t: 'start', mode: G.mode, diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
+const startMsg = () => ({ t: 'start', mode: G.mode, duel: isDuel(), diff: G.diff, roster: G.players.map(p => ({ pid: p.pid, wand: p.wand, name: p.name, skin: p.skin, cos: p.pid === 0 ? myCos() : (NET.peers.find(L => L.pid === p.pid) || {}).cos })) });
 function netStartRun() {
   NET.playing = true; NET.parked = {};
   hostAll(startMsg());
@@ -658,7 +658,7 @@ function clientStart(m) {
   });
   G.player = G.players.find(p => p.pid === NET.me);
   G.stats = { kills: 0, coins: 0, items: 0, time: 0 };
-  G.run = { vault: 0, keep: 0 };
+  G.run = { vault: 0, keep: 0, duel: !!m.duel };
   G.coins = 0; G.won = false; G.record = false; G.arena = m.mode === 'arena' ? { wave: 0, phase: 'break', t: 3, left: 0 } : null;
   G.bestBefore = m.mode === 'arena' ? Save.stats.bestWave : Save.stats.bestDepth;
   resetRunFx();
@@ -1126,8 +1126,24 @@ const LOBBY_Y = { name: 100, robe: 112, wand: 124, mode: 136, diff: 148, invite:
 const lobbyY = (row) => (NET.role !== 'host' && row === 'leave' ? 176 : LOBBY_Y[row]);
 const PICK_ROWS = new Set(['robe', 'wand', 'mode', 'diff']);
 function lobbyBack() { setState('lobby'); G.menuSel = 0; }
+// The Boss Fight is secret: the host unlocks it once with a code (only its hash is shipped).
+const DUEL_KEY = 3056464606;
+const duelLocked = () => NET.lobby.mode === 'duel' && NET.role === 'host' && !Save.flags.duel;
+function openDuelCode() {
+  const back = () => { setState('lobby'); G.menuSel = lobbyRows().indexOf('start'); };
+  openEntry({
+    title: 'SECRET CODE', hint: 'THE BOSS FIGHT NEEDS A CODE', abc: NAME_ABC, min: 1, max: 8, ok: 'OK',
+    done: (v) => {
+      if (hashSeed('duel', v) === DUEL_KEY) { Save.flags.duel = true; Save.write(); Audio_.sfx('confirm'); toast('BOSS FIGHT UNLOCKED!'); }
+      else { Audio_.sfx('deny'); toast('WRONG CODE'); }
+      back();
+    },
+    back,
+  });
+}
 function updateLobby() {
-  if (!NET.role) { setState('title'); return; }
+  if (!NET.role) { NET.qr = false; setState('title'); return; }
+  if (NET.qr) { updateQR(); return; }
   const rows = lobbyRows();
   menuNav(rows.length);
   let click = -1;
@@ -1144,7 +1160,7 @@ function updateLobby() {
     if (owned.length > 1) { Save.wand = cycle(owned, Save.wand, dir); Save.write(); Audio_.sfx('select'); netMe(); }
     else if (pickClick || dir) toast('UNLOCK MORE WANDS IN THE GARDEN');
   }
-  if (dir && row === 'mode') { NET.lobby.mode = NET.lobby.mode === 'adv' ? 'arena' : 'adv'; Audio_.sfx('select'); netLobbySync(); }
+  if (dir && row === 'mode') { NET.lobby.mode = cycle(['adv', 'arena', 'duel'], NET.lobby.mode, dir); Audio_.sfx('select'); netLobbySync(); }
   if (dir && row === 'diff') {
     // skip difficulty levels that are still locked (if the game locks any)
     let d = NET.lobby.diff;
@@ -1154,18 +1170,26 @@ function updateLobby() {
   const ok = (pressed(...K_OK) && !PICK_ROWS.has(row)) || (click >= 0 && Input.mouseHit && !PICK_ROWS.has(row));
   if (pressed(...K_BACK) || (ok && row === 'leave')) { Audio_.sfx('select'); netLeave(); return; }
   if (ok && row === 'name') { Audio_.sfx('confirm'); openName(lobbyBack); }
-  if (ok && row === 'invite') netInvite();
+  if (ok && row === 'invite') { Audio_.sfx('confirm'); NET.qr = true; }
+  if (ok && row === 'start' && NET.status === '' && duelLocked()) { Audio_.sfx('confirm'); openDuelCode(); return; }
   if (ok && row === 'start' && NET.status === '') {
     Audio_.sfx('confirm');
     G.diff = NET.lobby.diff; Save.write();
     const roster = netRoster(), mode = NET.lobby.mode;
     NET.playing = true;
     hostAll({ t: 'state', s: 'wipe', stats: null });
-    wipe(() => startRun(mode, roster));
+    wipe(() => startRun(mode === 'duel' ? 'arena' : mode, roster, { duel: mode === 'duel' }));
   }
 }
+// The invite link. A copy served from this device only (file://, localhost) points
+// friends to the public build instead, since their phones cannot open it.
+const NET_HOME = 'https://attikaaaa.github.io/star-garden/';
+function netInviteURL() {
+  const local = !/^https?:$/.test(location.protocol) || /^(localhost|127\.|\[::1\])/.test(location.hostname);
+  return (local ? NET_HOME : location.origin + location.pathname) + '?join=' + NET.code;
+}
 function netInvite() {
-  const url = location.origin + location.pathname + '?join=' + NET.code;
+  const url = netInviteURL();
   if (navigator.share && IS_TOUCH) navigator.share({ title: 'Star Garden', text: 'Join my Star Garden game! Code: ' + NET.code, url }).catch(() => {});
   else if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => toast('INVITE LINK COPIED!'), () => toast('CODE: ' + NET.code));
   else toast('CODE: ' + NET.code);
@@ -1196,7 +1220,7 @@ function drawLobby() {
     } else text(i ? 'OPEN' : '', x + 30, y + 13, '3', 1, 1);
   }
   const rows = lobbyRows(), sel = rows[G.menuSel], d = DIFFS[NET.lobby.diff];
-  const modeName = NET.lobby.mode === 'arena' ? 'ARENA' : 'ADVENTURE';
+  const modeName = NET.lobby.mode === 'duel' ? (duelLocked() ? 'BOSS FIGHT: CODE' : 'BOSS FIGHT') : NET.lobby.mode === 'arena' ? 'ARENA' : 'ADVENTURE';
   const line = (id, label, value) => {
     const y = lobbyY(id), on = sel === id, vx = VW / 2 + 24;
     text(label, VW / 2 - 116, y, on ? 'Y' : 'l', 1);
@@ -1222,10 +1246,47 @@ function drawLobby() {
     if (on) pointer(VW / 2 - textW(label) / 2 - 10, y);
   };
   if (host) {
-    menuRow('invite', IS_TOUCH && navigator.share ? 'SHARE INVITE LINK' : 'COPY INVITE LINK', 'c');
+    menuRow('invite', 'INVITE FRIENDS (QR CODE)', 'c');
     menuRow('start', L.length > 1 ? 'START WITH ' + L.length + ' HEROES!' : 'START ALONE (OR WAIT FOR FRIENDS)', 'h');
   }
   menuRow('leave', host ? 'CLOSE THE GAME' : 'LEAVE');
+  if (NET.qr) drawQR();
+}
+// The invite as a QR code: a friend points a phone camera at it and lands in the game.
+const inviteLabel = () => (IS_TOUCH && navigator.share ? 'SHARE INVITE LINK' : 'COPY INVITE LINK');
+let _qrCache = null;
+function qrCanvas(url) {
+  if (_qrCache && _qrCache.url === url) return _qrCache.c;
+  const M = qrMatrix(url);
+  if (!M) return null;
+  const n = M.length, q = 3, c = document.createElement('canvas'), g = c.getContext('2d');
+  c.width = c.height = n + q * 2;
+  g.fillStyle = PAL.w; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = PAL['0'];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (M[y][x]) g.fillRect(x + q, y + q, 1, 1);
+  _qrCache = { url, c };
+  return c;
+}
+const QR_LINK_Y = 197;
+function updateQR() {
+  const link = Input.mouseHit && Math.abs(Input.my - QR_LINK_Y - 3) < 7 && Math.abs(Input.mx - VW / 2) < 80;
+  if (pressed(...K_OK) || link) netInvite();
+  else if (pressed(...K_BACK) || Input.mouseHit) { Audio_.sfx('select'); NET.qr = false; }
+}
+function drawQR() {
+  dim(0.7);
+  panel(VW / 2 - 90, 6, 180, 204);
+  text('SCAN TO JOIN', VW / 2, 12, 'Y', 2, 1);
+  const c = qrCanvas(netInviteURL());
+  if (c) {
+    const k = Math.max(2, Math.floor(160 / c.width)), w = c.width * k, x = Math.round(VW / 2 - w / 2), y = 24;
+    ctx.imageSmoothingEnabled = false;
+    rect(x - 1, y - 1, w + 2, w + 2, '0');
+    ctx.drawImage(c, x, y, w, w);
+  }
+  text('OR ENTER THE CODE  ' + NET.code, VW / 2, 186, 'l', 1, 1);
+  const pad = Input.lastAim === 'pad', touch = Input.lastAim === 'touch';
+  text((pad ? 'A: ' : touch ? 'TAP: ' : 'ENTER: ') + inviteLabel(), VW / 2, QR_LINK_Y, 'c', 1, 1);
 }
 // Opening an invite link (…/?join=CODE) goes straight to joining that game.
 function netAutoJoin() {

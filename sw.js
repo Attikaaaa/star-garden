@@ -1,6 +1,6 @@
 // Offline support: every file is cached on install; later visits are served from the cache
 // and refreshed in the background. Bump VERSION with each release.
-const VERSION = 'star-garden-v15';
+const VERSION = 'star-garden-v16';
 const FILES = [
   './', 'index.html', 'live.json', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
   'src/palette.js', 'src/save.js', 'src/online.js', 'src/rng.js', 'src/gfx.js', 'src/font.js', 'src/lang.js', 'src/lang_hu.js', 'src/art_chars.js', 'src/art_heroes.js', 'src/art_world.js', 'src/art_ui.js', 'src/art_more.js', 'src/art_items.js', 'src/art_foes.js', 'src/art_bosses.js', 'src/art_rooms.js', 'src/art_garden.js',
@@ -8,8 +8,8 @@ const FILES = [
   'src/ui.js', 'src/meta.js', 'src/progress.js', 'src/firstrun.js', 'src/screens.js',
   'src/quests.js', 'src/stars.js', 'src/hub.js', 'src/book.js', 'src/items2.js', 'src/mail.js',
   'src/mods.js', 'src/daily.js', 'src/loot.js', 'src/affix.js',
-  'src/foes.js', 'src/bosses.js', 'src/story.js', 'src/rooms.js',
-  'src/heroes.js', 'src/options.js', 'src/couch.js', 'src/cloud.js', 'src/yard.js', 'src/events.js', 'src/main.js', 'src/net.js',
+  'src/foes.js', 'src/bosses.js', 'src/duel.js', 'src/story.js', 'src/rooms.js',
+  'src/heroes.js', 'src/options.js', 'src/couch.js', 'src/cloud.js', 'src/yard.js', 'src/events.js', 'src/main.js', 'src/qr.js', 'src/net.js',
 ];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

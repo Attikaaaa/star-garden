@@ -45,5 +45,8 @@
       d('d0b', idle(shut(F, [5, 10], skin), LEGS.idle)); d('s0b', idle(shut(Sd, [10], skin), LEGS.sideIdle));
       d('d0h', idle(hurtF, LEGS.idle)); d('s0h', idle(hurtS, LEGS.sideIdle));
     }
+    // meme robes are whole costumes: every hero wears Pip's
+    MEME_SKINS.forEach((m, i) => ['d0', 'd1', 'd2', 'u0', 'u1', 'u2', 's0', 's1', 's2', 'd0b', 's0b', 'd0h', 's0h']
+      .forEach(n => alias(id + '_' + n + '#' + (8 + i), 'hero_' + n + '#' + (8 + i))));
   }
 })();

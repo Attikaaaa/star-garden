@@ -126,6 +126,7 @@ function drawTeam(y) {
 // Arena: wave number in the top-right corner, and the countdown between waves.
 function drawWave() {
   const A = G.arena, r = SCR.w - SCR.ox - 5, t = 4 - SCR.oy;
+  if (isDuel()) { text('BOSS FIGHT', r, t + 1, 'Y', 2, 2); return t + 12; }
   text('WAVE ' + Math.max(1, A.wave), r, t + 1, 'Y', 2, 2);
   if (A.phase === 'fight') {
     const left = A.left + G.enemies.filter(e => !e.dead && !e.passive).length;
@@ -469,7 +470,7 @@ function drawPause() {
   }
   drawMenu(pauseItems(), 118);
   rect(VW / 2 - 110, 162, 220, 1, '2');
-  const where = G.mode === 'arena' ? 'WAVE ' + Math.max(1, G.arena.wave) : 'LAND ' + (G.floor.depth + 1);
+  const where = isDuel() ? 'BOSS FIGHT' : G.mode === 'arena' ? 'WAVE ' + Math.max(1, G.arena.wave) : 'LAND ' + (G.floor.depth + 1);
   text(where + '   ' + DIFFS[G.diff].name + '   ' + fmtTime(G.stats.time), VW / 2, 170, 'c', 1, 1);
   if (host) text('CODE: ' + NET.code, VW / 2, 182, 'l', 1, 1);
 }
@@ -478,11 +479,11 @@ function endItems() {
   if (NET.role === 'client') return ['LEAVE'];
   if (G.daily) return ['PRACTICE'].concat(G.daily.key === dailyKeyOf(G.daily.kind) ? ['SHARE'] : [], ['MENU']);
   const mid = NET.role === 'host' ? ['LOBBY'] : !NET.role && menuOpen('garden') ? ['GARDEN'] : [];
-  return (G.state === 'win' ? ['KEEP GOING: ENDLESS MODE'] : ['AGAIN!']).concat(mid, ['MENU']);
+  return (G.state === 'win' && !isDuel() ? ['KEEP GOING: ENDLESS MODE'] : ['AGAIN!']).concat(mid, ['MENU']);
 }
 function drawOver() { drawEndScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }
 function drawWin() {
-  drawEndScreen('VICTORY!', 'Y', 'THE STAR GARDEN SHINES AGAIN!');
+  drawEndScreen('VICTORY!', 'Y', isDuel() ? 'BIG GRIN IS BEATEN!' : 'THE STAR GARDEN SHINES AGAIN!');
   for (let i = 0; i < 10; i++) {
     const a = G.time * 0.7 + i * 0.63;
     drawS(S(i % 2 ? 'sparkle_0' : 'sparkle_1'), VW / 2 + Math.cos(a) * 116 - 1, 108 + Math.sin(a) * 92 - 1);

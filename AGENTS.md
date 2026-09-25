@@ -18,7 +18,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
   data → level → entities → enemies → fx → ui → meta → the progress and content files →
-  couch → cloud → yard → events → main → net). `net.js` loads last because it wraps a few
+  couch → cloud → yard → events → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
@@ -44,6 +44,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
+| `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |
+| `qr.js` | a small QR encoder (`qrMatrix`) for the co-op invite shown in the lobby |
 | `rng.js` | seeded random streams for everything that decides the game (`grnd`, `gpick`, `withSeed`, `hashSeed`) |
 | `online.js` | consent-gated stats (`track`), error reports, `live.json`, the optional game server (`api`, `online()`), install and storage |
 | `lang.js`, `lang_hu.js` | languages: `tr()` looks up whole on-screen strings (`#` numbers, `*` words); one table per language |

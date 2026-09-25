@@ -1,3 +1,5 @@
 promo/
 .DS_Store
 server/data/
+.codegraph/
+graphify-out/

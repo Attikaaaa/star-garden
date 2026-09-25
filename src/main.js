@@ -11,7 +11,7 @@ const G = {
   mode: 'adv', diff: 1, coins: 0, arena: null, eid: 0, propsN: 0, overT: 0,
 };
 function saveBest() {
-  if (G.daily) return; // daily runs start in any land: no land records from them
+  if (G.daily || isDuel()) return; // daily runs start in any land: no land records from them
   const st = Save.stats;
   if (G.mode === 'arena') {
     if (G.arena.wave - 1 > st.bestWave) { st.bestWave = G.arena.wave - 1; st.bestWaveKills = G.stats.kills; }
@@ -64,7 +64,7 @@ function startRun(mode, roster, opts) {
   if (mode === 'adv' && !NET.role && !G.daily) clearRun();
   if (mode === 'arena' && !NET.role) clearArena();
   G.mode = mode;
-  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), quick: !!opts.quick, bow: opts.bow || null };
+  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), quick: !!opts.quick, bow: opts.bow || null, duel: !!opts.duel };
   // Star Trials stack their twists (solo runs)
   G.trial = !NET.role && opts.trial ? opts.trial : 0;
   setMods((opts.mods || []).concat(trialMods(G.trial)));
@@ -386,7 +386,7 @@ function arenaFloor(tier) {
 function startArena() {
   G.arena = { wave: 0, phase: 'break', t: 3.5, hold: 0, left: 0, cap: 0, gap: 1, spawnT: 0, killed: 0 };
   arenaLand(0);
-  G.floorBanner = { t: 2.8, text: 'THE ARENA', small: 'HOLD OUT AS LONG AS YOU CAN' };
+  G.floorBanner = isDuel() ? { t: 2.8, text: 'BOSS FIGHT', small: 'BEAT BIG GRIN' } : { t: 2.8, text: 'THE ARENA', small: 'HOLD OUT AS LONG AS YOU CAN' };
 }
 function arenaLand(tier) {
   G.floor = arenaFloor(tier);
@@ -412,9 +412,9 @@ function startWave() {
   A.wave++;
   reseed(G.run.seed, 'wave', A.wave);
   hapticAll('wave');
-  if (A.wave % 10 === 0) {
+  if (A.wave % 10 === 0 || isDuel()) {
     A.phase = 'boss';
-    startBoss(G.floor.boss || G.floor.land.boss);
+    startBoss(isDuel() ? 'grin' : G.floor.boss || G.floor.land.boss);
     return;
   }
   A.phase = 'fight';
@@ -436,7 +436,7 @@ function updateArena(dt) {
   if (A.phase === 'break') {
     A.hold += dt;
     // solo: the Arena can be continued from here (after the land change has settled)
-    if (A.savedW !== A.wave && A.hold > 1.2 && Wipe.t < 0) { A.savedW = A.wave; saveArena(); }
+    if (A.savedW !== A.wave && A.hold > 1.2 && Wipe.t < 0 && !isDuel()) { A.savedW = A.wave; saveArena(); }
     const waiting = G.room.props.some(o => o.group) && A.hold < 30;
     A.t -= dt;
     if (waiting) A.t = Math.max(A.t, 3);
@@ -498,6 +498,7 @@ function arenaShop() {
 }
 function arenaBossReward() {
   const A = G.arena;
+  if (isDuel()) { duelWon(); return; }
   spawnPickup('heart', 192, 120);
   for (let i = 0; i < 6; i++) spawnPickup('coin', 192 + grnd(-10, 10), 120);
   Audio_.play(G.floor.land.song);
@@ -509,7 +510,7 @@ function arenaBossReward() {
 function endRun() {
   saveBest();
   if (G.mode === 'adv' && !G.daily) clearRun();
-  if (G.mode === 'arena' && !NET.role) clearArena();
+  if (G.mode === 'arena' && !NET.role && !isDuel()) clearArena();
   Save.write();
   G.record = !G.daily && G.bestBefore > 0 && (G.mode === 'arena' ? G.arena.wave - 1 > G.bestBefore : G.floor.depth + 1 > G.bestBefore);
   noteCoins();
@@ -636,7 +637,7 @@ function update(dt) {
     }
     case 'over': case 'win': {
       const items = endItems(), c = menu(items, G.endMenuY || 152, 13), id = items[c];
-      if (id === 'AGAIN!') { Audio_.sfx('confirm'); wipe(() => startRun(G.mode, mp ? netRoster() : null)); }
+      if (id === 'AGAIN!') { Audio_.sfx('confirm'); const duel = isDuel(); wipe(() => startRun(G.mode, mp ? netRoster() : null, { duel })); }
       else if (id === 'PRACTICE') { Audio_.sfx('confirm'); const D = G.daily; wipe(() => startDaily(D.kind, D.key === dailyKeyOf(D.kind) ? undefined : D.key)); }
       else if (id === 'SHARE') { Audio_.sfx('confirm'); shareDaily(G.daily.kind); }
       else if (id === 'KEEP GOING: ENDLESS MODE') { Audio_.sfx('confirm'); wipe(() => { setState('play'); loadFloor(G.floor.depth + 1); if (mp) netState('play'); }); }

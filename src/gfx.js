@@ -31,6 +31,10 @@ function def(name, art, opts) {
   _defs.push({ name, rows: parseArt(name, art), opts: opts || {} });
 }
 
+// Another name for a registered sprite (shares its atlas pixels).
+const _aliases = [];
+function alias(name, src) { _aliases.push([name, src]); }
+
 // Register a sprite once per land, with the land's slot legend (see THEMES).
 function defT(name, art, opts) {
   const rows = parseArt(name, art);
@@ -114,7 +118,8 @@ function bakeAtlas() {
     s.x[v] = r.ax; s.y[v] = r.ay;
   }
   actx.putImageData(img, 0, 0);
-  _defs.length = 0;
+  for (const [n, src] of _aliases) SPR[n] = SPR[src];
+  _defs.length = 0; _aliases.length = 0;
 }
 
 function S(name) {

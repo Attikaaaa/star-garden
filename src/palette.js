@@ -38,6 +38,9 @@ const PAL = {
   'm': '#9796d6', // stone
   'l': '#c9c8f2', // stone light
   'L': '#f0efff', // near white
+  'u': '#5c3629', // dark brown (hair)
+  'x': '#363049', // charcoal (black clothes)
+  'X': '#4f4868', // charcoal light
 };
 
 // Semi-transparent shade used for drop shadows under everything that stands.
