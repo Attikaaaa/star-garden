@@ -25,7 +25,7 @@ function payReward(room, x, y) {
       case 'key': if (k === 0) spawnPickup('key', x, y); else spawnPickup('gem', x, y); break;
     }
   }
-  if (room.skull) { earnVault(4); room.props.push({ kind: 'chest', x: x + 20 > 340 ? x - 20 : x + 20, y, t: 0, open: false }); }
+  if (room.skull) { earnVault(4); const [cx, cy] = reachSpot(room, x + 20 > 340 ? x - 20 : x + 20, y); room.props.push({ kind: 'chest', x: cx, y: cy, t: 0, open: false }); }
 }
 const MM_REWARD = { coin: 'mm_coin', gem: 'mm_gem', heart: 'mm_heart', potion: 'mm_pot', scroll: 'mm_scroll', key: 'mm_key' };
 // The marks on a door to an uncleared normal room (skull rooms alternate skull and reward).

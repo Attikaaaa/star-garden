@@ -719,6 +719,23 @@ function settlePickup(room, k) {
   k.x = (best % COLS) * 16 + 8 + grnd(-3, 3); k.y = OY + ((best / COLS) | 0) * 16 + 10 + grnd(-2, 2);
   k.z = 10; k.vz = 60; k.vx = k.vy = 0;
 }
+// Where to put a prop (pedestal, chest, cage): the wanted spot if a hero can walk to it,
+// otherwise the nearest reachable floor tile that is free, not in front of a door.
+function reachSpot(room, x, y) {
+  markReach(room);
+  const near = (j) => { for (const k in DIRS) if (room.tiles[j + DIRS[k][1] * COLS + DIRS[k][0]] === T_DOOR) return true; return false; };
+  const taken = (px, py) => room.props.some(o => o.kind !== 'rug' && Math.abs(o.x - px) < 20 && Math.abs(o.y - py) < 14);
+  const good = (j) => { const c = j % COLS, r = (j / COLS) | 0; return c >= 1 && c < COLS - 1 && r >= 2 && r < ROWS - 1 && REACH[j] && room.tiles[j] === T_FLOOR && !near(j); };
+  const c = Math.floor(x / 16), r = Math.floor((y - 1 - OY) / 16);
+  if (good(r * COLS + c) && !boxSolid(room, x, y, 8, 6, 'enemy') && !taken(x, y)) return [x, y];
+  let best = null, bd = 1e9;
+  for (let j = 0; j < REACH.length; j++) {
+    if (!good(j)) continue;
+    const px = (j % COLS) * 16 + 8, py = OY + ((j / COLS) | 0) * 16 + 12, d = Math.hypot(px - x, py - y);
+    if (d < bd && !taken(px, py)) { bd = d; best = [px, py]; }
+  }
+  return best || [x, y];
+}
 const teamLuck = () => G.players.reduce((m, p) => Math.max(m, p.luck), 0);
 // Coins go into the team purse; a share of every coin is also kept forever (the vault).
 function gainCoins(n) {
@@ -748,7 +765,9 @@ function updatePickups(dt) {
       const d = Math.hypot(p.x - k.x, p.y - 3 - k.y);
       if (p.magnet && !waits && d < 80 && d > 1) {
         const pull = (80 - d) * 4 * dt + 40 * dt;
-        k.x += (p.x - k.x) / d * pull; k.y += (p.y - 3 - k.y) / d * pull;
+        // the pull stops at water and rocks, so it never drags a pickup out of reach
+        const nx = k.x + (p.x - k.x) / d * pull, ny = k.y + (p.y - 3 - k.y) / d * pull;
+        if (!solidPx(room, nx, ny, 'enemy')) { k.x = nx; k.y = ny; }
       }
       if (d >= 9 || k.z >= 6) continue;
       if (k.type === 'pot') {
@@ -796,7 +815,7 @@ function drawPickup(k, ox, oy) {
 }
 
 // ---------- Props: pedestals, merchant, portal ----------
-function addPedestal(room, x, y, item, price) { room.props.push({ kind: 'ped', x, y, item, price: price || 0, t: Math.random() * 6 }); }
+function addPedestal(room, x, y, item, price) { [x, y] = reachSpot(room, x, y); room.props.push({ kind: 'ped', x, y, item, price: price || 0, t: Math.random() * 6 }); }
 function nearestProp(p) {
   let best = null, bd = 18;
   if (!alive(p)) return null;

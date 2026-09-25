@@ -267,7 +267,7 @@ function spawnRoomEnemies(room, bonus) {
 function freeSpot(room) {
   let x = 192, y = 128;
   for (let k = 0; k < 30 && boxSolid(room, x, y, 8, 6, 'enemy'); k++) { x = grnd(60, 324); y = grnd(70, 180); }
-  return [x, y];
+  return reachSpot(room, x, y);
 }
 // Everyone who went down gets back up when the fight is over.
 function reviveAll() { for (const p of G.players) if (p.down) revivePlayer(p, 2); }
