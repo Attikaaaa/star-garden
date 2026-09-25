@@ -122,7 +122,8 @@ onNote((ev) => {
     Save.flags.guide = true;
   }
   // after the first boss: offer to install (home-screen apps keep their data on iPhone too)
-  if (cnt('b') > 0 && !isInstalled() && !Save.flags.installNo && (Save.flags.installN || 0) < 3) Save.flags.installAsk = true;
+  // (on an iPhone also after two days of play: Safari clears a game after a week away)
+  if ((cnt('b') > 0 || (IS_IOS && Save.days >= 2)) && !isInstalled() && !Save.flags.installNo && (Save.flags.installN || 0) < 3) Save.flags.installAsk = true;
   if (Save.stats.runs >= 2) requestPersist(false);
   Save.write();
 });

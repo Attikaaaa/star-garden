@@ -7,21 +7,18 @@
 // ---------- Save codes ----------
 const SAVE_KEY = 'csk_save';
 function saveJson() { Save.write(); try { return localStorage.getItem(SAVE_KEY) || '{}'; } catch (e) { return '{}'; } }
-const saveCode = () => 'SG1' + btoa(unescape(encodeURIComponent(saveJson())));
+const saveCode = () => packSave(saveJson());
 // Replace this device's save with another one and start again from it.
 function loadSaveData(obj) {
   if (!obj || typeof obj !== 'object' || !obj.stats || !obj.settings) return false;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(obj)); } catch (e) { return false; }
+  Save._frozen = true;
   clearRun(); clearArena();
   track('save_loaded');
   location.reload();
   return true;
 }
-function readSaveCode(code) {
-  code = String(code || '').replace(/\s+/g, '');
-  if (!code.startsWith('SG1')) return null;
-  try { return JSON.parse(decodeURIComponent(escape(atob(code.slice(3))))); } catch (e) { return null; }
-}
+const readSaveCode = (code) => unpackSave(String(code || '').replace(/\s+/g, ''));
 function confirmLoad(obj) {
   if (!obj || !obj.stats) { Audio_.sfx('deny'); toast('THAT CODE DID NOT WORK'); return; }
   openModal({ title: 'LOAD THIS GARDEN?', lines: [(obj.stats.runs || 0) + ' RUNS, ' + (obj.stats.wins || 0) + ' WINS, ' + (obj.vault || 0) + ' VAULT COINS', 'IT REPLACES THE GARDEN ON THIS DEVICE.'],

@@ -88,6 +88,8 @@ function note(ev, a, b) {
     case 'rescue': bump('rescue'); break;
   }
   for (const fn of NOTE_HOOKS) fn(ev, a, b);
+  // the end of a run: everything the hooks just recorded goes to disk
+  if (ev === 'end') Save.write();
 }
 // Coins picked up since the last note (the purse is shared, so this is a team event).
 function noteCoins() {

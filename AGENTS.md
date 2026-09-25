@@ -139,6 +139,11 @@ stays hidden and the game is complete offline.
 - Solo adventure runs are saved with `saveRun()` only while standing in a cleared room (room entry, room
   clear, boss reward, new floor, save-and-quit); `loadRun()` rebuilds the floor. A run's
   save is deleted when the hero dies or the player leaves after a victory.
+- Keeping the save: `flushSave()` (`main.js`) writes on `pagehide` and when the tab is hidden;
+  a tab whose save another tab changed (`Save._stale`) does not overwrite it but reloads in
+  menus. On iOS Safari the save also rides in the address (`#SG1...`, throttled), since a
+  Home Screen app gets its own empty storage and opens that address; Safari pages drop the
+  manifest link for this. Anything that replaces the save and reloads sets `Save._frozen`.
 
 ## Adding content
 

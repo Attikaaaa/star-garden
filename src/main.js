@@ -1011,7 +1011,23 @@ function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
   else goFullscreen();
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play' && !NET.role && !G.player.dead) setState('pause'); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (G.state === 'play' && !NET.role && !G.player.dead) setState('pause');
+    flushSave();
+  } else if (Save._stale && !Save.mayWrite()) location.reload();
+});
+// Closing the tab or leaving the app: keep what was earned since the last save point.
+// A solo run is saved only in a cleared room (saveRun checks), the rest always.
+function flushSave() {
+  if (G.state === 'play' || G.state === 'pause') saveRun();
+  Save.write();
+}
+window.addEventListener('pagehide', flushSave);
+// Another tab saved (see save.js): a run keeps its progress, a menu reloads to show the
+// new save, and a hidden tab waits until it is seen again.
+Save.mayWrite = () => !!NET.role || !MENU_STATES.has(G.state);
+Save.onStale = () => { if (!document.hidden) { Save._frozen = true; location.reload(); } };
 
 // ---------- Loop ----------
 const STEP = 1 / 60;
@@ -1030,6 +1046,8 @@ function frame(now) {
 bakeAtlas();
 resize();
 initProgress();
+// ask the browser to keep the save for good (Firefox asks the player, so not there)
+if (Save.stats.runs > 0 || isInstalled()) requestPersist(false);
 refreshQuests();
 linkRuns();
 checkStars(true);

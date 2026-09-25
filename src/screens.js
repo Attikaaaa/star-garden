@@ -60,6 +60,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.3.1', lines: ['YOUR GARDEN IS SAVED WHEN YOU CLOSE THE GAME', 'IPHONE: THE HOME SCREEN APP TAKES YOUR SAVE ALONG'] },
   { v: '1.3.0', lines: ['THE SKY: STAR RAIN, MOON NIGHTS AND SEASONS', 'A NEW BOSS OF THE WEEK EVERY MONDAY', 'COUCH CO-OP: PLUG IN MORE CONTROLLERS', 'CO-OP: REJOIN A GAME AFTER A DROP', 'SAVE CODES: TAKE YOUR GARDEN ANYWHERE', 'A NEW LANGUAGE: MAGYAR'] },
   { v: '1.2.0', lines: ['THE GARDEN: QUESTS, CONSTELLATIONS, A BOOK AND A MAILBOX', 'MISTER RIBBIT WRITES LETTERS AND GIVES DAILY GIFTS', 'ROLL THROUGH BULLETS TO CHARGE STARFALL', '15 ITEM COMBOS WITH REAL BONUSES TO FIND', 'THE END SCREEN SHOWS YOUR NEXT GOAL', 'TRAILS, PETS AND TITLES IN THE WARDROBE'] },
 ];
@@ -75,6 +76,7 @@ function titleNotices() {
     Save.ver = GAME_VERSION; Save.write();
     if (lines.length) openModal({ title: 'WHAT IS NEW', lines: lines.slice(0, 7), buttons: [{ label: 'GREAT!' }] });
   }
+  if (saveNotices()) return;
   if (typeof progressNotices === 'function') progressNotices();
   if (typeof linkNotice === 'function') linkNotice();
   if (typeof goalNotice === 'function') goalNotice();
@@ -84,7 +86,7 @@ function titleNotices() {
     if (canPromptInstall() || ios) {
       openModal({
         title: 'KEEP YOUR GARDEN SAFE', icon: 'icon_heart',
-        lines: ios ? ['ADD STAR GARDEN TO YOUR HOME SCREEN:', 'TAP SHARE, THEN ADD TO HOME SCREEN', 'IT PLAYS FULLSCREEN AND KEEPS YOUR SAVE'] : ['INSTALL STAR GARDEN LIKE AN APP:', 'IT PLAYS FULLSCREEN, WORKS OFFLINE', 'AND KEEPS YOUR SAVE SAFE'],
+        lines: ios ? ['SAFARI FORGETS A GAME AFTER A WEEK AWAY.', 'TAP SHARE, THEN ADD TO HOME SCREEN:', 'THE APP KEEPS YOUR GARDEN FOR GOOD'] : ['INSTALL STAR GARDEN LIKE AN APP:', 'IT PLAYS FULLSCREEN, WORKS OFFLINE', 'AND KEEPS YOUR SAVE SAFE'],
         buttons: ios ? [{ label: 'OK' }, { label: 'NOT NOW', fn: () => { Save.flags.installNo = true; Save.write(); } }]
           : [{ label: 'INSTALL', col: 'h', fn: () => { promptInstall(); requestPersist(true); } }, { label: 'LATER' }],
       });
@@ -97,6 +99,32 @@ function titleNotices() {
       buttons: [{ label: 'YES', col: 'h', fn: () => setShare(true) }, { label: 'NO', fn: () => setShare(false) }],
     });
   }
+}
+
+// Where the save could be lost or was just moved. True when a notice was shown.
+// Apps inside Instagram, Facebook, TikTok and the like throw their storage away.
+const IN_APP = /FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|TikTok|musical_ly|Bytedance|Snapchat|Line\//.test(navigator.userAgent);
+function saveNotices() {
+  if (IN_APP) {
+    openModal({ title: 'THIS BROWSER FORGETS', icon: 'icon_heart', lines: ['THE BROWSER INSIDE THIS APP DELETES', 'YOUR GARDEN WHEN YOU CLOSE IT.', 'OPEN THE LINK IN SAFARI OR CHROME.'], buttons: [{ label: 'OK' }] });
+    return true;
+  }
+  if (Save._carried) {
+    Save._carried = false;
+    openModal({ title: 'YOUR GARDEN IS HERE', icon: 'icon_sprout', lines: ['YOUR SAVE CAME ALONG FROM SAFARI.', 'THE APP KEEPS IT FOR GOOD.'], buttons: [{ label: 'GREAT!' }] });
+    return true;
+  }
+  // an iPhone app that starts empty: the save may still be waiting in Safari
+  if (Save._app && !Save.stats.runs && !Save.flags.appAsk) {
+    Save.flags.appAsk = true; Save.write();
+    openModal({
+      title: 'PLAYED IN SAFARI BEFORE?', icon: 'icon_sprout',
+      lines: ['THIS APP HAS ITS OWN SAVE. IN SAFARI, COPY', 'YOUR SAVE CODE (SETTINGS > SAVE CODE)', 'AND LOAD IT HERE.'],
+      buttons: [{ label: 'LOAD', col: 'h', fn: () => { let c = null; try { c = window.prompt('PASTE A SAVE CODE'); } catch (e) { /* blocked */ } if (c) confirmLoad(readSaveCode(c)); } }, { label: 'NEW GARDEN' }],
+    });
+    return true;
+  }
+  return false;
 }
 
 // ---------- The end of a run ----------

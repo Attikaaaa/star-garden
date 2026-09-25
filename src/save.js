@@ -23,8 +23,29 @@ const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a
 const FIRST_ITEMS = ['rapid', 'big', 'triple', 'bounce', 'pierce', 'homing', 'moon', 'heart', 'speed', 'magnet',
   'firework', 'honey', 'backshot', 'clover', 'scope', 'stardust', 'shield'];
 
+// A save as one pasteable string: 'SG1' + base64 of its JSON (save codes, the carry below).
+const packSave = (json) => 'SG1' + btoa(unescape(encodeURIComponent(json)));
+function unpackSave(code) {
+  if (!code || !code.startsWith('SG1')) return null;
+  try { const o = JSON.parse(decodeURIComponent(escape(atob(code.slice(3))))); return o && typeof o === 'object' && o.stats && o.settings ? o : null; } catch (e) { return null; }
+}
+
 const Save = (() => {
   const KEY = 'csk_save';
+  // iPhone and iPad: a game added to the Home Screen gets its own, empty storage, apart
+  // from Safari's. So Safari also keeps the save in the page address (#SG1...), which is
+  // what the Home Screen icon opens, and the app takes it over while its own save is new.
+  // (The manifest goes, or iOS would open its start_url without the save.)
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const APP = navigator.standalone === true, CARRY = IOS && !APP;
+  let carried = null;
+  try {
+    if (CARRY) { const m = document.querySelector('link[rel="manifest"]'); if (m) m.remove(); }
+    if (location.hash.startsWith('#SG1')) {
+      if (APP) carried = unpackSave(location.hash.slice(1));
+      history.replaceState(history.state, '', location.pathname + location.search);
+    }
+  } catch (e) { /* no history */ }
   const s = {
     v: SAVE_V,
     settings: { music: 7, sfx: 8, shake: true, vibe: 2, diff: 1, muted: false, assist: false, cb: false, lefty: false, share: null },
@@ -47,7 +68,10 @@ const Save = (() => {
   const arr = (v, d) => (Array.isArray(v) ? v : d);
   const obj = (v, d) => (v && typeof v === 'object' && !Array.isArray(v) ? v : d);
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { raw = null; }
+    // an app that has not been played yet takes the save Safari handed over
+    if (carried && !(raw && raw.stats && raw.stats.runs)) { raw = carried; s._carried = true; }
     if (raw) {
       Object.assign(s.settings, raw.settings);
       Object.assign(s.stats, raw.stats);
@@ -91,12 +115,28 @@ const Save = (() => {
       if (s.stats.bestDepth || s.stats.wins) { s.unl.items = FIRST_ITEMS.slice(); s.flags = { tutorial: true, gift: true, menus: true, legacy: true }; }
     }
   } catch (e) { /* no storage */ }
+  // Another tab saved since this one loaded, so this tab's copy is old: it must not write
+  // over the newer save. s.mayWrite (main.js) says when it still may (in a run), and
+  // s.onStale reloads the page to pick up the new save.
+  addEventListener('storage', (e) => { if (e.key === KEY || e.key === null) s._stale = true; });
+  let carryT = 0, carryJ = '';
+  const carry = () => {
+    carryT = 0;
+    try { history.replaceState(history.state, '', location.pathname + location.search + '#' + packSave(carryJ)); } catch (e) { /* rate limited */ }
+  };
   s.write = () => {
+    if (s._frozen) return; // a new save was put in place and the page is reloading
+    if (s._stale && !(s.mayWrite && s.mayWrite())) { if (s.onStale) s.onStale(); return; }
+    s._stale = false;
     const out = {};
     for (const k in s) if (typeof s[k] !== 'function' && k[0] !== '_') out[k] = s[k];
     out.v = SAVE_V;
-    try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) { /* no storage */ }
+    const json = JSON.stringify(out);
+    try { localStorage.setItem(KEY, json); } catch (e) { /* no storage */ }
+    // Safari limits address changes, so the carried copy follows at most once a second
+    if (CARRY) { carryJ = json; if (!carryT) carryT = setTimeout(carry, 1000); }
   };
+  s._app = IOS && APP;
   // Called once per boot: count distinct days of play (letters, the calendar, analytics).
   s.touch = () => {
     const today = dayKey();
