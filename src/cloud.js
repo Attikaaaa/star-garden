@@ -29,12 +29,41 @@ function copyText(str, done) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(str).then(() => toast(done), fail);
   else fail();
 }
+// Save files: the same save code in a text file, to keep or to move by hand.
+function exportSave() {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    const url = URL.createObjectURL(new Blob([saveCode()], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'star-garden-' + day + '.txt';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('SAVE FILE DOWNLOADED!'); track('save_file');
+  } catch (e) { toast('COULD NOT SAVE THE FILE'); }
+}
+function importSave() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.txt,.json,text/plain,application/json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    f.text().then(t => {
+      t = t.trim();
+      let obj = null;
+      try { obj = t[0] === '{' ? JSON.parse(t) : readSaveCode(t); } catch (e) { obj = null; }
+      if (!obj || !obj.stats) { Audio_.sfx('deny'); toast('THAT FILE DID NOT WORK'); } else confirmLoad(obj);
+    }, () => toast('THAT FILE DID NOT WORK'));
+  };
+  inp.click();
+}
 // The save screen, from the settings.
 function openSaveMenu() {
-  const lines = ['A SAVE CODE CARRIES YOUR WHOLE GARDEN.', 'PASTE IT ON ANOTHER DEVICE TO PLAY ON THERE.'];
+  const lines = ['A SAVE CODE OR FILE CARRIES YOUR WHOLE GARDEN.', 'LOAD IT ON ANOTHER DEVICE TO PLAY ON THERE.'];
   const buttons = [
     { label: 'COPY', col: 'h', fn: () => { copyText(saveCode(), 'SAVE CODE COPIED!'); track('save_code'); } },
-    { label: 'LOAD', fn: () => { let c = null; try { c = window.prompt('PASTE A SAVE CODE'); } catch (e) { /* blocked */ } if (c) confirmLoad(readSaveCode(c)); } },
+    { label: 'PASTE', fn: () => { let c = null; try { c = window.prompt('PASTE A SAVE CODE'); } catch (e) { /* blocked */ } if (c) confirmLoad(readSaveCode(c)); } },
+    { label: 'SAVE FILE', col: 'h', fn: exportSave },
+    { label: 'LOAD FILE', fn: importSave },
   ];
   if (online()) {
     lines.push('ONLINE: A SHORT TRANSFER CODE DOES THE SAME.');

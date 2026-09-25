@@ -18,7 +18,9 @@ const MODALS = [];
 function openModal(m) { MODALS.push(Object.assign({ sel: 0, t: 0 }, m)); }
 const modalUp = () => MODALS.length > 0;
 function modalRect(m) {
-  const w = Math.max(200, textW(m.title) + 24, ...m.lines.map(l => textW(l) + 20)), h = 30 + m.lines.length * 11 + 16 + (m.icon ? 18 : 0);
+  // wide enough for every button, each with room for the pointer
+  const bw = Math.max(...m.buttons.map(b => textW(b.label))) + 14;
+  const w = Math.max(200, textW(m.title) + 24, ...m.lines.map(l => textW(l) + 20), m.buttons.length * bw + 16), h = 30 + m.lines.length * 11 + 16 + (m.icon ? 18 : 0);
   return [Math.round((VW - w) / 2), Math.round((VH - h) / 2), w, h];
 }
 function updateModal(dt) {
