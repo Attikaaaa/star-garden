@@ -1,6 +1,7 @@
-// Offline support: every file is cached on install; later visits are served from the cache
+// Offline support: every file is cached on install (straight from the network, never from
+// the browser's HTTP cache, or a release could be stored with last version's files); later visits are served from the cache
 // and refreshed in the background. Bump VERSION with each release.
-const VERSION = 'star-garden-v16';
+const VERSION = 'star-garden-v17';
 const FILES = [
   './', 'index.html', 'live.json', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
   'src/palette.js', 'src/save.js', 'src/online.js', 'src/rng.js', 'src/gfx.js', 'src/font.js', 'src/lang.js', 'src/lang_hu.js', 'src/art_chars.js', 'src/art_heroes.js', 'src/art_world.js', 'src/art_ui.js', 'src/art_more.js', 'src/art_items.js', 'src/art_foes.js', 'src/art_bosses.js', 'src/art_rooms.js', 'src/art_garden.js',
@@ -12,7 +13,7 @@ const FILES = [
   'src/heroes.js', 'src/options.js', 'src/couch.js', 'src/cloud.js', 'src/yard.js', 'src/events.js', 'src/main.js', 'src/qr.js', 'src/net.js',
 ];
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -22,7 +23,7 @@ self.addEventListener('fetch', e => {
   const live = new URL(e.request.url).pathname.endsWith('/live.json');
   e.respondWith(caches.open(VERSION).then(async c => {
     const hit = await c.match(e.request, { ignoreSearch: true });
-    const fresh = fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => hit);
+    const fresh = fetch(e.request, { cache: 'no-cache' }).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => hit);
     // live.json (events, news) is network-first, so live changes reach players at once
     if (live) return fresh.then(r => r || hit);
     return hit || fresh;
