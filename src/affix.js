@@ -7,7 +7,7 @@ const AFFIXES = {
   shield: { name: 'SHIELDED', col: 'c' },   // the first three hits only pop its bubble
   split: { name: 'SPLITTING', col: 'h' },   // falls apart into two little slimes
   hasty: { name: 'HASTY', col: 'Y' },       // moves and shoots much faster
-  mend: { name: 'MENDING', col: 'h' },      // heals itself over time
+  mend: { name: 'MENDING', col: 'h' },      // heals itself when left alone for a moment
   bomber: { name: 'BOMBER', col: 'R' },     // bursts into a ring of bullets
   blink: { name: 'BLINKING', col: 'P' },    // hops to a new spot now and then
 };
@@ -33,7 +33,8 @@ function affixBlock(e, fx, fy) {
 }
 // Speed factor and ongoing effects, every frame on the host.
 function affixTick(e, dt) {
-  if (hasAffix(e, 'mend') && e.hp < e.maxHp) {
+  // only after two seconds without a hit: steady fire always wins, however tough it is
+  if (hasAffix(e, 'mend') && e.hp < e.maxHp && !(G.time - e.hurtAt < 2)) {
     e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.05 * dt);
     if (Math.random() < 0.05) part(e.x + rnd(-5, 5), e.y - e.h + rnd(0, 4), 0, -20, 0.5, 'h', { drag: 1 });
   }

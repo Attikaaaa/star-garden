@@ -100,7 +100,7 @@ function spawnEnemy(type, x, y, opts) {
 function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.dead || e.spawnT > 0) return;
   if (affixBlock(e, fx, fy)) return;
-  e.hp -= dmg;
+  e.hp -= dmg; e.hurtAt = G.time;
   if (e.boss) addCharge(own, dmg * 0.004 / crewHp(true));
   if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
   if (e.flashCd <= 0) { e.flash = 0.07; e.flashCd = 0.14; }

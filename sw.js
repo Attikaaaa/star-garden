@@ -1,7 +1,7 @@
 // Offline support: every file is cached on install, straight from the network (never from the
 // browser's HTTP cache, or a release could be stored with last release's files). Later visits
 // are served from the cache and refreshed in the background. Bump VERSION with each release.
-const VERSION = 'star-garden-v19';
+const VERSION = 'star-garden-v20';
 const FILES = [
   './', 'index.html', 'live.json', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
   'src/palette.js', 'src/save.js', 'src/online.js', 'src/rng.js', 'src/gfx.js', 'src/font.js', 'src/lang.js', 'src/lang_hu.js', 'src/art_chars.js', 'src/art_heroes.js', 'src/art_world.js', 'src/art_ui.js', 'src/art_more.js', 'src/art_items.js', 'src/art_foes.js', 'src/art_bosses.js', 'src/art_rooms.js', 'src/art_garden.js',
