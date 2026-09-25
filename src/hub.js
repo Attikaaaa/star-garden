@@ -10,6 +10,8 @@ const TRAILS = {
   comet: { name: 'COMET', cols: ['O', 'o', 'y', 'Y'], how: 'THE STORM' },
   rainbow: { name: 'RAINBOW', cols: ['r', 'O', 'y', 'h', 'c', '3'], how: 'THE STAR OF THE DAY' },
 };
+// Every pet is free to pick in the wardrobe; the constellations that list one as a reward
+// still grant it, but nothing is locked.
 const PETS = {
   bun: { name: 'BUNNY', how: 'THE COLLECTOR' },
   bee: { name: 'BEE', how: 'THE FRIENDS' },
@@ -194,7 +196,7 @@ function wardList(row) {
   if (row === 'title') return [''].concat(Object.keys(TITLES));
   return ROBES.map((r, i) => i);
 }
-const wardOwned = (row, v) => v === '' || (row === 'robe' ? v >= 8 || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? Save.unl.pets.includes(v) : Save.unl.titles.includes(v));
+const wardOwned = (row, v) => v === '' || (row === 'robe' ? v >= 8 || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? true : Save.unl.titles.includes(v));
 const wardCur = (row) => (row === 'robe' ? Save.skin : row === 'trail' ? Save.trail : row === 'pet' ? Save.pet : Save.title);
 function wardSet(row, v) {
   if (row === 'robe') Save.skin = v; else if (row === 'trail') Save.trail = v; else if (row === 'pet') Save.pet = v; else Save.title = v;

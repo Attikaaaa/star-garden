@@ -11,7 +11,9 @@ EDEF.dummy = {
 AI.dummy = function () { /* stands and takes it */ };
 
 const TUT_STEPS = ['move', 'shoot', 'roll'];
-const tutNeeded = () => !Save.flags.tutorial && !NET.role && G.mode === 'adv' && !G.daily;
+// Off for now: new players start the run straight away. Set to true to bring it back.
+const TUT_ON = false;
+const tutNeeded = () => TUT_ON && !Save.flags.tutorial && !NET.role && G.mode === 'adv' && !G.daily;
 function startTutorial(room) {
   G.tut = { step: 0, t: 0, all: 0, grazed: 0, fire: 0, dummy: null, mark: [112, 150] };
   room.cleared = false;
