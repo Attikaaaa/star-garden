@@ -165,6 +165,35 @@ stays hidden and the game is complete offline.
 - **Robe:** a legend in `SKINS` (`art_chars.js`), a name in `ROBES` and a tag colour in
   `TAG_COL` that exists in `FONT_COLORS` (text in other colours does not render).
 
+## Bosses
+
+Every boss, old or new, follows the same rules, so the cast looks and plays as one family.
+
+- **Art:** body 32x32 (wide ones up to 40x32), one colour family plus one accent, 4-tone
+  `PAL` ramp lit from the top left, `rim()` for the 1px hue-shifted edge light on the
+  bottom right. `sculpt` gives the mass; hand-`stamp`ed horns, crowns, cracks and teeth
+  break the silhouette (check the `sil` copy at 1x). Big `BOSS_EYE` eyes via `bossEyes`.
+- **Frames:** `bossFrames(t, make)` bakes the full set: `_0 _1 _move _tell _atk`, the same
+  five angry (`_p0` ...), `_stag`, `_die`. The `EDEF` `sprite` picks one through
+  `bossFrame(e, f)`, which already switches to the angry look and the dazed frame.
+- **Tell language:** every attack has a tell of at least 0.45 s. Yellow glint (`glintAt`)
+  = bullets, pink ground ring (`G.markers`) = area hit, cyan sparkle lane (`lane(e, p)`,
+  chosen when the tell starts) = charge or dash, cyan sparkles over the boss = stagger.
+- **Fight rules:** bullets at most about 95 px/s, and always a gap or a safe spot; no
+  unavoidable damage, no regeneration, no stun-lock. After its signature attack a boss
+  calls `stagger(e)` (1.5 s, x1.5 damage, no touch damage). `bossPhase(e, n)` starts a new
+  phase (0.5 s freeze, bullets cleared, banner); list the thresholds in `EDEF.phases` if
+  they are not 0.5, so the HP bar shows the notches. Each boss has its own bullet family
+  in `bossBullets`.
+- **Entrance and exit:** `EDEF.intro` is the subtitle on the name card (the cine is
+  `CINE_T`, skippable once the boss was met twice); the corpse uses `_die` and its Big
+  Star flies back to the sky.
+- **Checklist for a new boss:** `EDEF` (`hp`, `intro`, `sprite`, `colors`), `AI.<type>`,
+  art through `bossFrames`, a name in `FOE_NAMES`, a Book entry, `lang_hu.js` strings, new
+  client-drawn fields in `EF_EXTRA`, then the boss bots: a bot that stands still must
+  lose, a circling bot should reach phase 2, a dodging bot should win in 70-100 s on
+  Normal with no hit that came without a tell.
+
 ## Live ops, languages, couch co-op
 
 - Events come from the device's clock (`events.js`): meteor showers (`SHOWERS`), the

@@ -138,7 +138,7 @@ function grinToss(e, p) {
 }
 AI.grin = function (e, dt, room, p) {
   e.t -= dt;
-  if (e.hp < e.maxHp * 0.5 && !e.p2) { bossPhase2(e); toast('AAAAAAAAH!'); }
+  if (e.hp < e.maxHp * 0.5 && !e.p2) { bossPhase(e, 2); toast('AAAAAAAAH!'); }
   const held = e.grab !== undefined ? G.players.find(q => q.pid === e.grab) : null;
   if (e.state !== 'hold' && held) e.grab = undefined;
   switch (e.state) {

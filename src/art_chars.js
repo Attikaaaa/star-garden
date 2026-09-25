@@ -930,9 +930,37 @@ const MEME_SKINS = [
 })();
 
 // ---------- Bosses ----------
+// Every boss has the same frame set (see AGENTS.md, Art Bible): <t>_0/_1 idle, _move, _tell,
+// _atk, the same five with a 'p' prefix for the angry phase look (_p0 ...), _stag, _die.
+// Shared 4x4 eyes: pupil with a top-left glint; brows lean in when angry.
+const BOSS_EYE = {
+  calm: '.00.\n0w00\n0000\n.00.',
+  madL: '00..\n.000\n0w00\n.00.',
+  madR: '..00\n000.\n0w00\n.00.',
+  daze: '.00.\n0..0\n0.00\n.00.',
+  dead: '0..0\n.00.\n.00.\n0..0',
+  shut: '....\n0..0\n.00.\n....',
+  squintL: '00..\n..00\n00..\n....',
+  squintR: '..00\n00..\n..00\n....',
+};
+// stamp a pair of eyes (left eye at x, right eye at x + gap); kind 'mad' picks the brows
+function bossEyes(r, x, y, gap, kind) {
+  const two = kind === 'mad' || kind === 'squint';
+  r = stamp(r, x, y, BOSS_EYE[two ? kind + 'L' : kind]);
+  return stamp(r, x + gap, y, BOSS_EYE[two ? kind + 'R' : kind]);
+}
+function bossFrames(t, make, o) {
+  const F = { 0: {}, 1: { b: 1 }, move: { m: 1 }, tell: { tl: 1, face: 'squint' }, atk: { a: 1 } };
+  for (const k in F) {
+    def(t + '_' + k, make(Object.assign({ face: 'calm' }, F[k])), o);
+    def(t + '_p' + k, make(Object.assign({ face: 'mad' }, F[k], { p: 1 })), o);
+  }
+  def(t + '_stag', make({ face: 'daze', st: 1, p: 1 }), o);
+  def(t + '_die', make({ face: 'dead', d: 1, p: 1 }), o);
+}
 (function bosses() {
   const o = { flash: true };
-  // 1. King Slime (32x32)
+  // 1. King Slime (32x32): squash and stretch, the crown slips when he is angry.
   const CROWN = `
     .0....00....0.
     0Y0..0YY0..0y0
@@ -941,92 +969,101 @@ const MEME_SKINS = [
     0yPyyyPPyyyPo0
     0yyyyyyyyyyoo0
     00000000000000`;
-  const king = (rx, ry, cy, crownY, eyeDx) => {
-    let r = sculpt(32, 32, [{ e: [16, cy, rx, ry], ramp: 'gGhH', cut: 30 }]);
-    const ey = Math.round(cy) - 2, ex1 = 16 - eyeDx - 2, ex2 = 16 + eyeDx;
-    const eye = `
-      00
-      w0
-      00`;
-    r = stamp(r, ex1, ey, eye);
-    r = stamp(r, ex2, ey, eye);
-    r = stamp(r, ex1 - 2, ey + 4, 'qq');
-    r = stamp(r, ex2 + 2, ey + 4, 'qq');
-    r = stamp(r, 13, ey + 4, `
-      0....0
-      .0000.`);
-    r = stamp(r, Math.round(16 - rx * 0.5), Math.round(cy - ry * 0.55), `
-      ww.
-      w..`);
-    return stamp(r, 9, crownY, CROWN);
+  const MOUTH = {
+    calm: '0....0\n.0000.', squint: '.0000.\n0wwww0\n.0000.', mad: '.0000.\n0wqqw0\n.0000.', daze: '.00...\n0qq0..\n.00...', dead: '.0000.\n0....0',
   };
-  def('king_0', king(15.5, 14, 20, 1, 5), o);
-  def('king_1', king(16, 11, 23, 7, 6), o);
-  def('king_2', king(12, 15.5, 19.5, 0, 4), o);
+  const king = (f) => {
+    // body shape per pose: [rx, ry, cy]
+    const [rx, ry, cy] = f.m ? [12, 15.5, 19.5] : f.tl ? [16, 11, 23] : f.a ? [16, 10, 24] : f.b ? [16, 13.5, 20.5] : f.d ? [16, 9, 25] : [15.5, 14, 20];
+    let r = sculpt(32, 32, [{ e: [16, cy, rx, ry], ramp: 'gGhH', cut: 30 }]);
+    r = rim(r, { g: 'T' });
+    const ey = Math.round(cy - ry * 0.25) - 1, gap = f.m ? 9 : 11, ex = 16 - Math.floor(gap / 2) - 2;
+    r = bossEyes(r, ex, ey, gap, f.face);
+    // cheeks: pink, red when furious
+    const ck = f.p ? 'rr' : 'qq';
+    r = stamp(r, ex - 2, ey + 5, ck);
+    r = stamp(r, ex + gap + 4, ey + 5, ck);
+    r = stamp(r, 13, ey + 5, f.a && !f.p ? '.0000.\n0wqqw0\n.0000.' : MOUTH[f.face]);
+    r = stamp(r, Math.round(16 - rx * 0.55), Math.round(cy - ry * 0.6), 'ww.\nw..');
+    // the crown sits on top; angry: knocked 2px sideways, stagger: sliding off, death: on the ground
+    const top = Math.round(cy - ry) - 5;
+    const cx = f.d ? 18 : f.st ? 14 : f.p ? 11 : 9, cyy = f.d ? 25 : f.st ? top + 2 : top;
+    return stamp(r, cx, Math.max(0, cyy), CROWN);
+  };
+  bossFrames('king', king, o);
 
-  // 2. Giant Crab (40x30)
-  const crab = (clawY, angry, legA) => {
+  // 2. Giant Crab (40x30): claws up to tell, snapped down to attack; a Big Star in the shell.
+  const crab = (f) => {
+    const clawY = f.tl ? -3 : f.a ? 2 : f.st || f.d ? 4 : f.b ? 1 : 0, sy = f.d ? 2 : f.st ? 1 : 0;
     let r = sculpt(40, 30, [
-      { e: [20, 18.5, 14.5, 9], ramp: 'nrRA' },
+      { e: [20, 18.5 + sy, 14.5, 9 - sy], ramp: 'nrRA' },
       { e: [8.5, 16 + clawY * 0.5, 3.5, 2.5], ramp: 'nrRA', hi: false },
       { e: [31.5, 16 + clawY * 0.5, 3.5, 2.5], ramp: 'nrRA', hi: false },
       { e: [5.5, 9 + clawY, 5.5, 5.5], ramp: 'nrRA' },
       { e: [34.5, 9 + clawY, 5.5, 5.5], ramp: 'nrRA' },
     ]);
-    // pincer notches
-    r = stamp(r, 4, 3 + clawY, '_0\n_0\n0.');
-    r = stamp(r, 34, 3 + clawY, '0_\n0_\n.0');
-    // eye stalks
-    const eye = angry ? `
-      0000
-      0w00
-      0000
-      .00.` : `
-      .00.
-      0ww0
-      0w00
-      .00.`;
-    r = stamp(r, 13, 4, eye);
-    r = stamp(r, 23, 4, eye);
-    r = stamp(r, 13, 8, '.00.\n.00.');
-    r = stamp(r, 23, 8, '.00.\n.00.');
-    // mouth
-    r = stamp(r, 17, 19, angry ? '000000\n0wwww0\n.0000.' : '0....0\n.0000.');
-    r = stamp(r, 12, 18, 'qq');
-    r = stamp(r, 26, 18, 'qq');
+    r = rim(r, { n: 'p' });
+    // pincer notches: open when telling, shut on the snap
+    if (!f.a) {
+      r = stamp(r, 4, 3 + clawY, '_0\n_0\n0.');
+      r = stamp(r, 34, 3 + clawY, '0_\n0_\n.0');
+    }
+    // eye stalks droop when staggered or beaten
+    const ey = 4 + sy * 2, EYE = {
+      calm: '.00.\n0ww0\n0w00\n.00.', mad: '0000\n0w00\n0ww0\n.00.', squint: '....\n0000\n0ww0\n.00.',
+      daze: '.00.\n0ww0\n0ww0\n.00.', dead: '.00.\n0w00\n00w0\n.00.',
+    }[f.face];
+    r = stamp(r, 13, ey, EYE);
+    r = stamp(r, 23, ey, EYE);
+    r = stamp(r, 14, ey + 4, '00\n00');
+    r = stamp(r, 24, ey + 4, '00\n00');
+    // the Big Star shows through the shell once it is angry
+    if (f.p && !f.d) r = stamp(r, 18, 12 + sy, '.y.\nyYy\n.y.');
+    r = stamp(r, 17, 19 + sy, f.face === 'mad' || f.a ? '000000\n0wwww0\n.0000.' : f.face === 'squint' ? '.0000.\n0wwww0\n.0000.'
+      : f.face === 'daze' ? '..00..\n.0qq0.\n..00..' : f.d ? '.0000.\n0....0' : '0....0\n.0000.');
+    r = stamp(r, 12, 18 + sy, f.p ? 'rr' : 'qq');
+    r = stamp(r, 26, 18 + sy, f.p ? 'rr' : 'qq');
     // legs
-    const L = legA ? ['0.0.0', '.0.0.'] : ['.0.0.', '0.0.0'];
-    r = stamp(r, 6, 25, L.join('\n'));
-    r = stamp(r, 29, 25, L.join('\n'));
-    return r;
+    const L = f.m || f.b ? ['0.0.0', '.0.0.'] : ['.0.0.', '0.0.0'];
+    r = stamp(r, 6, 25 + sy, L.join('\n'));
+    return stamp(r, 29, 25 + sy, (f.m ? L.slice().reverse() : L).join('\n'));
   };
-  def('bcrab_0', crab(0, false, true), o);
-  def('bcrab_1', crab(1, false, false), o);
-  def('bcrab_2', crab(-1, true, true), o);
+  bossFrames('bcrab', crab, o);
 
-  // 3. Crystal Golem (32x32)
-  const golem = (armY, eyes) => {
+  // 3. Crystal Golem (32x32): arms up to tell, slammed down to attack; its crystals turn
+  // pink and its heart gem cracks when it is angry.
+  const GEYES = {
+    calm: '.00..00.\n0cw00wc0\n.00..00.', mad: '0000.0000\n.0cw0wc0.\n..00.00..', squint: '.00..00.\n0ww00ww0\n.00..00.',
+    daze: '.00..00.\n0dd00dd0\n.00..00.', dead: '0.0..0.0\n.0....0.\n0.0..0.0',
+  };
+  const golem = (f) => {
+    const armY = f.tl ? -4 : f.a ? 3 : f.st || f.d ? 2 : f.b ? 1 : 0, sy = f.d ? 3 : f.st ? 1 : 0;
+    const lA = f.m ? -1 : 0, lB = f.m ? 1 : 0;
     let r = sculpt(32, 32, [
-      { r: [8, 24, 7, 8, 2], ramp: 'dmlL', hi: false },
-      { r: [17, 24, 7, 8, 2], ramp: 'dmlL', hi: false },
-      { r: [5, 11, 22, 16, 5], ramp: 'dmlL' },
-      { r: [10, 3, 12, 11, 4], ramp: 'dmlL' },
+      { r: [8, 24 + lA, 7, 8 - lA, 2], ramp: 'dmlL', hi: false },
+      { r: [17, 24 + lB, 7, 8 - lB, 2], ramp: 'dmlL', hi: false },
+      { r: [5, 11 + sy, 22, 16 - sy, 5], ramp: 'dmlL' },
+      { r: [10, 3 + sy, 12, 11, 4], ramp: 'dmlL' },
       { r: [0, 12 + armY, 7, 13, 3], ramp: 'dmlL' },
       { r: [25, 12 + armY, 7, 13, 3], ramp: 'dmlL' },
     ]);
-    const crystal = `
-      .0.
-      0C0
-      0cb
-      0c0`;
+    r = rim(r, { d: '2' });
+    // crystals: cyan, pink when angry, dull when beaten
+    const k = f.d ? 'dmd' : f.p ? 'qPp' : 'Ccb', tint = (a) => a.replace(/C/g, k[0]).replace(/c/g, k[1]).replace(/b/g, k[2]);
+    const crystal = tint('.0.\n0C0\n0cb\n0c0'), tall = tint('.0.\n0C0\n0cb\n0cb\n0c0');
     r = stamp(r, 1, 9 + armY, crystal);
-    r = stamp(r, 3, 8 + armY, '.0.\n0C0\n0cb\n0cb\n0c0');
-    r = stamp(r, 26, 8 + armY, '.0.\n0C0\n0cb\n0cb\n0c0');
+    r = stamp(r, 3, 8 + armY, tall);
+    r = stamp(r, 26, 8 + armY, tall);
     r = stamp(r, 28, 9 + armY, crystal);
-    r = stamp(r, 13, 0, '.0..0.\n0C00C0\n0cbCcb\n0cb0cb');
-    r = stamp(r, 12, 7, eyes);
-    // heart gem in the chest
-    r = stamp(r, 13, 16, `
+    r = stamp(r, 13, sy, tint('.0..0.\n0C00C0\n0cbCcb\n0cb0cb'));
+    r = stamp(r, 12, 7 + sy, GEYES[f.face]);
+    // heart gem in the chest (cracked when angry)
+    r = stamp(r, 13, 16 + sy, f.d ? '.0000.\n0d0mm0\n0mm0d0\n.0dd0.\n..00..' : f.p ? `
+      .0000.
+      0qw0P0
+      0P0Pp0
+      .0Pp0.
+      ..00..` : `
       .0000.
       0qwPP0
       0qPPp0
@@ -1034,11 +1071,7 @@ const MEME_SKINS = [
       ..00..`);
     return r;
   };
-  const EYES = '.00..00.\n0cw00wc0\n.00..00.';
-  const EYES_MAD = '0000.0000\n.0cw0wc0.\n..00.00..';
-  def('golem_0', golem(0, EYES), o);
-  def('golem_1', golem(1, EYES), o);
-  def('golem_2', golem(-4, EYES_MAD), o);
+  bossFrames('golem', golem, o);
 })();
 
 // ---------- Land-specific newcomers ----------

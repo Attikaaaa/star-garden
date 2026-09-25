@@ -286,3 +286,12 @@ function grid(w, h) {
   };
   return g;
 }
+
+// Hue-shifted rim light: recolour (by `map`) the body pixels just inside the outer outline
+// on the right edge, and on the bottom edge of the right half (light is top-left).
+function rim(rows, map) {
+  const h = rows.length, w = rows[0].length;
+  const out = (x, y) => y < 0 || y >= h || x < 0 || x >= w || rows[y][x] === '.';
+  return rows.map((row, y) => row.split('').map((c, x) =>
+    map[c] && ((row[x + 1] === '0' && out(x + 2, y)) || (x >= w / 2 && y + 1 < h && rows[y + 1][x] === '0' && out(x, y + 2))) ? map[c] : c).join(''));
+}

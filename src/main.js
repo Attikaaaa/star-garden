@@ -210,10 +210,10 @@ function startBoss(b) {
   G.boss = spawnEnemy(b, 192, b === 'king' ? 110 : 100);
   gentleBoss(G.boss);
   if (modOn('t_boss')) { G.boss.hp *= 1.25; G.boss.maxHp *= 1.25; }
-  if (modOn('t_rage')) G.boss.p2 = true;
+  if (modOn('t_rage')) { G.boss.p2 = true; G.boss.phase = 2; }
   G.bossT = G.stats.time;
   noteTeam('bossstart');
-  G.cine = { t: 0 };
+  G.cine = { t: 0, skip: cnt('bt:' + b) > 1 };
   Audio_.play('boss'); Audio_.sfx('roar'); hapticAll('roar');
 }
 
@@ -316,7 +316,7 @@ function bossDefeated(e) {
   for (const o of G.enemies) if (!o.dead && o !== e) { o.dead = true; poof(o.x, o.y - o.h / 2); }
   clearEBullets(); G.markers.length = 0;
   if (room.type !== 'arena') { room.cleared = true; room.doorT = 0; }
-  G.corpse = { s: enemySprite(e), x: e.x, y: e.y, w: e.sw, h: e.h, flip: e.flip, colors: enemyColors(e), t: 0, n: 0 };
+  G.corpse = { s: SPR[e.type + '_die'] ? S(e.type + '_die') : enemySprite(e), x: e.x, y: e.y, w: e.sw, h: e.h, flip: e.flip, colors: enemyColors(e), t: 0, n: 0 };
   earnVault(16);
   noteTeam('boss', e.type, Math.round(G.stats.time - (G.bossT || 0)));
   reviveAll();
@@ -348,6 +348,11 @@ function drawCorpse(ox, oy) {
   const jx = Math.round(rnd(-1, 1) * Math.min(2, c.t * 3));
   shadow(ox + c.x, oy + c.y, c.w);
   drawFeet(c.s, ox + c.x + jx, oy + c.y + 1, (c.flip ? 1 : 0) + (Math.floor(c.t * 16) % 2 ? 2 : 0));
+  // its Big Star breaks free and flies back up to the sky
+  if (c.t < 0.3) return;
+  const k = c.t - 0.3, y = oy + c.y - c.h - 6 - Math.round(k * k * 200);
+  for (let i = 1; i <= 3; i++) drawS(S('sparkle_' + ((Math.floor(c.t * 12) + i) % 2)), ox + c.x - 1, y + 4 + i * 7);
+  drawS(S('icon_big'), ox + c.x - 8, y - 8);
 }
 function bossItems(room, y) {
   const ids = itemPool(Math.min(5, 2 + G.players.length));
@@ -669,6 +674,8 @@ function update(dt) {
   const was = room.doorT;
   room.doorT = room.cleared ? Math.min(1, room.doorT + dt * 5) : Math.max(0, room.doorT - dt * 6);
   if (was > 0 && room.doorT === 0 && Object.keys(room.doors).length) { Audio_.sfx('door'); G.shake = Math.max(G.shake, 1.5); hapticAll('door'); }
+  // a boss met before can be hurried along
+  if (G.cine && G.cine.skip && G.cine.t < CINE_T - 0.25 && pressed(...K_OK) && G.boss) { G.cine.t = CINE_T - 0.25; G.boss.t = 0.25; G.boss.z = 0; }
   if (G.cine && (G.cine.t += dt) > CINE_T) G.cine = null;
   heartbeat(dt);
 
@@ -863,8 +870,10 @@ function drawCine() {
   rect(-SCR.ox, -SCR.oy, SCR.w, h + SCR.oy, '0');
   rect(-SCR.ox, VH - h, SCR.w, h + SCR.oy + 1, '0');
   if (k > 0.9 && t > 0.3) {
-    text('BOSS', VW / 2, VH - 21, 'c', 0, 1);
-    text(curBossName(), VW / 2, VH - 11, 'Y', 0, 1);
+    const d = G.boss && EDEF[G.boss.type];
+    text('BOSS', VW / 2, h - 16, 'c', 0, 1);
+    text(curBossName(), VW / 2, VH - 21, 'Y', 0, 1);
+    if (d && d.intro) text(d.intro, VW / 2, VH - 11, 'w', 0, 1);
   }
 }
 // Red frame when the hero gets hurt.

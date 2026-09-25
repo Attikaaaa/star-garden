@@ -85,8 +85,10 @@ function drawHUD() {
     rect(x - 1, y - 1, w + 2, 6, '0');
     rect(x, y, w, 4, '1');
     const f = Math.max(0, Math.round(w * b.hp / b.maxHp));
-    rect(x, y, f, 4, 'P');
-    rect(x, y, f, 1, 'q');
+    rect(x, y, f, 4, b.stag > 0 ? 'c' : 'P');
+    rect(x, y, f, 1, b.stag > 0 ? 'C' : 'q');
+    // a notch where each new phase begins
+    for (const k of EDEF[b.type].phases || [0.5]) rect(x + Math.round(w * k), y, 1, 4, '0');
     text(curBossName(), VW / 2, 3, 'w', 2, 1);
   }
   G.tipRect = null;

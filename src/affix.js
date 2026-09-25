@@ -13,7 +13,7 @@ const AFFIXES = {
 };
 const AFFIX_IDS = Object.keys(AFFIXES);
 // Co-op: clients draw these too.
-const EF_EXTRA = ['affix', 'shieldHp', 'grudge', 'burnT', 'slowT', 'poisonT', 'sleepT'];
+const EF_EXTRA = ['stag', 'phase', 'p2', 'affix', 'shieldHp', 'grudge', 'burnT', 'slowT', 'poisonT', 'sleepT'];
 const hasAffix = (e, id) => e.affix === id || e.affix2 === id;
 function rollAffix(e) {
   if (!e.elite || e.boss || e.type === 'gold' || e.type === 'dummy') return;

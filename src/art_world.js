@@ -529,6 +529,7 @@ def('poof_2', `
   ..........`);
 def('sparkle_0', '.Y.\nYwY\n.Y.');
 def('sparkle_1', 'Y.Y\n.w.\nY.Y');
+def('sparkle_c', '.C.\nCwC\n.C.');
 // Stardrop: the Star Rain event's pickup (a fallen shooting star)
 def('stardrop', autoOutline(parseArt('stardrop', `
   ...........

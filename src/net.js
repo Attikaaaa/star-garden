@@ -457,7 +457,7 @@ function netHostTick(dt) {
     S: SHOTS.map(s => { const a = pack(s, SF); a.push(s.ps && s.own ? s.own.pid : -1); return a; }),
     B: liveBullets().map(b => pack(b, BF)),
     K: room.pickups.map(k => pack(k, KF)),
-    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max]),
+    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a]),
     H: G.hazards.map(h => [r1(h.x), r1(h.y), r1(h.life)]),
     T: G.turrets.map(t => [r1(t.x), r1(t.y), r1(t.life), r1(t.flash)]),
     L: BOLTS.map(b => [b.x0, b.y0, b.x1, b.y1, b.mx, b.my, b.t].map(r1)),
@@ -818,7 +818,7 @@ function clientSnap(m) {
     unpack(a, BF, b); b.spr = S(b.key); b.life = 1; b.t = 0;
   }
   G.room.pickups = m.K.map(a => unpack(a, KF, {}));
-  G.markers = m.M.map(([x, y, t, max]) => ({ x, y, t, max }));
+  G.markers = m.M.map(([x, y, t, max, kind, a]) => ({ x, y, t, max, kind, a }));
   G.hazards = m.H.map(([x, y, life]) => ({ x, y, life }));
   G.turrets = m.T.map(([x, y, life, flash]) => ({ x, y, life, flash }));
   BOLTS.length = 0;
@@ -987,11 +987,11 @@ function clientHits(me) {
     }
   }
   if (!hit) for (const e of G.enemies) {
-    if (e.dead || e.passive || e.ghost || (e.z || 0) >= 8 || e.spawnT > 0) continue;
+    if (e.dead || e.passive || e.ghost || e.stag > 0 || (e.z || 0) >= 8 || e.spawnT > 0) continue;
     if (Math.hypot(me.x - e.x, (me.y - 5) - (e.y - e.h / 2)) < e.r + 4) { hit = true; break; }
   }
   if (!hit) for (const k of G.markers) {
-    if (!k.done && k.t <= 0.05 && Math.hypot(me.x - k.x, (me.y - k.y) * 1.6) < 10) { k.done = true; hit = true; break; }
+    if (!k.done && !k.kind && k.t <= 0.05 && Math.hypot(me.x - k.x, (me.y - k.y) * 1.6) < 10) { k.done = true; hit = true; break; }
   }
   if (!hit) return;
   sendR(NET.host, { t: 'hit', b: bullet });
