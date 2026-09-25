@@ -15,11 +15,14 @@ Object.assign(EDEF, {
   mayor: { hp: 460, r: 13, h: 24, hw: 12, hh: 7, sw: 34, boss: true, intro: 'DIGS IN', phases: [0.66, 0.33], colors: ['N', 'n', 'p'],
     sprite: (e) => e.ghost ? S(mayorSet(e) + '_mound') : bossFrame(e, { dig: 'tell', grab: 'tell', sink: 'tell', hills: 'atk', walk: bob(e, 4, 'move', 0) }[e.state] || bob(e, 2, 1, 0), mayorSet(e)),
     glint: (e) => (e.state === 'walk' && e.n > mayorGap(e) - 0.45 ? [0, -26] : null) },
+  turtle: { hp: 520, r: 14, h: 22, hw: 14, hh: 7, sw: 38, boss: true, intro: 'RIDES THE TIDE', phases: [0.66, 0.33], colors: ['R', 'T', 'o'],
+    sprite: (e) => (e.state === 'spin' || e.state === 'bank' ? S('turtle_shell_' + (Math.floor(e.anim * 10) % 2)) : bossFrame(e, { tuck: 'tell', horn: 'tell', swirl: 'atk', walk: bob(e, 3, 'move', 0) }[e.state] || bob(e, 2, 1, 0))),
+    glint: (e) => (e.state === 'walk' && e.n > turtleGap(e) - 0.45 ? [0, -22] : null) },
   hill: { hp: 10, r: 7, h: 11, hw: 7, hh: 4, sw: 18, still: true, colors: ['N', 'n', 'h'], sprite: (e) => S(e.state === 'aim' ? 'mhill_1' : 'mhill_0'),
     glint: (e) => (e.state === 'aim' ? [0, -10] : null) },
 });
-Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL' });
-LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = 'octo'; LANDS[2].alt = 'cmoth';
+Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE' });
+LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = ['octo', 'turtle']; LANDS[2].alt = 'cmoth';
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
 const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
@@ -301,6 +304,57 @@ Object.assign(AI, {
         break;
     }
   },
+  // Tide Turtle: paddles and puffs foam; tucks in and spins wall to wall, three legs, each
+  // one aimed anew, then lies dazed on her back; from phase 2 a tide sweeps the arena (a gap
+  // and the rocks' shade are safe), in phase 3 from both sides at once, then a foam spiral.
+  turtle(e, dt, room, p) {
+    e.t -= dt; e.tide -= dt;
+    if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+    if (e.hp < e.maxHp * 0.33) bossPhase(e, 3);
+    switch (e.state) {
+      case 'intro': if (e.t <= 0) { e.state = 'walk'; e.t = 2; e.n = 0; e.tide = 0; } break;
+      case 'walk': {
+        const d = Math.hypot(p.x - e.x, p.y - e.y), v = towardPlayer(e), sp = d > 110 ? 22 : d < 70 ? -22 : 0;
+        moveBox(room, e, v.x * sp * dt, v.y * sp * dt, 'enemy');
+        e.flip = p.x < e.x;
+        if ((e.n += dt) > turtleGap(e)) { e.n = 0; fan(e.x, e.y - 12, aimAt(e.x, e.y - 12), e.phase > 1 ? 5 : 3, 0.3, 62, 'foam'); Audio_.sfx('bubble'); }
+        if (e.t <= 0) {
+          e.n = 0;
+          if (e.phase > 1 && e.tide <= 0) {
+            e.state = 'horn'; e.t = 1.2; e.tide = 10 + grand() * 2; Audio_.sfx('horn');
+            e.gy = Math.max(52, Math.min(184, p.y - 7 + (grand() - 0.5) * 60)); e.side = grand() < 0.5 ? 0 : 1;
+            for (const s of turtleSides(e)) G.markers.push({ kind: 'tide', x: s ? VW - 18 : 18, y: e.gy, t: 1.2, max: 1.2 });
+          } else { e.state = 'tuck'; e.t = 0.7; e.w = 0; lane(e, p); Audio_.sfx('charge'); }
+        }
+        break;
+      }
+      case 'tuck': if (e.t <= 0) { e.state = 'spin'; e.t = 2.5; } break;
+      case 'spin': {
+        if (Math.random() < 0.6) part(e.x + rnd(-14, 14), e.y - 1, 0, -8, 0.5, Math.random() < 0.5 ? 'w' : 'C', { size: 2 });
+        const sp = e.phase > 2 ? 170 : 150;
+        if (moveBox(room, e, Math.cos(e.la) * sp * dt, Math.sin(e.la) * sp * dt, 'enemy') || e.t <= 0) {
+          G.shake = Math.max(G.shake, 4); Audio_.sfx('boom'); dust(e.x, e.y, 10, 26);
+          if (++e.w >= 3) { ring(e.x, e.y - 10, 10, 60, 'foam', grand()); hapticAll('slam'); e.state = 'stun'; e.t = 0.2; stagger(e); }
+          else { e.state = 'bank'; e.t = 0.5; lane(e, nearestHero(e.x, e.y)); }
+        }
+        break;
+      }
+      case 'bank': if (e.t <= 0) { e.state = 'spin'; e.t = 2.5; } break;
+      case 'stun': if (e.t <= 0) { e.state = 'walk'; e.t = 2.2; e.n = 0; } break;
+      case 'horn':
+        if (e.t <= 0) {
+          for (const s of turtleSides(e)) for (let y = 36; y <= 190; y += 10) if (Math.abs(y - e.gy) > 14) ebullet(s ? VW - 18 : 18, y, s ? Math.PI : 0, 70, 'foam');
+          Audio_.sfx('bubble'); G.shake = Math.max(G.shake, 2);
+          e.state = e.phase > 2 ? 'swirl' : 'walk'; e.t = e.phase > 2 ? 5 : 2.2; e.n = 0;
+        }
+        break;
+      case 'swirl':
+        // the riptide passes the middle first, then a slow two-armed spiral
+        if (e.t < 2.4 && (e.n += dt) > 0.12) { e.n = 0; for (let i = 0; i < 2; i++) ebullet(e.x, e.y - 10, e.t * 2.4 + i * Math.PI, 58, 'foam'); Audio_.sfx('eshoot'); }
+        if (e.t <= 0) { e.state = 'walk'; e.t = 2; e.n = 0; }
+        break;
+    }
+  },
   // A molehill: in turn, lobs a clod at a hero; the ring shows where it lands.
   hill(e, dt, room, p) {
     e.t -= dt;
@@ -314,6 +368,8 @@ Object.assign(AI, {
   },
 });
 const mayorSet = (e) => (e.phase > 2 ? 'mayor3' : 'mayor');
+const turtleGap = (e) => (e.phase > 1 ? 1.7 : 1.3);
+const turtleSides = (e) => (e.phase > 2 ? [0, 1] : [e.side]);
 const mayorGap = (e) => (e.phase > 1 ? 1.8 : 1.4);
 // A floor tile can sink if nobody stands on it, it keeps clear of the doors and the rest of
 // the floor stays in one piece.
@@ -353,5 +409,6 @@ BEASTS.push(
   { t: 'octo', spr: 'octo_0', boss: true, lore: ['THE PEARL OCTOPUS GUARDS THE DEEP SHORE.', 'WHEN IT SINKS, IT COMES UP SOMEWHERE ELSE.', 'ITS PEARL IS REALLY A BIG STAR.'] },
   { t: 'cmoth', spr: 'cmoth_0', boss: true, lore: ['THE CRYSTAL MOTH LIVES DEEP IN THE CAVE.', 'ITS WINGS SHED GLOWING DUST.', 'IT CARRIES A BIG STAR FOR THE NIGHT MOTH.'] },
   { t: 'mayor', spr: 'mayor_0', boss: true, lore: ['THE MOLE MAYOR RUNS THE MEADOW FROM BELOW.', 'WHEN THE GROUND BULGES, HE IS RIGHT UNDER IT.', 'HE LOST HIS HAT ONCE, AND NEVER GOT OVER IT.'] },
+  { t: 'turtle', spr: 'turtle_0', boss: true, lore: ['THE TIDE TURTLE HAS SWUM EVERY SEA.', 'WHEN SHE BLOWS HER HORN, THE TIDE COMES IN.', 'THE PEARL ON HER SHELL IS A BIG STAR.'] },
   { t: 'nmoth', spr: 'nmoth_0', boss: true, lore: ['THE NIGHT MOTH ATE THE STARLIGHT.', 'IN ITS DARK, ONLY YOUR OWN GLOW IS SAFE.', 'IT WAS ONCE A LITTLE MOTH THAT FEARED THE DARK.'] },
 );

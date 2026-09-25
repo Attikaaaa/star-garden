@@ -598,6 +598,7 @@ function updateMarkers(dt) {
 function drawMarkers(ox, oy) {
   for (const k of G.markers) {
     if (k.kind === 'lane') { if (Math.floor(k.t * 8) % 2) for (let d = 20; d < 400; d += 14) drawS(S('sparkle_c'), ox + k.x + Math.cos(k.a) * d - 1, oy + k.y + Math.sin(k.a) * d - 1); continue; }
+    if (k.kind === 'tide') { if (Math.floor(k.t * 8) % 2) for (let y = 36; y <= 190; y += 14) if (Math.abs(y - k.y) > 14) { const l = k.x < VW / 2; drawS(S('tide_arrow'), ox + k.x + (l ? 4 : -10), oy + y - 3, l ? 0 : 1); drawS(S('sparkle_c'), ox + k.x + (l ? 22 : -24), oy + y - 1); } continue; }
     if (k.kind === 'line') { if (Math.floor(k.t * 8) % 2) for (let i = 0; i < 20; i++) if (Math.abs(i - k.x) > 1) drawS(S('sparkle_c'), ox + 23 + i * 17, oy + k.y - 1); continue; }
     const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
     ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));

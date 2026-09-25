@@ -13,6 +13,7 @@ const FROG_LINES = [
   { id: 'golem', when: (r) => r.killer === 'golem', text: 'THE GOLEM IS SLOW. KEEP MOVING AND KEEP SHOOTING.' },
   { id: 'queen', when: (r) => r.killer === 'queen', text: 'THE QUEEN LEAVES HONEY WHERE SHE FLIES. STAY OUT OF IT.' },
   { id: 'mayor', when: (r) => r.killer === 'mayor', text: 'WHEN THE GROUND BULGES, MOVE. HE POPS UP RIGHT THERE.' },
+  { id: 'turtle', when: (r) => r.killer === 'turtle', text: 'WHEN THE HORN SOUNDS, FIND THE GAP OR HIDE BEHIND A ROCK.' },
   { id: 'octo', when: (r) => r.killer === 'octo', text: 'WHEN THE OCTOPUS SINKS, GET READY TO MOVE.' },
   { id: 'cmoth', when: (r) => r.killer === 'cmoth', text: 'THAT MOTH SHEDS DUST. SHOOT IT BETWEEN THE CLOUDS.' },
   { id: 'nmoth', when: (r) => r.killer === 'nmoth', text: 'SO CLOSE TO THE SKY... TRY AGAIN, LITTLE WIZARD.' },

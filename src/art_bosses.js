@@ -164,6 +164,56 @@
   const hill = (up) => stamp(stamp(sculpt(18, 14, [{ e: [9, 13, 8.5, 9], ramp: 'nNNa', cut: 12 }]), 6, 5, up ? '.0000.\n0nNNn0\n0NNnn0\n.0000.' : '.0000.\n000000\n.0000.'), 2, 8, 'h..........G');
   def('mhill_0', hill(false), { flash: true });
   def('mhill_1', hill(true), { flash: true });
+
+  // ---------- Tide Turtle (Sunny Shore) ----------
+  // A huge sea turtle seen from the front: a coral shell with a pearl star on top, an aqua
+  // head and flippers. Dazed, she lies on her back and shows the star on her belly.
+  const PEARL = '..000..\n.0LwL0.\n0LwYwl0\n0LYYYl0\n0lwYll0\n.0lll0.\n..000..';
+  // the shell: a rim band, the dome, dark seams between the plates, the pearl in the middle
+  const shell = (x, y, k, p) => {
+    return (g) => {
+      for (const [sx, sy, t] of [[x - 12 + k, y - 1, 'n\nn\nn'], [x + 11 + k, y - 1, 'n\nn\nn'], [x - 7 + k, y - 6, 'nn'], [x + 6 + k, y - 6, 'nn'], [x - 7 + k, y + 4, 'nnn'], [x + 5 + k, y + 4, 'nnn']]) g = stamp(g, sx, sy, t);
+      return stamp(g, x - 3 + k, y - 4, p ? PEARL.replace(/Y/g, 'P').replace(/w/g, 'q') : PEARL);
+    };
+  };
+  const turtle = (f) => {
+    if (f.st) {
+      // on her back: the pale belly up, flippers waving, the pearl star showing underneath
+      let r = sculpt(40, 32, [
+        { e: [20, 22, 19, 8], ramp: 'nroR', cut: 27 },
+        { e: [20, 19, 15, 7], ramp: 'eaAA' },
+        { e: [4, 13, 3.5, 5], ramp: 'tTTC' }, { e: [36, 13, 3.5, 5], ramp: 'tTTC' },
+        { e: [20, 27, 6, 4], ramp: 'tTTC' },
+      ]);
+      r = rim(r, { a: 'e', A: 'a', T: 't' });
+      r = stamp(r, 9, 19, 'e.............e\n.eeeeeeeeeeeee.');
+      r = stamp(r, 17, 13, PEARL);
+      return bossEyes(r, 15, 25, 7, 'daze');
+    }
+    const dy = f.d ? 3 : 0, hy = f.tl ? -2 : f.a ? 1 : 0, fl = f.b || f.m ? 1 : 0;
+    const sh = shell(20, 11 + dy, 0, f.p);
+    let r = sculpt(40, 32, [
+      { e: [5, 21 - fl * 2 + dy, 5, 3.5], ramp: 'tTTC' },
+      { e: [35, 21 + fl * 2 - (f.m ? 3 : 0) + dy, 5, 3.5], ramp: 'tTTC' },
+      { e: [20, 24 + hy + dy, 8, 7], ramp: 'tTTC' },
+      { e: [20, 12 + dy, 19, 10], ramp: 'nroR', cut: 20 + dy }, { e: [20, 11 + dy, 15.5, 8.5], ramp: 'roRO' },
+    ]);
+    r = rim(r, { R: 'r', O: 'R', T: 't' });
+    r = sh(r);
+    const ey = 22 + hy + dy;
+    r = bossEyes(r, 14, ey, 8, f.face);
+    r = stamp(r, 12, ey + 5, f.p ? 'rr' : 'qq');
+    r = stamp(r, 26, ey + 5, f.p ? 'rr' : 'qq');
+    return stamp(r, 18, ey + 5, f.a ? '.00.\n0tt0\n.00.' : MOUTH[f.face]);
+  };
+  bossFrames('turtle', turtle, o);
+  // tucked into her shell for the spin: the plates slide past to show it rolling
+  for (const k of [0, 1]) {
+    let r = sculpt(40, 32, [{ e: [20, 19, 19, 10], ramp: 'nroR', cut: 28 }, { e: [20, 18, 15.5, 8.5], ramp: 'roRO' }]);
+    def('turtle_shell_' + k, shell(20, 18, k * 3 - 1)(rim(r, { R: 'r', O: 'R' })), o);
+  }
+  // the tide's tell: arrows along the wall the wave comes from
+  def('tide_arrow', ['00.....', '0w00...', '0wCC00.', '0CCCTT0', '0CTT00.', '0T00...', '00.....'], { flip: true });
 })();
 
 // The Star Well's rocks (dark stone with a star) and breakable star lanterns.
@@ -187,6 +237,7 @@
     pearl: [['.wL.', 'wLLq', 'LLqq', '.qP.'], ['.wLLq.', 'wwLLqq', 'wLLLqq', 'LLLqqP', 'LLqqPP', '.qqPP.']],
     dust: [['.C..', 'C43.', '.332', '..2.'], ['..C...', '.C43..', 'C4433.', '.43322', '..322.', '...2..']],
     clod: [['.hG.', 'aNNn', 'NNnn', '.nn.'], ['.h.G..', 'aNhNN.', 'aNNNNn', 'NNNnnn', 'NNnnnn', '.nnnn.']],
+    foam: [['.wC.', 'wCTT', 'CTTt', '.Tt.'], ['.wwCC.', 'wwCCTT', 'wCCTTT', 'CCTTTt', 'CTTTtt', '.TTtt.']],
     nstar: [['..q..', 'qqwPP', '.qPp.', '.P.p.'], ['...q...', '..qqP..', 'qqqwPPp', '.qqPPp.', '..qPp..', '.qp.pp.', '.p...p.']],
   };
   for (const k in B) {

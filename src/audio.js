@@ -73,6 +73,7 @@ const Audio_ = (() => {
     brk() { noise(0.16, 0.22, 1200, 'bandpass', 0, 300); osc('p25', 220, 90, 0.12, 0.1); },
     land() { osc('triangle', 180, 90, 0.1, 0.18); },
     tele() { osc('p12', 1400, 500, 0.18, 0.07); },
+    horn() { osc('triangle', 196, 196, 0.55, 0.16); osc('triangle', 294, 290, 0.5, 0.1, 0.08); },
     charge() { osc('p12', 200, 600, 0.3, 0.06); },
     roar() { osc('square', 130, 70, 0.7, 0.14); noise(0.6, 0.2, 600, 'lowpass', 0, 150); },
     portal() { [392, 523, 659, 784, 1047].forEach((f, i) => osc('triangle', f, f * 1.01, 0.3, 0.14, i * 0.06)); },
