@@ -119,6 +119,7 @@ const MENU_RULES = {
   quests: () => Save.stats.runs > 0,
   book: () => Save.stats.runs > 0 || Save.found.length > 0,
   coop: () => Save.stats.runs > 0,
+  casino: () => Save.stats.runs > 0,
   arena: () => cnt('b') > 0 || Save.stats.bestWave > 0,
   stars: () => Object.keys(Save.ach).length > 0,
   mail: () => Save.mail.got.length > 0,

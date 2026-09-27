@@ -42,12 +42,19 @@ const cardShoe = (decks) => { const a = []; for (let d = 0; d < decks; d++) for 
 // A queue of timed steps: each waits its delay, then runs (steps may queue more).
 function cq(Q, d, fn) { Q.push({ d, fn }); }
 function cqTick(Q, dt) { if (Q.length && (Q[0].d -= dt) <= 0) Q.shift().fn(); }
+// A hand in play is saved as its deck plus the choices made, so a reload replays it
+// to the same spot (`cas().pend.bj` / `.vp`): leaving never undoes a hand.
+const cPack = (a) => a.map(c => String.fromCharCode(c < 26 ? 65 + c : 71 + c)).join('');
+const cUnpack = (s) => [...s].map(ch => { const n = ch.charCodeAt(0); return n < 91 ? n - 65 : n - 71; });
+function cHold(g, st) { cas().pend = { g, n: 0, [g]: st }; Save.write(); }
 
 // ---------- Blackjack ----------
 // Four decks, the dealer stands on soft 17 and peeks under an ace or a ten, blackjack
 // pays 3 to 2, double on any two cards (also after a split), split to three hands, split
 // aces take one card each, insurance pays 2 to 1.
 const BJ_BETS = [2, 4, 10, 20, 50, 100, 200];
+// The Gold card's high limit: up to 1000 a spot.
+const bjBets = () => casTier() >= 2 ? BJ_BETS.concat([500, 1000]) : BJ_BETS;
 const BJ_DECKS = 4, BJ_CUT = 52; // the cut card: a fresh shoe once 3/4 of it is dealt
 const bjVal = (c) => { const r = cRank(c); return r === 0 ? 11 : r >= 9 ? 10 : r + 1; };
 function bjTotal(cards) {
@@ -86,8 +93,11 @@ const BJ_SAY = { H: 'HIT', S: 'STAND', D: 'DOUBLE', P: 'SPLIT' };
 const BJ_SHOE = { x: 342, y: 30 }, BJ_TRAY = { x: 20, y: 30 };
 const BJ = {
   shoe: [], spots: 1, betI: 2, hands: [], dealer: [], gone: [], out: 0, q: [],
-  phase: 'bet', cur: -1, ins: 0, staked: 0, msg: '', hint: '',
+  phase: 'bet', cur: -1, ins: 0, staked: 0, msg: '', hint: '', log: null, replay: false,
 };
+// Stakes taken on the first run of a hand are not taken again when it is replayed.
+const bjStake = (n) => BJ.replay || casinoBet('bj', n);
+function bjNote(a) { BJ.log.a += a; if (!BJ.replay) cHold('bj', BJ.log); }
 function bjDraw(up) {
   if (!BJ.shoe.length) BJ.shoe = cardShoe(BJ_DECKS); // never with the cut card, but never empty
   Audio_.sfx('card');
@@ -112,15 +122,19 @@ function bjSweep() {
   for (const k of BJ.dealer.concat(...BJ.hands.map(h => h.cards))) { k.tx = BJ_TRAY.x; k.ty = BJ_TRAY.y - Math.min(10, BJ.out / 16); k.up = false; k.fl = 0; BJ.gone.push(k); BJ.out++; }
   BJ.dealer = []; BJ.hands = [];
 }
-function bjDeal() {
-  const bet = BJ_BETS[BJ.betI], n = BJ.spots;
-  if (!casinoBet('bj', n * bet)) { toast('NOT ENOUGH CHIPS'); Audio_.sfx('tick'); return; }
+function bjDeal(log) {
+  const bet = log ? log.bet : bjBets()[BJ.betI], n = log ? log.spots : BJ.spots;
+  if (!log && !casinoBet('bj', n * bet)) { toast('NOT ENOUGH CHIPS'); Audio_.sfx('tick'); return; }
   bjSweep();
   BJ.staked = n * bet; BJ.ins = 0; BJ.hint = ''; BJ.cur = -1; BJ.phase = 'deal';
   BJ.msg = '';
-  // ponytail: closing the tab mid-hand loses that hand's bet (casPend only guards the payout).
   let wait = 0.3;
-  if (BJ.shoe.length < BJ_CUT) { BJ.shoe = cardShoe(BJ_DECKS); BJ.out = 0; BJ.msg = 'A FRESH SHOE'; Audio_.sfx('shuffle'); wait = 1; }
+  if (log) BJ.shoe = cUnpack(log.shoe);
+  else {
+    if (BJ.shoe.length < BJ_CUT) { BJ.shoe = cardShoe(BJ_DECKS); BJ.out = 0; BJ.msg = 'A FRESH SHOE'; Audio_.sfx('shuffle'); wait = 1; }
+    BJ.log = { shoe: cPack(BJ.shoe), spots: n, bet, a: '' };
+    cHold('bj', BJ.log);
+  }
   for (let i = 0; i < n; i++) BJ.hands.push({ spot: i, cards: [], bet, done: false, dbl: false, split: false, aces: false, res: '', pay: 0 });
   for (let r = 0; r < 2; r++) {
     for (const h of BJ.hands) { cq(BJ.q, wait, () => bjGive(h)); wait = 0.28; }
@@ -135,7 +149,8 @@ function bjAfterDeal() {
   bjPeek();
 }
 function bjInsure(yes) {
-  if (yes && casinoBet('bj', bjInsCost())) { BJ.ins = bjInsCost(); BJ.staked += BJ.ins; Audio_.sfx('chip'); }
+  bjNote(yes ? 'Y' : 'N');
+  if (yes && bjStake(bjInsCost())) { BJ.ins = bjInsCost(); BJ.staked += BJ.ins; Audio_.sfx('chip'); }
   BJ.hint = '';
   bjPeek();
 }
@@ -178,11 +193,12 @@ function bjCan(h) {
 }
 function bjAct(a) {
   const h = BJ.hands[BJ.cur];
+  if ((a === 'D' || a === 'P') && !bjStake(h.bet)) return;
+  bjNote(a);
   BJ.hint = '';
   BJ.phase = 'deal';
   if (a === 'S') { h.done = true; bjNext(); return; }
   if (a === 'P') {
-    if (!casinoBet('bj', h.bet)) return;
     BJ.staked += h.bet;
     const k = h.cards.pop(), aces = bjVal(k.c) === 11;
     h.split = true; h.aces = aces;
@@ -192,7 +208,6 @@ function bjAct(a) {
     return;
   }
   if (a === 'D') {
-    if (!casinoBet('bj', h.bet)) return;
     BJ.staked += h.bet; h.bet *= 2; h.dbl = true;
     Audio_.sfx('chip');
   }
@@ -233,15 +248,39 @@ function bjSettle() {
   const net = pay - BJ.staked, d = bjTotal(D).t;
   BJ.msg = (dBJ ? 'DEALER BLACKJACK. ' : d > 21 ? 'DEALER BUSTS. ' : 'DEALER HAS ' + d + '. ') + (net > 0 ? 'YOU WIN ' + net : net === 0 ? 'A PUSH' : pay > 0 ? pay + ' BACK' : 'DEALER WINS');
   if (net > 0) casWin(pay, BJ.staked, 192, 110); else Audio_.sfx(pay > 0 ? 'chip' : 'rstop');
-  BJ.phase = 'bet'; BJ.cur = -1;
+  BJ.phase = 'bet'; BJ.cur = -1; BJ.log = null;
+}
+// Replay a saved hand at once: run every queued step, feed back each choice, stop where
+// the player has to choose again (or where it settles).
+function bjResume(log) {
+  BJ.replay = true; BJ.q.length = 0;
+  BJ.log = { shoe: log.shoe, spots: log.spots, bet: log.bet, a: '' };
+  bjDeal(log);
+  let i = 0;
+  for (let guard = 0; guard < 500; guard++) {
+    if (BJ.q.length) { BJ.q.shift().fn(); continue; }
+    if (i >= log.a.length) break;
+    const a = log.a[i++];
+    if (BJ.phase === 'ins') bjInsure(a === 'Y');
+    else if (BJ.phase === 'play') bjAct(a);
+    else break;
+  }
+  BJ.replay = false;
+  bjLayout();
+  for (const k of BJ.dealer.concat(...BJ.hands.map(h => h.cards))) { k.x = k.tx; k.y = k.ty; k.wait = 0; k.fl = k.up ? 1 : 0; }
+  if (BJ.phase !== 'bet') BJ.msg = 'YOUR HAND WAITED FOR YOU';
 }
 
 CAS_GAMES.bj = {
   name: 'BLACKJACK',
-  enter() { if (!BJ.shoe.length) BJ.shoe = cardShoe(BJ_DECKS); BJ.phase = 'bet'; BJ.msg = 'PLACE YOUR BET'; BJ.hint = ''; BJ.q.length = 0; },
+  enter(pend) {
+    if (!BJ.shoe.length) BJ.shoe = cardShoe(BJ_DECKS);
+    BJ.phase = 'bet'; BJ.msg = 'PLACE YOUR BET'; BJ.hint = ''; BJ.q.length = 0;
+    if (pend && pend.bj) bjResume(pend.bj);
+  },
   leave() { BJ.dealer = []; BJ.hands = []; BJ.gone = []; BJ.q.length = 0; },
   odds() {
-    return ['FOUR DECKS. THE DEALER STANDS ON SOFT 17', 'AND PEEKS FOR BLACKJACK UNDER AN ACE OR A TEN.', 'BLACKJACK PAYS 3 TO 2, A WIN 1 TO 1.', 'INSURANCE PAYS 2 TO 1. IT IS NEVER WORTH IT.', 'DOUBLE ON ANY TWO CARDS, ALSO AFTER A SPLIT.', 'SPLIT TO THREE HANDS. SPLIT ACES TAKE ONE CARD.', 'PLAY LIKE COSMO SAYS AND THE HOUSE KEEPS', 'ABOUT 0.4 OF EVERY 100 CHIPS BET.'];
+    return ['FOUR DECKS. THE DEALER STANDS ON SOFT 17', 'AND PEEKS FOR BLACKJACK UNDER AN ACE OR A TEN.', 'BLACKJACK PAYS 3 TO 2, A WIN 1 TO 1.', 'INSURANCE PAYS 2 TO 1. IT IS NEVER WORTH IT.', 'DOUBLE ON ANY TWO CARDS, ALSO AFTER A SPLIT.', 'SPLIT TO THREE HANDS. SPLIT ACES TAKE ONE CARD.', 'PLAY LIKE COSMO SAYS AND THE HOUSE KEEPS', 'ABOUT 0.4 OF EVERY 100 CHIPS BET.', 'BETS 2 TO ' + bjBets()[bjBets().length - 1] + ' A HAND.'];
   },
   update(dt) {
     const busy = BJ.phase !== 'bet';
@@ -254,8 +293,8 @@ CAS_GAMES.bj = {
     BJ.gone = BJ.gone.filter(k => k.x !== k.tx || k.y !== k.ty);
     if (BJ.phase === 'bet') {
       BJ.spots = 1 + casStepper('spots', 52, 196, 'HANDS', [1, 2, 3], BJ.spots - 1, false);
-      BJ.betI = casStepper('bet', 150, 196, 'BET EACH', BJ_BETS, BJ.betI, false);
-      const tot = BJ.spots * BJ_BETS[BJ.betI];
+      BJ.betI = casStepper('bet', 150, 196, 'BET EACH', bjBets(), BJ.betI, false);
+      const tot = BJ.spots * bjBets()[BJ.betI];
       if (cbtn('deal', 262, 190, 70, 20, 'DEAL ' + tot, { primary: true, keys: ['PadX', 'PadStart'], disabled: tot > cas().chips })) bjDeal();
     } else if (BJ.phase === 'ins') {
       if (cbtn('ins', 112, 194, 72, 16, 'INSURE ' + bjInsCost(), { keys: ['KeyY'] })) bjInsure(true);
@@ -323,7 +362,7 @@ CAS_GAMES.bj = {
       drawS(S('cz_owl_' + (Math.floor(G.time * 3) % 2)), 192 - w / 2 - 4, 58);
       text(t, 192 + 7, 68, 'Y', 1, 1);
     } else if (BJ.msg) text(BJ.msg, 192, 68, 'w', 1, 1);
-    if (BJ.phase === 'bet') { drawStepper('spots', BJ.spots); drawStepper('bet', BJ_BETS[BJ.betI]); }
+    if (BJ.phase === 'bet') { drawStepper('spots', BJ.spots); drawStepper('bet', bjBets()[BJ.betI]); }
     drawBtns();
     drawCasFx();
   },
@@ -413,6 +452,7 @@ function vpDeal() {
   VP.cards = [0, 1, 2, 3, 4].map(i => { const k = tCard(VP.deck.pop(), VP_X(i), VP_Y, true); k.wait = 0.15 + i * 0.1; return k; });
   VP.held = [false, false, false, false, false];
   VP.phase = 'deal';
+  cHold('vp', { den: VP.den, coins: VP.coins, bet, hand: cPack(VP.cards.map(k => k.c)), deck: cPack(VP.deck) });
 }
 function vpDraw() {
   VP.advice = -1;
@@ -428,7 +468,15 @@ function vpDraw() {
 const vpSettled = () => VP.cards.every(k => k.fl >= 1);
 CAS_GAMES.vp = {
   name: 'VIDEO POKER',
-  enter() { VP.phase = 'bet'; VP.cards = []; VP.res = -1; VP.advice = -1; },
+  enter(pend) {
+    VP.phase = 'bet'; VP.cards = []; VP.res = -1; VP.advice = -1;
+    const v = pend && pend.vp;
+    if (!v) return;
+    VP.den = v.den; VP.coins = v.coins; VP.bet = v.bet; VP.win = 0; VP.deck = cUnpack(v.deck);
+    VP.cards = cUnpack(v.hand).map((c, i) => { const k = tCard(c, VP_X(i), VP_Y, true); k.fl = 1; return k; });
+    VP.held = [false, false, false, false, false];
+    VP.phase = 'hold';
+  },
   leave() {},
   odds() {
     return ['JACKS OR BETTER. ONE DECK, SHUFFLED EVERY HAND.', 'HOLD ANY CARDS, THEN DRAW NEW ONES FOR THE REST.', 'A PAIR OF JACKS, QUEENS, KINGS OR ACES PAYS.', 'A ROYAL FLUSH PAYS 4000 COINS WHEN 5 ARE BET.', 'WITH 5 COINS AND PERFECT PLAY IT PAYS BACK', '97.3 OF EVERY 100 CHIPS BET. COSMO KNOWS HOW.'];

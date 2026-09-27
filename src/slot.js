@@ -166,7 +166,7 @@ function slotGo() {
   if (!fs && !casinoBet(SL.g, bet)) { Audio_.sfx('deny'); toast('NOT ENOUGH CHIPS'); SL.auto = 0; return; }
   const stops = slotSpin(M), r = slotEval(M, stops, lb, fs ? fs.mult : 1);
   let pay = r.total, jack = 0;
-  if (r.jack && lb === bets[bets.length - 1]) { jack = c.jack; c.jack = ctune('jackSeed'); pay += jack; }
+  if (r.jack && lb === bets[bets.length - 1]) { jack = c.jack; c.jack = ctune('jackSeed') * (typeof fullMoonAt === 'function' && fullMoonAt(Date.now()) ? 2 : 1); pay += jack; }
   let trig = false, done = null;
   if (fs) {
     fs.n--; fs.won += pay; fs.i++;

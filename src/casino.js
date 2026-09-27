@@ -71,7 +71,7 @@ function casinoBet(g, n) {
   const s = c.st[g] || (c.st[g] = { n: 0, bet: 0, won: 0, best: 0 });
   s.n++; s.bet += n;
   CAS.sess.net -= n;
-  if (g === 'land') c.jack += n * ctune('jackFeed');
+  c.jack += n * ctune('jackFeed'); // every bet in the casino feeds the Star Jackpot
   const t1 = casTier();
   if (t1 > t0) casTierUp(t1);
   return true;
@@ -89,7 +89,7 @@ function casinoPay(g, n) {
 function casPend(g, n) { cas().pend = { g, n: Math.max(0, Math.floor(n)) }; Save.write(); }
 function casSettle() {
   const c = cas(), p = c.pend;
-  if (!p) return 0;
+  if (!p || p.bj || p.vp) return 0; // a hand still in play resumes at its table
   c.pend = null;
   casinoPay(p.g, p.n);
   Save.write();
@@ -291,6 +291,7 @@ function enterCasino() {
   Audio_.play('lounge');
   if (typeof track === 'function') track('casino', { chips: c.chips, tier: casTier() });
   if (!c.gift) { casWelcome(); return; }
+  if (c.pend && CAS_GAMES[c.pend.g]) { toast('YOUR HAND IS STILL ON THE TABLE'); casPlay(c.pend.g, c.pend); return; }
   if (paid) toast('YOUR LAST ROUND PAID ' + paid + ' CHIPS');
   else if (Save.stats && G.chipsIn) toast('+' + G.chipsIn + ' CHIPS FROM YOUR LAST RUN');
   G.chipsIn = 0;

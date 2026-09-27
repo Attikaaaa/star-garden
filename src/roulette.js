@@ -72,15 +72,24 @@ function wofDisk(R) {
 }
 
 // A chip on the table: the biggest denomination that fits, with the amount under it.
-const CHIP_VALUES = [1, 5, 25, 100];
+// Table limits per spot; the Gold card (the VIP lounge) raises them and swaps the 1 chip for 500.
+const CAS_LIMIT = { rou: [200, 2000], wof: [100, 100], sic: [1000, 1000] };
+const casVipT = () => casTier() >= 2;
+const casLimit = (g) => CAS_LIMIT[g][casVipT() ? 1 : 0];
+const chipSet = (g) => g === 'wof' ? [1, 5, 25, 100] : g === 'sic' || casVipT() ? [5, 25, 100, 500] : [1, 5, 25, 100];
+function casOver(g, now, add) {
+  if (now + add <= casLimit(g)) return false;
+  toast('THE TABLE LIMIT IS ' + casLimit(g) + ' A SPOT'); Audio_.sfx('deny');
+  return true;
+}
 function drawChipAt(x, y, amt, small) {
   const d = [500, 100, 25, 5, 1].find(v => amt >= v) || 1;
   drawS(S('cz_chip_' + d), x - 4, y - 5);
   if (!small || amt > 1) text(String(amt), x, y + 7, 'w', 2, 1);
 }
 // A chip picker: one button per value, the chosen one lit. Returns the new index.
-function casChips(x, y, i, busy) {
-  CHIP_VALUES.forEach((v, k) => {
+function casChips(x, y, i, busy, g) {
+  chipSet(g).forEach((v, k) => {
     if (cbtn('chip' + v, x + k * 30, y, 28, 16, String(v), { icon: 'cz_chip_' + v, on: k === i, keys: ['Digit' + (k + 1)], disabled: busy, nofocus: true, quiet: true })) { Audio_.sfx('chip'); i = k; }
   });
   return i;
@@ -158,7 +167,8 @@ const ROU = { bets: new Map(), undo: [], last: null, chip: 1, cur: { z: 'in', gx
 const rouTotal = () => { let t = 0; for (const b of ROU.bets.values()) t += b.amt; return t; };
 function rouPlace(sp, amt) {
   const t = rouTotal(), b = ROU.bets.get(sp.id);
-  if ((b ? b.amt : 0) + amt > 500) { toast('THE TABLE LIMIT IS 500 A SPOT'); Audio_.sfx('deny'); return false; }
+  if (casOver('rou', b ? b.amt : 0, amt)) return false;
+  if (!b && ROU.bets.size >= 12) { toast('TWELVE SPOTS A SPIN'); Audio_.sfx('deny'); return false; }
   if (t + amt > cas().chips) { toast('NOT ENOUGH CHIPS'); Audio_.sfx('deny'); return false; }
   if (b) b.amt += amt; else ROU.bets.set(sp.id, { nums: sp.nums, amt, x: sp.x, y: sp.y });
   ROU.undo.push([sp.id, amt]);
@@ -185,14 +195,14 @@ CAS_GAMES.rou = {
   enter() { ROU.bets.clear(); ROU.undo = []; ROU.spin = null; ROU.res = null; ROU.win = 0; Audio_.sfx('chip'); },
   leave() { ROU.bets.clear(); },
   odds() {
-    return ['A EUROPEAN WHEEL: 37 POCKETS, ONE ZERO.', 'A BET ON N NUMBERS PAYS 36/N TIMES THE BET BACK.', 'ONE NUMBER 36X, SPLIT 18X, STREET 12X, CORNER 9X,', 'SIX LINE 6X, DOZEN OR COLUMN 3X, RED, ODD, 1-18... 2X.', 'THE ZERO LOSES EVERY OUTSIDE BET.', 'THE HOUSE KEEPS 2.7 OF EVERY 100 CHIPS BET.'];
+    return ['A EUROPEAN WHEEL: 37 POCKETS, ONE ZERO.', 'A BET ON N NUMBERS PAYS 36/N TIMES THE BET BACK.', 'ONE NUMBER 36X, SPLIT 18X, STREET 12X, CORNER 9X,', 'SIX LINE 6X, DOZEN OR COLUMN 3X, RED, ODD, 1-18... 2X.', 'THE ZERO LOSES EVERY OUTSIDE BET.', 'THE HOUSE KEEPS 2.7 OF EVERY 100 CHIPS BET.', 'UP TO 12 SPOTS A SPIN, ' + casLimit('rou') + ' CHIPS A SPOT.'];
   },
   update(dt) {
     const busy = !!ROU.spin;
     // the board owns the arrow keys: no button focus here
     CB.focus = null; CB.nav = false;
     casTop(this, busy);
-    ROU.chip = casChips(104, 196, ROU.chip, busy);
+    ROU.chip = casChips(104, 196, ROU.chip, busy, 'rou');
     const t = rouTotal();
     if (cbtn('undo', 228, 196, 36, 16, 'UNDO', { keys: ['KeyZ', 'Backspace', 'PadLB'], disabled: busy || !ROU.undo.length, nofocus: true })) {
       const [id, a] = ROU.undo.pop(), b = ROU.bets.get(id);
@@ -209,7 +219,7 @@ CAS_GAMES.rou = {
       if (dx || dy) { ROU.cur = rouMove(ROU.cur, dx, dy); Audio_.sfx('select'); }
       const h = mouseOn() ? rouHit(Input.mx, Input.my) : null;
       if (h && (Input.lastAim === 'mouse' || Input.mouseHit)) ROU.cur = h;
-      if ((h && Input.mouseHit && !CB.fired) || pressed('Enter', 'KeyE', 'PadA')) rouPlace(rouSpot(ROU.cur), CHIP_VALUES[ROU.chip]);
+      if ((h && Input.mouseHit && !CB.fired) || pressed('Enter', 'KeyE', 'PadA')) rouPlace(rouSpot(ROU.cur), chipSet('rou')[ROU.chip]);
       return;
     }
     // the spin: both ease out; the ball drops in over the last third
@@ -341,13 +351,13 @@ CAS_GAMES.wof = {
     WOF_KINDS.forEach((K, i) => {
       const x = 196 + (i % 4) * 46, y = 36 + Math.floor(i / 4) * 44;
       if (cbtn('w' + K.id, x, y, 42, 38, '', { col: K.col, hi: 'w', lo: '0', disabled: busy, quiet: true })) {
-        const a = CHIP_VALUES[WOF.chip];
-        if ((WOF.bets[K.id] || 0) + a > 500) { toast('THE TABLE LIMIT IS 500 A SPOT'); Audio_.sfx('deny'); }
+        const a = chipSet('wof')[WOF.chip];
+        if (casOver('wof', WOF.bets[K.id] || 0, a)) { /* told */ }
         else if (wofTotal() + a > cas().chips) { toast('NOT ENOUGH CHIPS'); Audio_.sfx('deny'); }
         else { WOF.bets[K.id] = (WOF.bets[K.id] || 0) + a; Audio_.sfx('chip'); }
       }
     });
-    WOF.chip = casChips(196, 130, WOF.chip, busy);
+    WOF.chip = casChips(196, 130, WOF.chip, busy, 'wof');
     const t = wofTotal();
     if (cbtn('clear', 322, 130, 56, 16, 'CLEAR', { keys: ['KeyC'], disabled: busy || !t })) WOF.bets = {};
     if (cbtn('re', 196, 154, 56, 16, 'REPEAT', { keys: ['KeyR'], disabled: busy || !!t || !WOF.last })) {

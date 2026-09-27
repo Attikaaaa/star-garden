@@ -305,7 +305,7 @@ function keyCap(x, y) {
 // Pip and friends beside them. A first launch keeps the classic centred menu.
 const TITLE_Y = 112, TITLE_GAP = 14, TITLE_COL1 = 178, TITLE_COL2 = 306;
 // The title menu grows as the player gets to things: a first launch shows just PLAY.
-const TITLE_BADGE = { ARENA: 'menu:arena', 'CO-OP': 'menu:coop', 'DAILY STAR RUN': 'menu:daily' };
+const TITLE_BADGE = { ARENA: 'menu:arena', 'CO-OP': 'menu:coop', 'DAILY STAR RUN': 'menu:daily', CASINO: 'menu:casino' };
 const TITLE_SIDE = new Set(['CO-OP', 'THE GARDEN', 'CASINO', 'SETTINGS']);
 function titleItems() {
   const first = Save.stats.runs === 0 && !hasRun();
@@ -314,7 +314,7 @@ function titleItems() {
   if (menuOpen('arena')) { if (hasArena()) out.push('CONTINUE ARENA'); out.push('ARENA'); }
   if (menuOpen('coop')) out.push('CO-OP');
   if (menuOpen('garden')) out.push('THE GARDEN');
-  if (!first) out.push('CASINO');
+  if (!first && menuOpen('casino') && !Save.settings.noCasino) out.push('CASINO');
   return out.concat(['SETTINGS']);
 }
 // How many items the left (play) column holds.
@@ -422,12 +422,13 @@ function settingsRows() {
   rows.push(['assist', 'ASSIST MODE', s.assist ? 'ON' : 'OFF'], ['cb', 'BULLET SHAPES', s.cb ? 'ON' : 'OFF']);
   if (IS_TOUCH) rows.push(['lefty', 'LEFT-HANDED', s.lefty ? 'ON' : 'OFF']);
   else rows.push(['keys', 'KEYS', '>']);
+  if (Save.stats.runs > 0) rows.push(['casino', 'CASINO', s.noCasino ? 'HIDDEN' : 'SHOWN']);
   if (ONLINE.url) rows.push(['share', 'PLAY STATS', s.share ? 'ON' : 'OFF']);
   rows.push(['lang', 'LANGUAGE', (LANGS.find(l => l[0] === langId()) || LANGS[0])[1]], ['save', 'SAVE CODE', '>'], ['back', 'BACK', null]);
   return rows;
 }
 const setGap = (rows) => (rows.length > 10 ? 10 : rows.length > 9 ? 11 : rows.length > 7 ? 13 : 16);
-const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE' };
+const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN' };
 function updateSettings() {
   const s = Save.settings, rows = settingsRows(), gap = setGap(rows);
   menuNav(rows.length);
@@ -445,6 +446,7 @@ function updateSettings() {
   else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
   else if ((id === 'assist' || id === 'cb' || id === 'lefty') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
+  else if (id === 'casino' && (dir || ok)) { s.noCasino = !s.noCasino; Audio_.sfx('select'); Save.write(); }
   else if (id === 'keys' && ok) { Audio_.sfx('confirm'); setState('keys'); }
   else if (id === 'share' && (dir || ok)) { setShare(!s.share); Audio_.sfx('select'); }
   else if (id === 'save' && ok) { Audio_.sfx('confirm'); openSaveMenu(); }

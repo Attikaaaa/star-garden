@@ -68,8 +68,8 @@ function sicArt() {
   return (SIC_ART = { plate, glass, RX, RY, GX, GY });
 }
 function sicPlace(id) {
-  const a = CHIP_VALUES[SB.chip];
-  if ((SB.bets[id] || 0) + a > 500) { toast('THE TABLE LIMIT IS 500 A SPOT'); Audio_.sfx('deny'); return; }
+  const a = chipSet('sic')[SB.chip];
+  if (casOver('sic', SB.bets[id] || 0, a)) return;
   if (sicTotal() + a > cas().chips) { toast('NOT ENOUGH CHIPS'); Audio_.sfx('deny'); return; }
   if (SB.done) { SB.done = false; SB.win = 0; }
   SB.bets[id] = (SB.bets[id] || 0) + a; SB.undo.push([id, a]);
@@ -86,7 +86,7 @@ CAS_GAMES.sic = {
     const busy = !!SB.roll;
     casTop(this, busy);
     for (const s of SIC_SPOTS) if (cbtn(s.id, s.x, s.y, s.w, s.h, '', { col: s.col, hi: s.hi, lo: s.lo, disabled: busy, quiet: true })) sicPlace(s.id);
-    SB.chip = casChips(12, 192, SB.chip, busy);
+    SB.chip = casChips(12, 192, SB.chip, busy, 'sic');
     const t = sicTotal();
     if (cbtn('clear', 138, 192, 44, 16, 'CLEAR', { keys: ['KeyC'], disabled: busy || !t })) { SB.bets = {}; SB.undo = []; }
     if (cbtn('undo', 186, 192, 44, 16, 'UNDO', { keys: ['KeyZ', 'Backspace'], disabled: busy || !SB.undo.length })) {
