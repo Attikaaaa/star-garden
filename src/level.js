@@ -2,6 +2,10 @@
 // Floors, rooms, tile collision and the cached static room layer.
 const COLS = 24, ROWS = 13, OY = 8;
 const T_FLOOR = 0, T_WALL = 1, T_ROCK = 2, T_BRK = 3, T_PIT = 4, T_DOOR = 5, T_PRISM = 6, T_BELL = 7, T_GATE = 8, T_PUFF = 9; // T_PUFF: a Cloud Steps cloud about to puff away (still walkable)
+// T_MIRROR .. T_MIRROR + 3: a mirror whose glass faces up-left, up-right, down-right, down-left
+// (layout '7' '9' '3' '1', like a keypad); T_ICE: slippery floor (Snowglobe ice, frozen pools)
+const T_MIRROR = 10, T_ICE = 14;
+const MIR_CH = '7931';
 const DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
 // Passable part of an open door, in room pixels: [x, y, w, h]
@@ -112,7 +116,9 @@ function stampLayout(t, layout, flipX, flipY, slots) {
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
     const ch = layout[flipY ? 9 - y : y][flipX ? 21 - x : x];
     const i = (y + 2) * COLS + x + 1;
-    t[i] = ch === '#' ? T_ROCK : ch === 'b' ? T_BRK : ch === '~' ? T_PIT : ch === 'p' ? T_PRISM : ch === 's' ? T_BELL : ch === 'g' ? T_GATE : T_FLOOR;
+    t[i] = ch === '#' ? T_ROCK : ch === 'b' ? T_BRK : ch === '~' ? T_PIT : ch === 'p' ? T_PRISM : ch === 's' ? T_BELL : ch === 'g' ? T_GATE : ch === 'i' ? T_ICE : T_FLOOR;
+    const m = MIR_CH.indexOf(ch); // a flip turns the glass the same way
+    if (m >= 0) t[i] = T_MIRROR + ((flipX ? m ^ 1 : m) ^ (flipY ? 3 : 0));
     if (ch === 'e' && slots) slots.push([x * 16 + 24, y * 16 + OY + 32 + 12]);
   }
 }
@@ -187,6 +193,79 @@ function nudgeOut(room, e, mode) {
 }
 
 const tileAt = (room, c, r) => (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? T_WALL : room.tiles[r * COLS + c];
+// ---------- Mirrors ----------
+// A mirror stands diagonally across its tile, glass on one side, a stone back on the other.
+// A shot or bullet that crosses the glass turns 90 degrees; one that meets the back stops
+// there, and a hero's shot turns the mirror a quarter step (host / solo). Every screen runs
+// the same test on its own shots, so a client's predicted shots bounce the same way.
+const MIR_N = [[-1, -1], [1, -1], [1, 1], [-1, 1]], MIR_TURN = 0.3;
+const mirrorAt = (room, x, gy) => { const c = Math.floor(x / 16), r = Math.floor((gy - OY) / 16), t = tileAt(room, c, r); return t >= T_MIRROR && t <= T_MIRROR + 3 ? r * COLS + c : -1; };
+// o (vx, vy, x, y) has its ground point at gy (lift px below o.y), and came from px, pgy.
+// 0: over the glass side, flying on; 1: it crossed the glass and was reflected; 2: it hit the back
+function mirrorPass(room, o, idx, lift, px, pgy) {
+  const n = MIR_N[room.tiles[idx] - T_MIRROR], cx = (idx % COLS) * 16 + 8, cy = OY + ((idx / COLS) | 0) * 16 + 8;
+  const f = n[0] * (o.x - cx) + n[1] * (o.y + lift - cy);
+  if (f > 0) return 0;
+  if (n[0] * (px - cx) + n[1] * (pgy - cy) <= 0) return 2;
+  const d = o.vx * n[0] + o.vy * n[1];
+  o.vx -= d * n[0]; o.vy -= d * n[1]; o.x -= f * n[0]; o.y -= f * n[1]; // |n|^2 = 2
+  return 1;
+}
+// host / solo: a hero's shot met the back
+function mirrorTurn(room, idx) {
+  if (G.time - ((room.tAt && room.tAt.get(idx)) ?? -9) < MIR_TURN) return;
+  setTile(room, idx % COLS, (idx / COLS) | 0, T_MIRROR + (room.tiles[idx] - T_MIRROR + 1) % 4);
+  Audio_.sfx('clack');
+}
+
+// ---------- Drift ----------
+// Ice keeps momentum (grip below 1) and a current carries (cx, cy px/s): heroes (movePlayer),
+// walking foes (updateEnemies), bullets and shots. A land adds its own through
+// LAND_MECH[id].drift(room, x, y, out), which runs on every screen.
+const DRIFT = { grip: 1, cx: 0, cy: 0 }, ICE_GRIP = 0.18;
+function driftAt(room, x, y) {
+  DRIFT.grip = 1; DRIFT.cx = DRIFT.cy = 0;
+  if (room.tiles[Math.floor((y - 1 - OY) / 16) * COLS + Math.floor(x / 16)] === T_ICE) DRIFT.grip = ICE_GRIP;
+  const m = landMech();
+  if (m && m.drift) m.drift(room, x, y, DRIFT);
+  return DRIFT;
+}
+// a shot or bullet rides the current, at half its strength (only lands with a drift hook)
+function driftShot(room, o, dt) {
+  const m = landMech();
+  if (!m || !m.drift) return;
+  const d = driftAt(room, o.x, o.y + 4);
+  o.x += d.cx * 0.5 * dt; o.y += d.cy * 0.5 * dt;
+}
+// A hero's walk this frame (vx, vy px/s) through the ice and the current; keeps p.mvx / p.mvy
+const DRIFT_V = [0, 0];
+function driftMove(room, p, vx, vy, dt) {
+  const d = driftAt(room, p.x, p.y);
+  if (d.grip < 1) { const k = Math.min(1, d.grip * 10 * dt); vx = p.mvx = (p.mvx || 0) + (vx - (p.mvx || 0)) * k; vy = p.mvy = (p.mvy || 0) + (vy - (p.mvy || 0)) * k; }
+  else { p.mvx = vx; p.mvy = vy; }
+  DRIFT_V[0] = vx + d.cx; DRIFT_V[1] = vy + d.cy;
+  return DRIFT_V;
+}
+// A walking foe, after its AI moved it from (x0, y0): on ice its steps blend into a slide, and
+// the current carries it. Host / solo only.
+function driftFoe(room, e, x0, y0, dt) {
+  const d = driftAt(room, x0, y0);
+  if (d.grip >= 1 && !d.cx && !d.cy) { e.mvx = e.mvy = 0; return; }
+  let vx = (e.x - x0) / dt, vy = (e.y - y0) / dt;
+  if (vx * vx + vy * vy > 40000) { e.mvx = e.mvy = 0; return; } // a blink or a dig, not a step
+  if (d.grip < 1) {
+    const k = Math.min(1, d.grip * 10 * dt);
+    vx = e.mvx = (e.mvx || 0) + (vx - (e.mvx || 0)) * k; vy = e.mvy = (e.mvy || 0) + (vy - (e.mvy || 0)) * k;
+    e.x = x0; e.y = y0;
+  } else { vx = 0; vy = 0; }
+  moveBox(room, e, (vx + d.cx) * dt, (vy + d.cy) * dt, 'enemy');
+}
+// after a hero's move: a wall stops the slide along its axis
+function driftStop(p, x0, y0, vx, vy, dt) {
+  if (Math.abs(p.x - x0) < Math.abs(vx * dt) * 0.5) p.mvx = 0;
+  if (Math.abs(p.y - y0) < Math.abs(vy * dt) * 0.5) p.mvy = 0;
+}
+
 // Crystal Cave prism pillars: the tile index of the pillar a ground point is in, else -1
 function prismAt(room, x, gy) {
   const c = Math.floor(x / 16), r = Math.floor((gy - OY) / 16);
@@ -207,8 +286,9 @@ function solidPx(room, x, y, mode) {
   const c = Math.floor(x / 16), r = Math.floor((y - OY) / 16);
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return true;
   switch (room.tiles[r * COLS + c]) {
-    case T_FLOOR: case T_PUFF: return false;
+    case T_FLOOR: case T_PUFF: case T_ICE: return false;
     case T_ROCK: case T_BRK: case T_PRISM: case T_BELL: return mode !== 'fly';
+    case T_MIRROR: case T_MIRROR + 1: case T_MIRROR + 2: case T_MIRROR + 3: return mode !== 'fly' && mode !== 'shot'; // shots: mirrorPass
     case T_PIT: return (mode === 'player' || mode === 'enemy') && !room.flood; // high tide on the Shore: shallows
     case T_DOOR: return mode === 'player' ? !doorPass(room, x, y) : true;
     default: return true;
@@ -372,13 +452,26 @@ function renderRoomStatic(room, theme) {
     if (!rt) g.fillRect(x + 15, y, 1, 16);
     if (!dn) { g.fillRect(x, y + 15, 16, 1); g.fillStyle = col('3'); g.fillRect(x + (lf ? 0 : 1), y + 14, 16 - (lf ? 0 : 1) - (rt ? 0 : 1), 1); }
   }
+  // ice sheets: an edge where the ice meets other ground
+  for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
+    if (room.tiles[r * COLS + c] !== T_ICE) continue;
+    const x = c * 16, y = OY + r * 16;
+    blit(g, S('ice'), x, y, hash(r * COLS + c, 7, room.seed) & 1);
+    g.fillStyle = PAL['w'];
+    if (tileAt(room, c, r - 1) !== T_ICE) g.fillRect(x, y, 16, 1);
+    if (tileAt(room, c - 1, r) !== T_ICE) g.fillRect(x, y, 1, 16);
+    g.fillStyle = PAL['t'];
+    if (tileAt(room, c, r + 1) !== T_ICE) g.fillRect(x, y + 15, 16, 1);
+    if (tileAt(room, c + 1, r) !== T_ICE) g.fillRect(x + 15, y, 1, 16);
+  }
   // obstacles with contact shadows
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const t = room.tiles[r * COLS + c];
-    if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE)) continue;
+    if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE) && (t < T_MIRROR || t > T_MIRROR + 3)) continue;
     const x = c * 16, y = OY + r * 16;
     g.drawImage(ellipseSprite(14, 5, SHADOW), x + 1, y + 12);
-    blit(g, S(t >= T_PRISM ? tileArt(room, c, r, t) : (t === T_ROCK ? 'rock_' : 'brk_') + theme), x, y);
+    const sp = S(t >= T_PRISM ? tileArt(room, c, r, t) : (t === T_ROCK ? 'rock_' : 'brk_') + theme);
+    blit(g, sp, x, y + 16 - sp.h); // taller art (mirrors) rises over the tile above
   }
   room.dirty = false;
 }

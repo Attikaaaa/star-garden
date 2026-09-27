@@ -43,6 +43,12 @@ function updateEBullets(dt) {
     b.life -= dt; b.t += dt;
     if (b.gust) b.vx += G.wind * dt * 1.2; // seeds ride the Meadow's gust
     b.x += b.vx * dt; b.y += b.vy * dt;
+    driftShot(room, b, dt);
+    const mi = mirrorAt(room, b.x, b.y + 5);
+    if (mi >= 0) {
+      const h = mirrorPass(room, b, mi, 5, b.x - b.vx * dt, b.y + 5 - b.vy * dt);
+      if (h === 2) { b.life = 0; burst(b.x, b.y, 3, ['w', 'l'], 30, 0.2); continue; }
+    }
     const pi = prismAt(room, b.x, b.y + 5);
     if (pi >= 0 && pi !== b.prism && b.prism < 0) { splitBullet(b, pi); continue; }
     if (pi !== b.prism && solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
@@ -225,7 +231,9 @@ function updateEnemies(dt) {
     if (e.dead) continue;
     if (k === 0) continue; // asleep (SLEEPY BELL): no moves, no contact damage
     if (e.stag > 0) { e.stag -= dt; continue; } // a staggered boss is harmless for a moment
+    const x0 = e.x, y0 = e.y, D = EDEF[e.type];
     AI[e.type](e, dt * pace * k * (e.elite ? 1.25 : 1), room, p);
+    if (!e.fly && !D.boss && !D.warden && !D.still && !e.dead) driftFoe(room, e, x0, y0, dt); // ice and currents
     // contact damage
     if (e.passive || e.ghost || e.calm || e.z >= 8) continue;
     for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, (q.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(q, 1, e.type);

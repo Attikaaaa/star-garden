@@ -91,7 +91,7 @@ function checkLayout(L) {
   if (L.length !== 10) return ['has ' + L.length + ' rows, expected 10'];
   L.forEach((r, y) => {
     if (r.length !== 22) bad.push('row ' + y + ' has ' + r.length + ' chars');
-    const u = r.replace(/[.#b~epsgou]/g, '');
+    const u = r.replace(/[.#b~epsgoui7931]/g, '');
     if (u) bad.push('row ' + y + ' has unknown "' + u + '"');
   });
   if (bad.length) return bad;
@@ -113,12 +113,12 @@ function checkLayout(L) {
     }
     return seen;
   };
-  const walk = flood('.eou'), dig = flood('.eoubg');
+  const walk = flood('.eoui'), dig = flood('.eouibg');
   for (const [d, cells] of Object.entries(lanes)) for (const [x, y] of cells) if (!walk[y * 22 + x]) bad.push(d + ' door unreachable');
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
     const c = at(x, y), i = y * 22 + x;
     if (c === 'e' && !walk[i]) bad.push('enemy slot ' + x + ',' + y + (dig[i] ? ' only reachable by breaking' : ' sealed off'));
-    if ('.ou'.includes(c) && !dig[i]) bad.push('sealed floor pocket at ' + x + ',' + y);
+    if ('.oui'.includes(c) && !dig[i]) bad.push('sealed floor pocket at ' + x + ',' + y);
   }
   return bad;
 }

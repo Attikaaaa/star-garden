@@ -223,6 +223,13 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   below: tells, `stagger`, a safe gap, a second phase. Add one with an `EDEF` entry, `AI.<type>`,
   art through `bossFrames`, the land's entry in `WARDENS`, a name in `FOE_NAMES`, a Book entry
   and `lang_hu.js` strings; `wardenCleared` pays an item per hero, coins and vault.
+- **Mirrors and drift:** layout chars `7 9 3 1` are mirrors (`T_MIRROR` + 0..3, the glass
+  faces up-left, up-right, down-right, down-left; flips turn them). `mirrorPass` turns shots and
+  bullets that cross the glass by 90 degrees; one that meets the back pops, and a hero's shot
+  turns the mirror a quarter step (`mirrorTurn`). `i` is ice (`T_ICE`): heroes and walking
+  foes keep momentum (`driftMove`, `driftFoe`), a dash cancels the slide. A land adds a current
+  or its own slippery ground with `LAND_MECH[id].drift(room, x, y, out)` (`out.grip`,
+  `out.cx`, `out.cy`), which also carries shots and bullets at half strength.
 - **Darkness:** each frame `lightReset(ambient)`, `lightAdd(x, y, r)` per light, then
   `drawLight(ox, oy, alpha)` from a layer-1 hook: a dithered `'0'` tint in 2px cells, never
   black. Game logic asks `lightAt(x, y)` (0 dark .. 4 lit). Keep bullets above the mask.

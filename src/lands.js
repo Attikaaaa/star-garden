@@ -818,7 +818,45 @@ LAND_MECH.crystal = {
 };
 // the sprite of a crystal tile (level.js renderRoomStatic)
 function tileArt(room, c, r, t) {
-  return t === T_PRISM ? 'prism' : t === T_BELL ? 'bell_' + Math.max(0, bellAt(room, c, r)) : 'cgate';
+  return t >= T_MIRROR ? 'mirror_' + (t - T_MIRROR) : t === T_PRISM ? 'prism' : t === T_BELL ? 'bell_' + Math.max(0, bellAt(room, c, r)) : 'cgate';
+}
+
+// Ice (T_ICE, layout 'i'): a pale sheet with glints; the renderer adds the edges
+def('ice', `
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCwCCCCCCCC
+  CCCCCCwCCCCCCCCC
+  CCCCCwCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCwCCC
+  CCCCCCCCCCCwCCCC
+  CCCCCCCCCCCCCCCC
+  CCcCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC
+  CCCCCCCCCCCCCCCC`, { flip: true });
+
+// ---------- Mirrors (T_MIRROR, layout 7 9 3 1) ----------
+// A slab standing diagonally across its tile (the same line mirrorPass tests), MIR_H px tall:
+// glass (white and cyan) on the side its normal points to, sandstone with a gold rim behind.
+// The sprite is MIR_OFF px taller than a tile and drawn bottom-aligned, so it rises over the tile above.
+const MIR_H = 6, MIR_OFF = 4;
+for (let k = 0; k < 4; k++) {
+  const n = MIR_N[k], a = [];
+  for (let y = 0; y < 16 + MIR_OFF; y++) a.push(new Array(16).fill('.'));
+  for (let gy = 3; gy <= 12; gy++) for (let x = 3; x <= 12; x++) { // back to front, so nearer rows cover
+    const f = n[0] * (x + 0.5 - 8) + n[1] * (gy + 0.5 - 8);
+    if (f <= -2 || f > 2) continue;
+    const glass = f > 0, yt = gy + MIR_OFF - MIR_H;
+    for (let h = 0; h <= MIR_H; h++) a[yt + h][x] = h === 0 ? (glass ? (f === 2 ? 'C' : 'w') : (f === 0 ? 'y' : 'O'))
+      : glass ? (h === 1 ? 'C' : h === MIR_H ? 'b' : h === 3 && (x + gy) % 4 === 0 ? 'w' : h === 2 ? 'c' : 'B')
+      : (h === 1 ? 'y' : h === MIR_H ? 'n' : h === 2 ? 'a' : 'e');
+  }
+  def('mirror_' + k, autoOutline(a.map(r => r.join(''))));
 }
 
 // ---------- Cloud Steps: the Puff Floor ----------

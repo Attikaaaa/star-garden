@@ -155,7 +155,8 @@ function movePlayer(p, dt) {
     const k = p.speed * (heroOf(p).move === 'leap' ? 2 : 2.6) * (p.buff.haste > 0 ? 1.15 : 1);
     vx = p.dx * k; vy = p.dy * k;
     if (Math.random() < 0.6) part(p.x + rnd(-4, 4), p.y - rnd(0, 3), -vx * 0.1, -vy * 0.1, 0.3, 'w', { size: 2 });
-  } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1); vx = mx * sp; vy = my * sp; }
+    p.mvx = p.mvy = 0; // a dash cancels a slide on ice
+  } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1), d = driftMove(room, p, mx * sp, my * sp, dt); vx = d[0]; vy = d[1]; }
 
   // Door assist: pushing into a doorway slides you into its opening.
   if (room.cleared) {
@@ -164,7 +165,9 @@ function movePlayer(p, dt) {
     if (vx < 0 && p.x < 40 && room.doors.l && Math.abs(p.y - 123) < 16) p.y += Math.sign(123 - p.y) * Math.min(Math.abs(123 - p.y), 60 * dt);
     if (vx > 0 && p.x > 344 && room.doors.r && Math.abs(p.y - 123) < 16) p.y += Math.sign(123 - p.y) * Math.min(Math.abs(123 - p.y), 60 * dt);
   }
+  const x0 = p.x, y0 = p.y;
   moveBox(room, p, vx * dt, vy * dt, heroMoveMode(p));
+  driftStop(p, x0, y0, vx, vy, dt);
   heroLeapEnd(p, dt);
   if (p.hopT > 0 || p.hopZ) { p.hopZ = p.hopT > 0; p.leapZ = p.hopZ ? Math.max(2, Math.sin(Math.PI * Math.min(1, 1 - p.hopT / HOP_T)) * HOP_Z) : 0; }
   if (p.moving) {
@@ -498,6 +501,7 @@ function updateShots(dt) {
     const px = s.x, py = s.y;
     if (G.wind && !s.ret) s.vx += G.wind * dt; // WINDY
     s.x += s.vx * dt; s.y += s.vy * dt;
+    driftShot(room, s, dt);
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: s.kind === 'comet' && Math.random() < 0.4 ? 2 : 1, drag: 1 });
     // enemies first, so nothing hugging a wall is immune
     for (const e of G.enemies) {
@@ -523,6 +527,12 @@ function updateShots(dt) {
       }
     }
     // shots fly at hand height; their ground point is a few px lower
+    const mi = s.life > 0 && !s.ret ? mirrorAt(room, s.x, s.y + 4) : -1;
+    if (mi >= 0) {
+      const h = mirrorPass(room, s, mi, 4, px, py + 4);
+      if (h === 1) { Audio_.sfx('mirror'); s.hitList = null; }
+      else if (h === 2) { mirrorTurn(room, mi); burst(s.x, s.y, 4, ['y', 'O'], 60, 0.2); s.life = 0; }
+    }
     const pi = prismAt(room, s.x, s.y + 4);
     if (s.life > 0 && !s.ret && pi !== s.prism && solidPx(room, s.x, s.y + 4, 'shot')) {
       if (pi >= 0 && splitShot(s, pi)) { SHOTS[i] = SHOTS[SHOTS.length - 1]; SHOTS.pop(); continue; }

@@ -926,10 +926,16 @@ function clientPlay(dt) {
     }
     if (G.wind && !s.ret) s.vx += G.wind * dt; // as updateShots does
     s.x += s.vx * dt; s.y += s.vy * dt; s.t += dt;
+    driftShot(G.room, s, dt);
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: 1, drag: 1 });
     if (s.pred && predShot(s, px, py, dt)) SHOTS.splice(i, 1);
   }
-  for (const b of EBULLETS) if (b.life > 0) { b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt; }
+  for (const b of EBULLETS) if (b.life > 0) {
+    b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt;
+    driftShot(G.room, b, dt);
+    const mi = mirrorAt(G.room, b.x, b.y + 5); // as updateEBullets does, until the next snapshot
+    if (mi >= 0 && mirrorPass(G.room, b, mi, 5, b.x - b.vx * dt, b.y + 5 - b.vy * dt) === 2) b.life = 0;
+  }
   clientHits(me);
   mechEvery(dt);
   for (const k2 of G.room.pickups) k2.t += dt;
@@ -967,6 +973,8 @@ function predShot(s, px, py, dt) {
       if (s.pierce > 0) { s.pierce--; (s.hitList || (s.hitList = [])).push(e); } else { s.life = 0; break; }
     }
   }
+  const mi = s.life > 0 && !s.ret ? mirrorAt(room, s.x, s.y + 4) : -1;
+  if (mi >= 0) { const h = mirrorPass(room, s, mi, 4, px, py + 4); if (h === 1) s.hitList = null; else if (h === 2) s.life = 0; }
   const pi = prismAt(room, s.x, s.y + 4);
   if (s.life > 0 && !s.ret && pi !== s.prism && solidPx(room, s.x, s.y + 4, 'shot')) {
     if (pi >= 0 && splitShot(s, pi)) return true;

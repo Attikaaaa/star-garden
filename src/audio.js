@@ -102,6 +102,7 @@ const Audio_ = (() => {
     quest() { [659, 880, 1109, 1319].forEach((f, i) => osc('triangle', f, f, 0.16, 0.13, i * 0.07)); osc('p25', 1760, 1760, 0.3, 0.07, 0.28); },
     clack() { osc('triangle', 1900, 1200, 0.035, 0.12); osc('triangle', 2600, 1700, 0.03, 0.06, 0.04); noise(0.025, 0.06, 5000, 'highpass'); },
     wave() { noise(1.2, 0.12, 250, 'lowpass', 0, 1500); noise(1.0, 0.08, 2200, 'bandpass', 0.35, 500); },
+    mirror() { osc('triangle', 1760, 2637, 0.06, 0.08); osc('p12', 2637, 2637, 0.03, 0.03, 0.04); },
     prism() { [1568, 1976, 2349].forEach((f, i) => osc('triangle', f, f * 1.01, 0.1, 0.06, i * 0.025)); },
     // Crystal Clock bells (C E G A, a bell's sine with a faint octave), and the gate opening
     bell0() { bell(1047); }, bell1() { bell(1319); }, bell2() { bell(1568); }, bell3() { bell(1760); },
