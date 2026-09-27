@@ -4,7 +4,7 @@
 // a second phase) but are ordinary enemies marked EDEF.warden: the HUD bar finds them by
 // that, knockback and sleep do not move them, and the room pays an item when they fall.
 
-const WARDENS = { meadow: 'thistle', shore: 'castle', crystal: 'chand' };
+const WARDENS = { meadow: 'thistle', shore: 'castle', crystal: 'chand', cloud: 'vane' };
 const wardenOf = () => G.enemies.find(e => !e.dead && EDEF[e.type].warden);
 
 function spawnWarden() {
@@ -436,3 +436,146 @@ AI.chand = function (e, dt, room, p) {
 };
 BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
   { t: 'chand', spr: 'chand_0', lore: ['THE WARDEN OF THE CRYSTAL HALLS.', 'IT SWINGS ON ITS CHAIN AND SHEDS SHARDS.', 'STAND INSIDE ITS SWING, CLOSE TO THE WALL.'] });
+
+// ---------- Weather Vane Rooster (Cloud Steps) ----------
+// A copper rooster on a pole. It ticks round, then stops and points: the arrow at its foot and
+// a cyan lane show the way for 0.6 s, and a gust of feathers blows down that lane. Every third
+// turn it crows (glint) and whirls, throwing a spiral of feathers from the tips of its arms:
+// right under it, in its shadow, is safe, and it cannot peck while it whirls. Dizzy after the
+// whirl, it hops to another spot (pink ring). Phase 2: the gust blows both ways, two spiral arms.
+(function vaneArt() {
+  const o = { flash: true };
+  const BEAK = { calm: 'yyY\nOo.', squint: 'yyY\n...\nOo.', mad: 'yyY\nOoo', daze: 'yY.\nOo.', dead: 'yy.\n...' };
+  const vane = (f) => {
+    // the rooster sits lower when it bobs, rises for the crow, slumps when dazed, lies on its side when beaten
+    const dy = f.d ? 8 : f.st ? 2 : f.b ? 1 : f.tl ? -1 : 0;
+    const wy = f.tl || f.a ? -3 : f.m ? -2 : f.st || f.d ? 2 : 0;
+    let r = sculpt(32, 32, [
+      // the pole's foot, a copper ball and the pole
+      { e: [16, 29.5, 5, 2], ramp: 'mlLw', hi: false },
+      { r: [15, 19, 3, 11, 0.5], ramp: 'mlLw', hi: false },
+      // the compass arms, with a gold ball at each tip
+      { r: [5, 23, 22, 3, 1], ramp: 'mlLw', hi: false },
+      { e: [5, 24, 2, 2], ramp: 'oOyY' }, { e: [27, 24, 2, 2], ramp: 'oOyY' },
+      // tail feathers (fanned high when it crows), body, head
+      { e: [6, 9 + dy + (f.tl ? -2 : 0), 3.5, 6.5], ramp: 'noOy' },
+      { e: [13, 15 + dy, 8, 5.5], ramp: 'noOy' },
+      { e: [22, 8 + dy, 5.5, 5], ramp: 'noOy' },
+    ]);
+    // tail feather curls
+    r = stamp(r, 3, (f.tl ? 3 : 5) + dy, 'y.\nOy\nnO\n.n');
+    r = stamp(r, 8, (f.tl ? 2 : 4) + dy, 'y\nO\nn');
+    // the wing: folded, raised (hop, crow), spread wide (whirl), limp (dazed)
+    if (f.a) { r = stamp(r, 1, 12 + dy, 'YyyOOn\n.yOOnn\n..Onn.'); r = stamp(r, 21, 13 + dy, '.nOOyY\nnnOOy.'); }
+    else r = stamp(r, 8, 12 + dy + wy, '.yyO.\nyOOOn\nOOnnn\n.nn..');
+    // legs on the pole
+    if (!f.d) r = stamp(r, 13, 20 + dy, 'n..n\nN..N');
+    // the comb: tall and red for the crow, flopped when dazed
+    const comb = f.st || f.d ? '...rR\n.rRRr\nrrr..' : f.tl ? 'R.R.R\nrRrRr\nrrrrr' : '.R.R.\nrRrRr';
+    r = stamp(r, 19, 1 + dy - (f.tl ? 1 : 0), comb);
+    // the beak (open to crow) and the red wattle below it
+    r = stamp(r, 27, 8 + dy, BEAK[f.face]);
+    r = stamp(r, 26, 11 + dy, f.p ? 'r\nr' : 'R\nr');
+    r = autoOutline(r);
+    r = bossEyes(r, 18, 5 + dy, 5, f.face);
+    r = stamp(r, 18, 10 + dy, f.p ? 'r' : 'q');
+    return rim(r, { o: 'r', O: 'o', l: 'm' });
+  };
+  bossFrames('vane', vane, o);
+  // its bullet: a gold feather
+  const pad = (rows) => autoOutline(['.'.repeat(rows[0].length + 2)].concat(rows.map(r => '.' + r + '.'), ['.'.repeat(rows[0].length + 2)]));
+  def('eb_feather', pad(['.Yy.', 'YyOo', 'yOon', '.on.']));
+  def('ebb_feather', pad(['..Yy..', '.YyyO.', 'YyyOOo', 'yyOOon', '.yOon.', '..on..']));
+  alias('ebcb_feather', 'eb_feather'); alias('ebbcb_feather', 'ebb_feather');
+})();
+const VANE_R = 22; // the whirl throws its feathers from this far out: nearer is its shadow, and safe
+Object.assign(EDEF, {
+  vane: { hp: 320, r: 8, h: 26, hw: 8, hh: 5, sw: 20, fly: true, warden: true, intro: 'POINTS WHERE THE WIND BLOWS',
+    colors: ['o', 'O', 'r'],
+    init: (e) => { e.state = 'turn'; e.t = 1.6; e.n = 0; e.w = 0; e.k = 0; },
+    sprite: (e) => {
+      if (e.stag > 0) return S('vane_stag');
+      const f = { crow: 'tell', whirl: 'atk', blow: 'atk', hop: 'move' }[e.state];
+      return bossFrame(e, f || (e.state === 'aim' ? 'tell' : bob(e, 2, '0', '1')));
+    },
+    glint: (e) => (e.state === 'crow' ? [8, -30] : null),
+    under: (e, ox, oy) => {
+      // the whirl's shadow, where the feathers do not reach
+      if (e.state === 'crow' || e.state === 'whirl') {
+        const R = VANE_R - 4, r = ringSprite(R, Math.floor(e.anim * 8) % 2 ? 'd' : 'm'), x = Math.round(ox + e.x - R), y = Math.round(oy + e.y - Math.round(R * 0.6));
+        ctx.drawImage(ellipseSprite(r.width, r.height, SHADOW), x, y);
+        ctx.drawImage(r, x, y);
+      }
+      // the arrow at its foot shows where it points (e.w, an angle)
+      if (e.state === 'hop' || e.z > 2) return;
+      const c = Math.cos(e.w), s = Math.sin(e.w) * 0.6, x0 = ox + e.x, y0 = oy + e.y;
+      for (let d = 6; d <= 16; d++) rect(Math.round(x0 + c * d) - 1, Math.round(y0 + s * d) - 1, 3, 3, '0');
+      for (let d = 6; d <= 16; d++) rect(Math.round(x0 + c * d), Math.round(y0 + s * d), 1, 1, e.state === 'aim' || e.state === 'blow' ? 'y' : 'l');
+      rect(Math.round(x0 + c * 17) - 1, Math.round(y0 + s * 17) - 1, 3, 3, e.state === 'aim' ? 'P' : 'y');
+    } },
+});
+FOE_NAMES.vane = 'WEATHER VANE';
+// a lane of sparkles from the pole: a lane marker (the gust comes along it)
+const vaneLane = (e, a, t) => G.markers.push({ kind: 'lane', x: e.x, y: e.y - 8, a, t, max: t, len: 420 });
+AI.vane = function (e, dt, room, p) {
+  e.t -= dt;
+  if (e.hp < e.maxHp * 0.5) bossPhase(e, 2);
+  E_SRC = 'vane';
+  e.calm = e.state === 'whirl' || e.state === 'crow';
+  if (e.state === 'turn') {
+    // it ticks round an eighth at a time, creaking
+    if ((e.k -= dt) <= 0) { e.k = e.p2 ? 0.2 : 0.28; e.w = (Math.round(e.w / (Math.PI / 4)) + 1) * Math.PI / 4; Audio_.sfx('tick'); }
+    e.flip = Math.cos(e.w) < 0;
+    if (e.t <= 0) {
+      if (++e.n % 3 === 0) { e.state = 'crow'; e.t = 0.7; Audio_.sfx('crow'); }
+      else {
+        // it stops pointing at a hero
+        e.w = Math.atan2(p.y - e.y, p.x - e.x); e.flip = Math.cos(e.w) < 0;
+        e.state = 'aim'; e.t = 0.6; vaneLane(e, e.w, 0.6); if (e.p2) vaneLane(e, e.w + Math.PI, 0.6);
+        Audio_.sfx('tele');
+      }
+    }
+  } else if (e.state === 'aim') {
+    if (e.t <= 0) { e.state = 'blow'; e.t = 0.9; e.k = 0; Audio_.sfx('swish'); }
+  } else if (e.state === 'blow') {
+    // a widening wedge of feathers down the lane, puffs at a time: step aside
+    if ((e.k -= dt) <= 0) {
+      e.k = 0.15; e.n2 = -(e.n2 || 0.1); // puffs sway half a gap each time, so the wedge has no still-standing gaps
+      for (const a of e.p2 ? [e.w, e.w + Math.PI] : [e.w]) fan(e.x + Math.cos(a) * 12, e.y - 8 + Math.sin(a) * 8, a + e.n2, 4, 0.2, 88, 'feather');
+      Audio_.sfx('eshoot');
+      if (Math.random() < 0.5) burst(e.x, e.y - 20, 2, ['C', 'w'], 40, 0.3);
+    }
+    if (e.t <= 0) { e.state = 'turn'; e.t = grnd(1.3, 1.8); e.k = 0.3; }
+  } else if (e.state === 'crow') {
+    if (e.t <= 0) { e.state = 'whirl'; e.t = e.p2 ? 2.2 : 1.7; e.k = 0; hapticAll('roar'); }
+  } else if (e.state === 'whirl') {
+    // it spins, and the arms' tips throw feathers: a spiral (two arms in phase 2)
+    e.w += dt * 7; e.flip = Math.floor(e.anim * 10) % 2 === 1;
+    if ((e.k -= dt) <= 0) {
+      e.k = 0.1;
+      for (const a of e.p2 ? [e.w, e.w + Math.PI] : [e.w]) ebullet(e.x + Math.cos(a) * VANE_R, e.y - 6 + Math.sin(a) * VANE_R * 0.6, a, 70, 'feather');
+      Audio_.sfx('eshoot');
+    }
+    if (e.t <= 0) { stagger(e, 1.5); e.state = 'hop'; e.t = 0; e.calm = false; }
+  } else if (e.state === 'hop') {
+    // pick a spot away from the heroes and ring it, then hop there
+    if (!e.to) {
+      let best = null, bd = -1;
+      for (let i = 0; i < 12; i++) {
+        const x = grnd(56, VW - 56), y = grnd(OY + 60, OY + 172), d = Math.min(...G.players.filter(alive).map(q => Math.hypot(q.x - x, q.y - y)));
+        if (Math.hypot(x - e.x, y - e.y) > 60 && d > bd && !solidPx(room, x, y, 'enemy')) { best = [x, y]; bd = d; }
+      }
+      e.to = best || [e.x, e.y]; e.fx = e.x; e.fy = e.y; e.t = 0.9;
+      G.markers.push({ kind: 'zone', x: e.to[0], y: e.to[1] + 2, t: 0.9, max: 0.9 });
+    }
+    const u = 1 - Math.max(0, e.t) / 0.9;
+    e.x = e.fx + (e.to[0] - e.fx) * u; e.y = e.fy + (e.to[1] - e.fy) * u; e.z = Math.sin(u * Math.PI) * 30;
+    if (e.t <= 0) {
+      e.z = 0; e.to = null; dust(e.x, e.y, 6, 12); G.shake = Math.max(G.shake, 3); Audio_.sfx('clack');
+      for (const h of G.players) if (alive(h) && Math.hypot(h.x - e.x, (h.y - e.y) * 1.6) < 14) hurtPlayer(h, 1, 'vane');
+      e.state = 'turn'; e.t = grnd(1.2, 1.6); e.k = 0.3;
+    }
+  }
+};
+BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
+  { t: 'vane', spr: 'vane_0', lore: ['THE WARDEN OF THE CLOUD STEPS.', 'ITS ARROW SHOWS WHERE THE GUST WILL BLOW.', 'WHEN IT CROWS, STAND IN ITS SHADOW.'] });

@@ -89,6 +89,7 @@ const Audio_ = (() => {
     shield() { osc('triangle', 900, 1800, 0.2, 0.15); },
     scatter() { noise(0.06, 0.12, 2600, 'bandpass'); osc('p25', 1100, 700, 0.06, 0.07); },
     bubble() { const p = 1 + (Math.random() - 0.5) * 0.3; osc('triangle', 500 * p, 1100 * p, 0.05, 0.08); },
+    crow() { osc('square', 520, 1180, 0.16, 0.07); osc('square', 1180, 760, 0.34, 0.07, 0.16); osc('triangle', 260, 590, 0.16, 0.06); },
     swish() { noise(0.16, 0.1, 1200, 'bandpass', 0, 3200); },
     zap() { osc('square', 1600, 400, 0.07, 0.05); noise(0.05, 0.1, 5000, 'highpass'); },
     comet() { osc('p25', 300, 700, 0.14, 0.1); noise(0.12, 0.08, 900, 'lowpass'); },
@@ -164,6 +165,15 @@ const Audio_ = (() => {
         'D6 - B5 - G5 - B5 D6 C#6 - A5 - E5 - A5 C#6 A5 - F#5 - C#6 - A5 - B5 - D6 - F#6 - E6 D6 ' +
         'G6 - F#6 - E6 - D6 - E6 - D6 - C#6 - A5 - D6 - F#6 - A6 - F#6 - D6 - - - . . . .',
     },
+    // the Cloud Steps: F Lydian (the bright B natural over G), a harp with bells on the downbeats
+    cloud: {
+      bpm: 128, wave: 'triangle', drum: 'k . h . s . h .', bells: true,
+      chords: 'F G F G Am G F C F G Em Am Dm G F F',
+      lead: 'A5 - C6 - F6 - E6 C6 B5 - D6 - G6 - - - A5 C6 F6 C6 A5 - F5 - G5 B5 D6 B5 G5 - D5 - ' +
+        'E5 - A5 - C6 - B5 A5 B5 - D6 - B5 - G5 - A5 - F5 - C6 - A5 - G5 - E5 - C5 - . . ' +
+        'F5 A5 C6 E6 F6 - E6 - D6 B5 G5 B5 D6 - G6 - E6 - B5 - G5 - B5 - C6 - A5 - E5 - A5 C6 ' +
+        'D6 - F6 - A6 - F6 D6 B5 - G5 - D6 - B5 - C6 - A5 - F5 - A5 C6 F6 - - - . . . .',
+    },
     // the Star Well: slow and starry
     well: {
       bpm: 104, wave: 'p12', drum: 'k . . h s . h .',
@@ -222,6 +232,7 @@ const Audio_ = (() => {
         while (song.leadT[(i + len) % song.len] === '-' && len < 8) len++;
         const f = freq(n);
         osc(song.wave, f, f, dt * len * 0.95, 0.22, at, musBus);
+        if (song.bells && i % 8 === 0) { osc('sine', f * 2, f * 2, 0.8, 0.09, at, musBus); osc('triangle', f * 4, f * 4, 0.2, 0.025, at, musBus); }
       }
       const b = song.bassT[i % song.bassT.length];
       if (b !== '.') { const f = freq(b); osc('triangle', f, f, dt * 0.9, 0.5, at, musBus); }

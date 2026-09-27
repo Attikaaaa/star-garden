@@ -65,7 +65,7 @@ function updateEBullets(dt) {
       if (d >= b.r + 3) continue;
       // practice bullets (the tutorial) just pop
       if (b.soft) { if (p.dashT <= 0) { b.life = 0; burst(b.x, b.y, 4, ['C', 'w'], 40, 0.25); Audio_.sfx('pop'); } break; }
-      if (p.inv <= 0 || p.buff.guard > 0) { b.life = 0; hurtPlayer(p, 1, b.src); break; }
+      if (p.inv <= 0 || p.buff.guard > 0) { b.life = 0; if (!umbrellaBlock(p)) hurtPlayer(p, 1, b.src); break; }
     }
   }
 }
@@ -605,14 +605,16 @@ function updateMarkers(dt) {
     const k = m[i];
     k.t -= dt;
     if (k.kind === 'beam') for (const p of G.players) if (alive(p) && beamHit(k, p)) hurtPlayer(p, 1, 'geode');
-    if (k.kind === 'zap') for (const p of G.players) if (alive(p) && zapHit(k, p)) hurtPlayer(p, 1, 'stormwisp');
+    if (k.kind === 'zap') for (const p of G.players) if (alive(p) && zapHit(k, p)) hurtPlayer(p, 1, k.src || 'stormwisp');
     if (k.t <= 0 && k.kind === 'bolt') {
       // lightning strikes the whole tile, which stays charged for a while
       for (const p of G.players) if (alive(p) && zapHit(k, p)) hurtPlayer(p, 1, k.src || 'stormwisp');
-      burst(k.x, k.y - 2, 12, ['y', 'Y', 'w'], 100, 0.35, { g: 150 });
-      G.shake = Math.max(G.shake, 2); Audio_.sfx('boom');
-      m.push({ kind: 'zap', x: k.x, y: k.y, t: 3, max: 3 });
+      // a quiet bolt (q) is one of many struck at once: the caster makes the one big boom
+      burst(k.x, k.y - 2, k.q ? 3 : 12, ['y', 'Y', 'w'], 100, 0.35, { g: 150 });
+      if (!k.q) { G.shake = Math.max(G.shake, 2); Audio_.sfx('boom'); }
+      m.push({ kind: 'zap', x: k.x, y: k.y, t: k.zt || 3, max: k.zt || 3, src: k.src, q: k.q });
     }
+    if (k.kind === 'hbolt') thunderTick(k);
     if (k.t <= 0 && k.kind === 'web') {
       // the web snaps tight: it hurts along its line and hangs there as silk for a while
       for (const p of G.players) if (alive(p) && webHit(k, p)) hurtPlayer(p, 1, 'geode');
@@ -620,7 +622,7 @@ function updateMarkers(dt) {
     }
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan' }[k.src] || 'shard', grand());
+      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan', whale: 'rain' }[k.src] || 'shard', grand());
       burst(k.x, k.y - 4, 10, k.src === 'bomber' ? ['P', 'q', 'w'] : k.src === 'castle' ? ['a', 'A', 'e'] : ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
@@ -656,10 +658,17 @@ function drawMarkers(ox, oy) {
       for (let d = 8; d < len; d += 1) rect(Math.round(ox + k.x + c * d) - 1, Math.round(oy + k.y + s * d) - 1, 2, 2, 'w');
       continue;
     }
-    if (k.kind === 'zap') { drawZap(k, ox, oy); continue; }
+    if (k.kind === 'zap' || k.kind === 'hzap') { drawZap(k, ox, oy); continue; }
+    if (k.kind === 'hbolt') { if (Math.floor(k.t * 16) % 2) drawS(S('sparkle_0'), ox + k.x - 1, oy + k.y - 18); continue; }
+    if (k.kind === 'bolt' && k.q) {
+      // a storm tile: a pink frame round the whole tile, blinking faster as the strike nears
+      const x = Math.round(ox + k.x) - 7, y = Math.round(oy + k.y) - 7, c = Math.floor(k.t * (k.t < 0.5 ? 16 : 6)) % 2 ? 'P' : 'y';
+      rect(x, y, 14, 2, c); rect(x, y + 12, 14, 2, c); rect(x, y + 2, 2, 10, c); rect(x + 12, y + 2, 2, 10, c);
+      continue;
+    }
     if (k.kind === 'line') { if (Math.floor(k.t * 8) % 2) for (let i = 0; i < 20; i++) if (Math.abs(i - k.x) > 1) drawS(S('sparkle_c'), ox + 23 + i * 17, oy + k.y - 1); continue; }
-    const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
-    ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));
+    const rr = k.r || 10, r = ringSprite(rr, Math.floor(k.t * 10) % 2 ? 'P' : k.c || 'w');
+    ctx.drawImage(r, Math.round(ox + k.x - rr), Math.round(oy + k.y - Math.round(rr * 0.6)));
     if (k.kind || k.fall === '') continue;
     const fall = Math.min(1, k.t / 0.6), s = S(k.fall || 'rock_crystal');
     if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - fall * (k.h || 150)); }
@@ -671,7 +680,8 @@ function drawMarkers(ox, oy) {
 function drawZap(k, ox, oy) {
   const x = Math.round(ox + k.x), y = Math.round(oy + k.y), age = k.max - k.t;
   if (age < 0.14) {
-    for (let yy = y - 150, i = 0; yy < y; yy += 6, i++) {
+    // a storm of quiet bolts: only one in seven comes down from the sky, every tile flashes
+    if (!k.q || hash(k.x, k.y, 3) % 7 === 0) for (let yy = y - 150, i = 0; yy < y; yy += 6, i++) {
       const dx = (i * 7) % 5 - 2;
       rect(x + dx - 3, yy, 6, 7, '0'); rect(x + dx - 2, yy, 4, 7, 'y'); rect(x + dx - 1, yy, 2, 7, 'w');
     }
@@ -722,7 +732,7 @@ function drawEnemy(e, ox, oy) {
     }
     return;
   }
-  if (e.ghost && e.type !== 'mayor' && e.type !== 'geode' && Math.floor(e.anim * 20) % 2) return;
+  if (e.ghost && e.type !== 'mayor' && e.type !== 'geode' && e.type !== 'whale' && Math.floor(e.anim * 20) % 2) return;
   if (e.state === 'fade' && Math.floor(e.anim * 20) % 2) return;
   const s = enemySprite(e);
   const hover = e.fly || e.boss;

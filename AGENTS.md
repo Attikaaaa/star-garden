@@ -43,8 +43,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `ui.js` | HUD, minimap, banners, menus, settings, collection, pause, end screens, touch overlay |
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
 | `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`) and the campfire between acts |
-| `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock; each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
-| `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat |
+| `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock, the Cloud Steps' Puff Floor (sunstone, updraft hops); each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
+| `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat, Weather Vane |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
 | `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |
@@ -115,7 +115,7 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   silhouette in the given colour, `legend` recolours (slime variants, tinted shots).
 - Draw variants (last argument of `drawS`): 0 normal, 1 mirrored, 2 white flash,
   3 mirrored flash, 4 silhouette. Halos are drawn with `drawGlow`.
-- `defT(name, art)` bakes a tile per land as `name@meadow|beach|crystal`. Slot characters
+- `defT(name, art)` bakes a tile per land as `name@<theme>` for every `THEME_ORDER` entry. Slot characters
   are explained in `THEMES` in `palette.js`; in themed sprites `a b c e g h 1-9` are slots,
   not `PAL` colours.
 - Big round shapes: `sculpt(w, h, shapes)` (shaded ellipses / rounded rects with automatic
@@ -212,6 +212,11 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   prop so clients draw it from snapshots. Change tiles through `setTile`, and before carving
   or sinking a tile ask `keepsJoined(room, i, v)` so no floor is cut off. A bullet with
   `b.shard` (a Shard Sprite's) breaks into five small pieces on a prism instead of three.
+- **Cloud Steps (Puff Floor):** cloud a hero lingers on wobbles (`T_PUFF`) and puffs into sky
+  (`T_PIT`) for `HOLE_T` s; falling costs half a heart and sets the hero back on cloud.
+  Sunstone (`skyStone(room)`: layout `o`, door approaches, a few patches) never puffs; `u`
+  vents hop a hero over the sky (`p.hopT`). No puffing in cleared rooms, the arena, the
+  tutorial or during a boss's name card (`puffLive`). One Rainbow Slide room per floor.
 - **Warden:** one per land, in a spare dead end (`rooms.js` turns it into room type
   `warden`, laid out like a boss room). A warden is an ordinary enemy with `EDEF.warden`
   (the HUD bar finds it, knockback and sleep do not move it) and follows every boss rule

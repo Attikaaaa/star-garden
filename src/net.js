@@ -258,7 +258,7 @@ function hostMessage(L, m) {
     const p = G.players.find(q => q.pid === L.pid);
     if (p && p.remote) {
       if (m.b) for (const b of EBULLETS) if (b.nid === m.b) b.life = 0;
-      NET.netHit = true; hurtPlayer(p, 1); NET.netHit = false;
+      NET.netHit = true; if (!(m.b && umbrellaBlock(p))) hurtPlayer(p, 1); NET.netHit = false;
     }
   } else if (m.t === 'offer') hostOffer(L, m);
   else if (m.t === 'resync' && L.pid >= 0) hostResync(L, m);
@@ -466,7 +466,7 @@ function netHostTick(dt) {
     S: SHOTS.map(s => { const a = pack(s, SF); a.push(s.ps && s.own ? s.own.pid : -1); return a; }),
     B: liveBullets().map(b => pack(b, BF)),
     K: room.pickups.map(k => pack(k, KF)),
-    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall, m.len, m.h]),
+    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall, m.len, m.h, m.q, m.r, m.c]),
     H: G.hazards.map(h => [r1(h.x), r1(h.y), r1(h.life)]),
     T: G.turrets.map(t => [r1(t.x), r1(t.y), r1(t.life), r1(t.flash)]),
     L: BOLTS.map(b => [b.x0, b.y0, b.x1, b.y1, b.mx, b.my, b.t].map(r1)),
@@ -829,7 +829,7 @@ function clientSnap(m) {
     unpack(a, BF, b); b.spr = S(b.key); b.life = 1; b.t = 0;
   }
   G.room.pickups = m.K.map(a => unpack(a, KF, {}));
-  G.markers = m.M.map(([x, y, t, max, kind, a, fall, len, h]) => ({ x, y, t, max, kind, a, fall, len, h }));
+  G.markers = m.M.map(([x, y, t, max, kind, a, fall, len, h, q, r, c]) => ({ x, y, t, max, kind, a, fall, len, h, q, r, c }));
   G.hazards = m.H.map(([x, y, life]) => ({ x, y, life }));
   G.turrets = m.T.map(([x, y, life, flash]) => ({ x, y, life, flash }));
   BOLTS.length = 0;
@@ -1014,6 +1014,7 @@ function clientHits(me) {
   }
   if (!hit) return;
   sendR(NET.host, { t: 'hit', b: bullet });
+  if (bullet && me.umbOpen) { me.umbOpen = false; me.inv = 0.5; NET.safeUntil = now + 500; umbrellaFx(me); return; } // the host's umbrella rule
   me.inv = 1.1; NET.safeUntil = now + 1100; // the host gives the same moment of safety
   if (!me.shieldUp) { NET.localHitT = performance.now(); me.hurtT = 0.35; YOU_FX.hurt(); Audio_.sfx('hurt'); burst(me.x, me.y - 8, 10, ['R', 'r', 'w'], 80, 0.5); }
 }

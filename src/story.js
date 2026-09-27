@@ -16,6 +16,8 @@ const FROG_LINES = [
   { id: 'mayor', when: (r) => r.killer === 'mayor', text: 'WHEN THE GROUND BULGES, MOVE. HE POPS UP RIGHT THERE.' },
   { id: 'turtle', when: (r) => r.killer === 'turtle', text: 'WHEN THE HORN SOUNDS, FIND THE GAP OR HIDE BEHIND A ROCK.' },
   { id: 'geode', when: (r) => r.killer === 'geode', text: 'WHEN THE WEBS GLOW, GET OFF THE LINES. THEY SNAP TIGHT.' },
+  { id: 'ram', when: (r) => r.killer === 'ram', text: 'WHEN THE RAM STOPS, STEP AWAY FROM ITS HORNS.' },
+  { id: 'whale', when: (r) => r.killer === 'whale', text: 'WHEN THE WHALE CALLS THE STORM, FIND A GAP OR A SUNSTONE.' },
   { id: 'octo', when: (r) => r.killer === 'octo', text: 'WHEN THE OCTOPUS SINKS, GET READY TO MOVE.' },
   { id: 'cmoth', when: (r) => r.killer === 'cmoth', text: 'THAT MOTH SHEDS DUST. SHOOT IT BETWEEN THE CLOUDS.' },
   { id: 'nmoth', when: (r) => r.killer === 'nmoth', text: 'SO CLOSE TO THE SKY... TRY AGAIN, LITTLE WIZARD.' },

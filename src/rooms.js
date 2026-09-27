@@ -9,6 +9,8 @@ const SPECIALS = [['shrine', 3], ['altar', 2], ['fountain', 2], ['gamble', 2], [
 function addSpecialRooms(list, at, add, depth, land) {
   // the land's Warden waits in a spare dead end (never on a first run); with none spare it
   // gets a new one, grown off a room with an empty neighbour
+  // the Cloud Steps hold one Rainbow Slide per floor
+  if (land.id === 'cloud' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'slide'; }
   if (WARDENS[land.id] && !G.first) {
     let w = list.find(r => r.type === 'normal' && Object.keys(r.doors).length === 1 && r.dist >= 2);
     if (!w) {
@@ -72,6 +74,7 @@ function stockSpecial(room) {
     if (id) { addPedestal(room, 192, 132, id); room.props[room.props.length - 1].heart = 2; }
   } else if (t === 'fountain') room.props.push({ kind: 'fountain', x: 192, y: 126, t: 0, used: false });
   else if (t === 'gamble') room.props.push({ kind: 'gfrog', x: 192, y: 110, t: 0, plays: 0 });
+  else if (t === 'slide') slideStock(room);
   else if (t === 'rescue') { const [x, y] = freeSpot(room); room.props.push({ kind: 'cage', x, y, t: 0, open: false, critter: nextCritter() }); }
   else if (t === 'vault') {
     const ids = itemPool(Math.min(3, 1 + G.players.length));
@@ -85,7 +88,7 @@ function stockSpecial(room) {
 // The one item of a Moon Altar: a rare or epic one.
 function rareItem() {
   const owned = new Set([].concat(...G.players.map(p => p.items)));
-  const pool = Object.keys(ITEMS).filter(k => (ITEMS[k].rare || 0) >= 1 && !(ITEMS[k].unique && owned.has(k)) && (G.daily || Save.unl.items.includes(k)));
+  const pool = Object.keys(ITEMS).filter(k => (ITEMS[k].rare || 0) >= 1 && !(ITEMS[k].unique && owned.has(k)) && (ITEMS[k].land ? landItem(k) : G.daily || Save.unl.items.includes(k)));
   return pool.length ? gpick(pool) : itemPool(1)[0];
 }
 // Champion rooms: one elite with two affixes and a lot of health.
@@ -114,7 +117,7 @@ const CRITTERS = { chick: 'CHICK', hedgehog: 'HEDGEHOG', duck: 'DUCKLING' };
 function nextCritter() { const left = Object.keys(CRITTERS).filter(c => !Save.critters.includes(c)); return left.length ? gpick(left) : gpick(Object.keys(CRITTERS)); }
 
 // ---------- Talking to the special props ----------
-const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp']);
+const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp', 'slide']);
 // Returns true when the prop was one of ours.
 function roomInteract(o, p) {
   const room = G.room;
@@ -130,6 +133,7 @@ function roomInteract(o, p) {
     return true;
   }
   if (o.kind === 'camp') { restAtCamp(o, p); return true; }
+  if (o.kind === 'slide') { slideStart(o, p); return true; }
   if (o.kind === 'fountain') {
     if (o.used) { say(p, 'THE FOUNTAIN IS DRY'); Audio_.sfx('deny'); return true; }
     o.used = true;
@@ -181,6 +185,7 @@ function roomPropTip(o) {
   if (o.kind === 'camp') return ['A CAMPFIRE', o.used ? 'THE FIRE CRACKLES' : NET.role || couchOn() ? 'REST: EVERYONE HEALS' : 'REST: HEAL AND SAVE THE RUN', 'REST'];
   if (o.kind === 'fountain') return ['A FOUNTAIN', o.used ? 'THE FOUNTAIN IS DRY' : 'HEALS EVERYONE', 'DRINK'];
   if (o.kind === 'gfrog') return ['THE LUCKY FROG', o.plays >= 3 ? 'NO MORE GAMES TODAY!' : 'A GAME? 8 COINS!', 'PLAY'];
+  if (o.kind === 'slide') return ['A RAINBOW SLIDE', o.done ? 'WHAT A RIDE!' : 'RIDE IT AND GRAB THE COINS', 'RIDE'];
   if (o.kind === 'cage') return ['A CRITTER IN A CAGE!', G.room.cleared ? 'SET IT FREE' : 'DEFEAT THE GUARDS FIRST', 'OPEN'];
   return ['BIG STAR', 'RETURN A BIG STAR TO THE SKY', 'TAKE'];
 }
@@ -238,6 +243,12 @@ function drawRoomProp(o, ox, oy) {
       const k = (o.t * 0.7 + i / 3) % 1;
       rect(Math.round(x - 1 + Math.sin((o.t + i) * 3) * 3), Math.round(y - 20 - k * 26), 1, 1, k < 0.5 ? 'Y' : 'O');
     }
+    return true;
+  }
+  if (o.kind === 'slide') {
+    shadow(x, y, 16);
+    drawFeet(S('slide_arch'), x, y + 1);
+    if (!o.at && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 6, y - 16);
     return true;
   }
   if (o.kind === 'bigstar') {

@@ -36,7 +36,9 @@ function doorMark(o) {
 
 // ---------- Star scrolls ----------
 // Items the player has not unlocked and has no scroll for yet.
-function lockedItems() { return Object.keys(ITEMS).filter(id => !Save.unl.items.includes(id) && !Save.scrolls.includes(id)); }
+function lockedItems() { return Object.keys(ITEMS).filter(id => !ITEMS[id].land && !Save.unl.items.includes(id) && !Save.scrolls.includes(id)); }
+// A land's own items need no scroll: they turn up only in that land.
+function landItem(k) { return !!G.floor && G.floor.land.id === ITEMS[k].land; }
 const scrollsLeft = () => lockedItems().length;
 const LEARN_COST = [20, 40, 70];
 const learnCost = (id) => LEARN_COST[ITEMS[id].rare || 0];
@@ -76,7 +78,7 @@ function learnScroll(id) {
 function itemPool(n) {
   const owned = new Set([].concat(...G.players.map(p => p.items)));
   const unl = G.daily ? null : new Set(Save.unl.items);
-  const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)) && (!unl || unl.has(k)));
+  const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)) && (ITEMS[k].land ? landItem(k) : !unl || unl.has(k)));
   const out = [];
   while (out.length < n && pool.length) {
     const w = pool.map(k => RARE_W[ITEMS[k].rare || 0]), tot = w.reduce((a, b) => a + b, 0);

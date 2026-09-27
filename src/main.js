@@ -862,7 +862,7 @@ function renderWorld(ox, oy) {
 }
 
 const MM_ICON = { boss: 'mm_boss', item: 'mm_item', shop: 'mm_shop', challenge: 'mm_chal', shrine: 'mm_shrine', altar: 'mm_altar', fountain: 'mm_fount',
-  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock', warden: 'mm_warden' };
+  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock', warden: 'mm_warden', slide: 'mm_slide' };
 function drawEmblems(room, ox, oy) {
   for (const d in room.doors) {
     const t = room.doors[d].type;
@@ -938,7 +938,7 @@ function renderGame() {
 
 function render() {
   const s = G.state;
-  if (HUD.on) hctx.clearRect(0, 0, hudCv.width, hudCv.height);
+  if (HUD.on) { hctx.setTransform(1, 0, 0, 1, 0, 0); hctx.clearRect(0, 0, hudCv.width, hudCv.height); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (G.floor && (s === 'play' || s === 'pause' || s === 'fork' || s === 'over' || s === 'win' || (s === 'settings' && G.back !== 'title'))) drawBackdrop(G.floor.theme);
   else if (s === 'yard') drawBackdrop('meadow');

@@ -96,6 +96,7 @@ function buildRoom(room, land) {
   if (own && room.type === 'normal' && grand() < 0.35) layout = own[room.lay = gpick(Object.keys(own))];
   else if (FIGHT_ROOMS.has(room.type)) layout = gpick(LAYOUTS);
   else if (room.type === 'boss' || room.type === 'arena' || room.type === 'warden') layout = BOSS_LAYOUT;
+  else if (room.type === 'slide') layout = SLIDE_LAYOUT;
   if (layout) {
     room.flip = [grand() < 0.5, grand() < 0.5];
     stampLayout(t, layout, room.flip[0], room.flip[1], room.slots);
@@ -362,7 +363,7 @@ function renderRoomStatic(room, theme) {
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     if (room.tiles[r * COLS + c] !== T_PIT) continue;
     const x = c * 16, y = OY + r * 16;
-    blit(g, T('pit'), x, y);
+    if (theme === 'cloud') { const [k, v] = skyOf(room, c, r); blit(g, S(k), x, y, v); } else blit(g, T('pit'), x, y);
     const up = tileAt(room, c, r - 1) === T_PIT, dn = tileAt(room, c, r + 1) === T_PIT;
     const lf = tileAt(room, c - 1, r) === T_PIT, rt = tileAt(room, c + 1, r) === T_PIT;
     if (!up) { g.fillStyle = col('e'); g.fillRect(x, y, 16, 4); g.fillStyle = col('1'); g.fillRect(x, y, 16, 2); g.fillStyle = PAL['0']; g.fillRect(x, y, 16, 1); }
@@ -387,7 +388,7 @@ function doorKind(room, d) {
   const o = room.doors[d];
   if (room.type === 'boss' || o.type === 'boss') return 'b';
   if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion' || room.type === 'warden' || o.type === 'warden') return 'c';
-  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret'];
+  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret', 'slide'];
   if (T.includes(room.type) || T.includes(o.type)) return 't';
   return 'n';
 }

@@ -279,6 +279,83 @@
       def(t + '_pwalk' + k, geode({ face: 'mad', m: 1, leg: k, p: 1 }, open), o);
     }
   }
+
+  // ---------- Thunder Whale (Cloud Steps) ----------
+  // A round sky-blue whale swimming through the air, facing left: a pale grooved belly, the
+  // tail flukes up behind, and on its back a little cloud holding the Big Star. When it is
+  // angry the cloud turns to storm and the star to a lightning bolt.
+  const BOLT = '..00\n.0y0\n0yY0\n0000\n.0y0\n0y0.\n00..';
+  const STAR = '..0..\n.0y0.\n0yYy0\n.0y0.\n0.0.0';
+  const whale = (f) => {
+    const dy = f.d ? 4 : f.st ? 2 : f.b ? 1 : 0, fin = f.m || f.a ? 2 : 0, tail = f.tl ? -2 : f.m ? 3 : f.d || f.st ? 4 : 0;
+    const cl = f.p ? 'dmml' : 'mlLw';
+    let r = sculpt(40, 32, [
+      { e: [33, 14 + dy + tail / 2, 6, 4], ramp: 'bBBc' },
+      { e: [32.5, 8 + dy + tail, 3.5, 3], ramp: 'bBBc' }, { e: [37.5, 9 + dy + tail, 2.5, 3.5], ramp: 'bBBc' },
+      { e: [18, 16 + dy, 16.5, 11], ramp: 'bBcC', cut: 28 },
+      { e: [15, 22 + dy, 12, 5], ramp: 'mlLw', cut: 27 },
+      { e: [23, 25 + dy + fin, 5, 2.5], ramp: 'bBBc' },
+    ]);
+    // the cloud on its back; it thins away on the corpse
+    if (!f.d) r = sculpt(40, 32, [{ e: [14, 7 + dy, 4, 3], ramp: cl }, { e: [20, 5.5 + dy, 4.5, 3.8], ramp: cl }, { e: [26, 7.5 + dy, 3.5, 2.6], ramp: cl }])
+      .map((row, y) => row.split('').map((c, x) => (c === '.' || (r[y][x] !== '.' && c === '0' && y > 8 + dy) ? r[y][x] : c)).join(''));
+    r = rim(r, { B: '3', c: '4', L: 'l' });
+    if (!f.d) r = stamp(r, f.p ? 19 : 18, dy + (f.p ? 1 : 2), f.p ? BOLT : STAR);
+    // belly grooves
+    if (!f.d) r = stamp(r, 8, 24 + dy, '.l.l.l.l.l.l.l\n..l.l.l.l.l.l.');
+    // the spout before an attack
+    if (f.tl && !f.st) r = autoOutline(stamp(r, 6, 1, 'w.w.w\n.CwC.\n..c..\n..c..'));
+    const ey = 14 + dy;
+    r = bossEyes(r, 5, ey, 9, f.face);
+    r = stamp(r, 3, ey + 5, f.p ? 'rr' : 'qq');
+    r = stamp(r, 14, ey + 5, f.p ? 'rr' : 'qq');
+    return stamp(r, 8, ey + 6, f.a ? '.0000.\n0PqqP0\n.0000.' : f.face === 'calm' ? '0....0\n.0000.' : MOUTH[f.face]);
+  };
+  bossFrames('whale', whale, o);
+
+  // ---------- Storm Ram (Cloud Steps) ----------
+  // A fat cloud of a ram facing left: lavender wool puffs, a stone-blue face and big curled
+  // gold horns, which carry the storm. Angry, the wool turns to thundercloud and the horns spark.
+  const HORN = [
+    '.00000..',
+    '0YyyyO0.',
+    '0y000oO0',
+    '0O0yO0o0',
+    '0O00o0o0',
+    '.0O00oo0',
+    '..0oooO0',
+    '...0000.',
+  ].join('\n');
+  const ram = (f) => {
+    const dy = f.d ? 5 : f.st ? 2 : f.b ? 1 : 0, hd = f.tl || f.a ? 3 : f.d ? 1 : 0, hx = f.a ? -2 : 0;
+    const wool = f.p ? 'dmml' : 'mlLw', face = 'bBBc', nl = true;
+    // legs: a stride when it moves, tucked away on the corpse
+    const lg = f.d ? [] : f.m ? [[9, 0], [14, 2], [22, 2], [27, 0]] : f.a ? [[8, 1], [13, 0], [23, 0], [28, 1]] : [[10, 0], [15, 0], [22, 0], [27, 0]];
+    let r = sculpt(36, 32, lg.map(([x, k]) => ({ r: [x, 22 + dy - k, 4, 9 - dy + k - (f.st ? 1 : 0), 1], ramp: 'dmml', hi: false })));
+    const body = sculpt(36, 32, [
+      { e: [21, 17 + dy, 12, 8], ramp: wool },
+      { e: [15, 13 + dy, 5, 5], ramp: wool, noLine: nl }, { e: [21, 10 + dy, 5.5, 4.5], ramp: wool, noLine: nl }, { e: [28, 11 + dy, 5, 4.5], ramp: wool, noLine: nl },
+      { e: [32, 16 + dy, 3.5, 5], ramp: wool, noLine: nl }, { e: [27, 22 + dy, 6, 4], ramp: wool }, { e: [17, 22 + dy, 6, 4], ramp: wool },
+      { e: [9 + hx, 17 + dy + hd, 6.5, 7], ramp: face },
+    ]);
+    r = body.map((row, y) => row.split('').map((c, x) => (c === '.' ? r[y][x] : c)).join(''));
+    r = rim(r, { L: 'C', l: '4', m: '3', B: '3' });
+    // curls in the wool
+    const cu = f.p ? '.d\nd.' : '.l\nl.';
+    if (!f.d) for (const [x, y] of [[20, 9], [27, 10], [24, 15], [31, 15], [19, 20], [28, 21]]) r = stamp(r, x, y + dy, cu);
+    // a wool tuft on the brow
+    r = autoOutline(stamp(r, 6 + hx, 9 + dy + hd, f.p ? '.mm.\nmllm' : '.LL.\nLwwL'));
+    // the curled horn over the ear, the angry one crackling
+    r = stamp(r, 11 + hx, 8 + dy + hd, HORN);
+    if (f.p && !f.d) r = stamp(r, 17 + hx, 6 + dy + hd, 'Y.\n.y\ny.');
+    if (f.tl && !f.st) r = stamp(r, 13 + hx, 7 + dy + hd, 'w');
+    const ey = 15 + dy + hd;
+    r = bossEyes(r, 3 + hx, ey, 5, f.face);
+    r = stamp(r, 11 + hx, ey + 5, f.p ? 'r' : 'q');
+    // a soft nose and a mouth low on the long face
+    return stamp(r, 5 + hx, ey + 6, f.a ? '.00.\n0ww0\n.00.' : f.face === 'calm' ? '0..0\n.00.' : MOUTH[f.face]);
+  };
+  bossFrames('ram', ram, o);
 })();
 
 // The Star Well's rocks (dark stone with a star) and breakable star lanterns.
@@ -304,6 +381,8 @@
     clod: [['.hG.', 'aNNn', 'NNnn', '.nn.'], ['.h.G..', 'aNhNN.', 'aNNNNn', 'NNNnnn', 'NNnnnn', '.nnnn.']],
     foam: [['.wC.', 'wCTT', 'CTTt', '.Tt.'], ['.wwCC.', 'wwCCTT', 'wCCTTT', 'CCTTTt', 'CTTTtt', '.TTtt.']],
     geode: [['..w..', '.wCc.', 'wCcBB', '.cBB.', '..B..'], ['...w...', '..wCc..', '.wCCcB.', 'wCCPcBB', '.cCcBB.', '..cBB..', '...B...']],
+    rain: [['.w.', '.C.', 'wCc', 'CcB', '.B.'], ['..w..', '.wC..', '.CCc.', 'wCCcB', 'CCccB', '.cBB.']],
+    spark: [['.Yw.', 'YwYy', 'yYyo', '.yo.'], ['..Yw..', '.YwYy.', 'YwwYyo', 'yYYyoo', '.yyoo.', '..oo..']],
     nstar: [['..q..', 'qqwPP', '.qPp.', '.P.p.'], ['...q...', '..qqP..', 'qqqwPPp', '.qqPPp.', '..qPp..', '.qp.pp.', '.p...p.']],
   };
   for (const k in B) {

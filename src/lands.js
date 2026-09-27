@@ -347,6 +347,74 @@ const LAND_LAYOUTS = {
       .bbbbbbb......bbbbbbb.
       ......................`,
   },
+  cloud: {
+    // a ring of sunstone islands in a sea of puffing cloud: hop from stone to stone
+    stones: `......................
+      ..e................e..
+      ......oo......oo......
+      ...oo.oo......oo.oo...
+      ...oo............oo...
+      .........e..e.........
+      ...oo............oo...
+      ...oo.oo......oo.oo...
+      ..e...oo......oo...e..
+      ......................`,
+    // four rock sails turn round an updraft in the middle
+    pinwheel: `......................
+      ..e.......e......#.e..
+      .....#####.......#....
+      .................#....
+      .........oooo.........
+      .........ouuo.........
+      ....#....oooo.........
+      ....#.......#####.....
+      .e..#..............e..
+      ......................`,
+    // open sky splits the room: ride the updrafts over, or walk the long way round
+    hop: `......................
+      ..e.......e........e..
+      ......o~~~~~~~~~~o....
+      .....oo~~~~~~~~~~oo...
+      ..e..ou~~~oooo~~~uo.e.
+      .....ou~~~ouuo~~~uo...
+      .....oo~~~~~~~~~~oo...
+      ......o~~~~~~~~~~o....
+      ..e.......e........e..
+      ......................`,
+    // sunstone terraces in rows; the gusts sweep the cloud lanes between them
+    terrace: `......................
+      ..e.......e........e..
+      ..oooooo......oooooo..
+      ......................
+      .....oooooo..oooooo...
+      ......................
+      ..oooooo......oooooo..
+      ......................
+      ..e.......e........e..
+      ......................`,
+    // walls of packed cloud to break through; a sunstone heart in the middle
+    puffmaze: `......................
+      ..bbbbbbb....bbbbbbb..
+      ..b..e..........e..b..
+      ..b....bbb..bbb....b..
+      .......b.oooo.b.......
+      .......b.oooo.b.......
+      ..b....bbb..bbb....b..
+      ..b..e..........e..b..
+      ..bbbbbbb....bbbbbbb..
+      ......................`,
+    // one long sunstone runway under the kites; the cloud either side is the risky ground
+    runway: `......................
+      ..e.......e........e..
+      ......................
+      ......................
+      .oooooooooooooooooooo.
+      .oooooooooooooooooooo.
+      ......................
+      ......................
+      ..e.......e........e..
+      ......................`,
+  },
 };
 for (const l in LAND_LAYOUTS) for (const k in LAND_LAYOUTS[l]) LAND_LAYOUTS[l][k] = LAND_LAYOUTS[l][k].split('\n').map(r => r.trim());
 // what each room brings: its own foe mix (max: how many, plus one per extra hero; calm: no elites)
@@ -361,7 +429,12 @@ const LAY_RULE = {
   prisms: { pool: [['imp', 3], ['shroom', 2], ['wisp', 2], ['gemlet', 2]] },
   echo: { pool: [['bat', 3], ['imp', 2], ['wisp', 2], ['gmoth', 2]] },
   clock: { pool: [['gbeet', 2], ['slime', 2], ['gemlet', 2], ['bat', 2]] },
-  vein: { pool: [['gbeet', 3], ['spider', 2], ['mole', 2], ['slime', 1]] },
+  vein: { pool: [['gbeet', 3], ['spider', 2], ['mole', 2], ['slime', 1]] },  stones: { pool: [['sheep', 3], ['nimbus', 2], ['stormwisp', 2]] },
+  pinwheel: { pool: [['pigeon', 3], ['sheep', 2], ['stormwisp', 2]] },
+  hop: { pool: [['kiteray', 3], ['stormwisp', 2], ['pigeon', 2]] },
+  terrace: { pool: [['nimbus', 2], ['pigeon', 2], ['kiteray', 2], ['slime', 1]] },
+  puffmaze: { pool: [['sheep', 3], ['slime', 2], ['nimbus', 1]] },
+  runway: { pool: [['kiteray', 4], ['stormwisp', 1]], max: 5 },
 };
 // Bee Meadow: the patches form a ring round the rock (layout cells, mirrored with the room)
 const BEE_RING = [[7, 2], [8, 2], [13, 2], [14, 2], [6, 4], [6, 5], [15, 4], [15, 5], [7, 7], [8, 7], [13, 7], [14, 7]];
@@ -817,6 +890,79 @@ def('vent', `
   ................
   ................
   ................`);
+// the open sky under the clouds: mostly empty blue with a speck of haze, now and then the world
+// far below (a tiny patchwork of meadow, a pond, a cloud drifting under ours)
+const SKY = [`
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  ccccccccccCccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccCcccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc`, `
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  ccccccCCCCcccccc
+  cccccCHhhGCCcccc
+  ccccCHhhGyYGCccc
+  ccccChGGGyyGgCcc
+  cccccCGGhhGggCcc
+  ccccccCggGggCccc
+  cccccccCCCCCcccc
+  cccccccccccccccc
+  cccccccccccccccc
+  ccCccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc`, `
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccCcccc
+  ccccccccccCCCccc
+  cccccccccCHhGCcc
+  ccccccccCHhBGgCc
+  ccccccccCGGgggCc
+  cccccccccCCCCccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc`, `
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccCCCcccccccc
+  ccccCwwwCCcccccc
+  cccCwwwwwwCccccc
+  ccccCCCCCCcccccc
+  cccccccccccccccc
+  cccccccccccccccc
+  cccccccccccCcccc
+  cccccccccccccccc`];
+SKY.forEach((a, i) => def('sky_' + i, a, { flip: true }));
+// which sky a hole shows: fixed per cell, so it looks the same on every screen
+function skyOf(room, c, r) {
+  const h = hash(c, r, room.seed ^ 0x51c7), k = h % 20;
+  return ['sky_' + (k === 0 ? 1 : k === 1 ? 2 : k < 5 ? 3 : 0), (h >>> 8) & 1];
+}
 // sprite copies with only part of their pixels (a 4x4 ordered dither), for clouds that thin out
 // and grow back: level 0..16 pixels of every 16
 const _dith = new Map();
@@ -840,7 +986,7 @@ const cellAt = (x, y) => Math.floor((y - 1 - OY) / 16) * COLS + Math.floor(x / 1
 // itself (clients never build rooms: they get their tiles from the host)
 function skyStone(room) {
   if (room.stone !== undefined) return room.stone;
-  if (room.type === 'arena') return (room.stone = null);
+  if (room.type === 'arena' || room.type === 'slide') return (room.stone = null);
   const st = new Uint8Array(COLS * ROWS), put = (c, r, v) => { if (c > 0 && c < COLS - 1 && r > 1 && r < ROWS - 1) st[r * COLS + c] = v; };
   const APPROACH = { u: [10, 2, 4, 2], d: [10, 10, 4, 2], l: [1, 5, 2, 4], r: [21, 5, 2, 4] };
   for (const d in room.doors) if (!hiddenDoor(room, d)) { const [c0, r0, w, h] = APPROACH[d]; for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) put(c, r, 1); }
@@ -884,10 +1030,12 @@ function puffAt(room, i) {
   setTile(room, i % COLS, (i / COLS) | 0, T_PUFF);
   return true;
 }
-const puffLive = room => !room.cleared && !G.tut && !G.first && !!skyStone(room);
+// not while a boss's name card holds everyone still
+const puffLive = room => !room.cleared && !G.tut && !G.first && !G.cine && !!skyStone(room);
 LAND_MECH.cloud = {
   // host / solo: lingering heroes weigh clouds down; wobbling clouds puff, holes fill back in
   update(dt, room) {
+    if (room.type === 'slide') { slideUpdate(room); return; }
     const P = room.puff || (room.puff = new Map());
     // now and then a Balloon Bandit drifts in while the fight is on (never into an empty purse)
     if (room.bandit === undefined) room.bandit = room.type === 'normal' && !room.cleared && !G.first && grand() < 0.25 ? grnd(3, 6) : 0;
@@ -907,7 +1055,7 @@ LAND_MECH.cloud = {
       if (room.tiles[i] !== T_FLOOR || room.stone[i]) continue;
       let q = P.get(i);
       if (!q) P.set(i, q = { s: 0, t: 0, l: 0, k: 0 });
-      q.k = Math.max(q.k, p.feather ? 0.5 : 1);
+      q.k = Math.max(q.k, p.fboots ? 0.5 : 1);
     }
     for (const [i, q] of P) {
       const c = i % COLS, r = (i / COLS) | 0;
@@ -942,6 +1090,7 @@ LAND_MECH.cloud = {
   },
   // every screen, for the heroes it controls: updraft hops and drops through the sky
   every(dt, room) {
+    if (room.type === 'slide') { slideEvery(dt, room); return; }
     const st = skyStone(room);
     for (const p of G.players) {
       if (NET.role === 'client' ? p !== G.player : p.remote) continue;
@@ -949,7 +1098,7 @@ LAND_MECH.cloud = {
       if (!alive(p) || p.hopT > 0) continue;
       const i = cellAt(p.x, p.y);
       if (st && st[i] === 2 && p.moving && !p.hopCd && p.dashT <= 0) {
-        p.hopT = HOP_T; p.hopHang = 0; p.hopVx = p.dx * HOP_V; p.hopVy = p.dy * HOP_V;
+        p.hopT = HOP_T; p.hopHang = 0; p.hopCd = HOP_T + 0.35; p.hopVx = p.dx * HOP_V; p.hopVy = p.dy * HOP_V; // the cooldown: landing on a vent does not bounce straight on
         burst(p.x, p.y - 2, 8, CLOUD_BURST, 50, 0.4, { g: -40 });
         Audio_.sfx('swish');
         if (p === G.player && !Save.flags.hopTip) { Save.flags.hopTip = true; Save.write(); toast('UPDRAFT! IT HOPS YOU OVER THE SKY'); }
@@ -980,6 +1129,7 @@ LAND_MECH.cloud = {
   },
   // on the floor: a wobbling cloud thins until the sky shows through; a hole grows back in
   drawLayer(ox, oy, room, layer) {
+    if (room.type === 'slide') slideDraw(ox, oy, room, layer);
     if (layer || !room.tAt) return;
     for (const [i, at] of room.tAt) {
       const t = room.tiles[i], u = G.time - at, c = i % COLS, r = (i / COLS) | 0;
@@ -987,7 +1137,7 @@ LAND_MECH.cloud = {
       if (t === T_PUFF) {
         const lvl = Math.min(12, 2 + Math.floor(u / PUFF_WOB * 12));
         const j = u > PUFF_WOB * 0.6 && Math.floor(G.time * 20) % 2 ? 1 : 0; // a late shiver
-        ctx.drawImage(dithered('pit@cloud', 0, lvl), x + j, y);
+        { const [k, v] = skyOf(room, c, r); ctx.drawImage(dithered(k, v, lvl), x + j, y); }
       } else if (t === T_PIT && u > HOLE_T - 0.6 && u < HOLE_T + 1) {
         const [k, v] = cloudOf(room, c, r);
         ctx.drawImage(dithered(k, v, Math.min(15, Math.floor((u - HOLE_T + 0.6) / 0.6 * 16))), x, y);
@@ -995,3 +1145,179 @@ LAND_MECH.cloud = {
     }
   },
 };
+
+// ---------- Cloud Steps items ----------
+// Found only on the Cloud Steps (itemPool reads `land`).
+Object.assign(ITEMS, {
+  fboots: { name: 'FEATHER BOOTS', desc: 'CLOUDS HOLD YOU TWICE AS LONG', land: 'cloud', unique: true, apply: p => { p.fboots = true; } },
+  umbrella: { name: 'UMBRELLA', desc: 'BLOCKS THE FIRST BULLET IN EVERY ROOM', land: 'cloud', unique: true, apply: p => { p.umbrella = true; p.umbOpen = true; } },
+  thunder: { name: 'THUNDER CHARM', desc: 'A KILL CALLS LIGHTNING ON A FOE', land: 'cloud', rare: 1, unique: true, apply: p => { p.thunder = true; } },
+});
+// the small open umbrella over its holder's head
+def('umb_open', autoOutline(parseArt('umb_open', `
+  .....y.....
+  ...qwqPP...
+  .qqwqqPPPp.
+  qqqqqqqPPpp
+  .....n.....
+  .....n.....
+  ....n......`)));
+
+function umbrellaFx(p) {
+  burst(p.x, p.y - 22, 10, ['q', 'P', 'w'], 70, 0.4);
+  Audio_.sfx('pop');
+}
+// The umbrella takes a bullet instead of its hero (once per room). A remote hero's hits are
+// judged on their own screen, so the host only folds it for a reported hit.
+function umbrellaBlock(p) {
+  if (!p.umbOpen || NET.role === 'host' && p.remote && !NET.netHit) return false;
+  p.umbOpen = false; p.inv = Math.max(p.inv, 0.5);
+  umbrellaFx(p);
+  return true;
+}
+
+// THUNDER CHARM: a kill marks the nearest other foe, and lightning strikes it 0.45 s later.
+// A thunder kill does not call more thunder.
+let THUNDER_NOW = false;
+function thunderCall(dead, own) {
+  if (THUNDER_NOW) return;
+  let tgt = null, bd = 1e9;
+  for (const e of G.enemies) {
+    if (e === dead || e.hp <= 0 || e.dead) continue;
+    const d = Math.hypot(e.x - dead.x, e.y - dead.y);
+    if (d < bd) { bd = d; tgt = e; }
+  }
+  if (tgt) G.markers.push({ kind: 'hbolt', x: tgt.x, y: tgt.y, t: 0.45, max: 0.45, tgt, own });
+}
+function thunderTick(k) {
+  const e = k.tgt;
+  if (!e) return; // a client's copy only blinks
+  if (e.hp > 0 && !e.dead) { k.x = e.x; k.y = e.y; }
+  if (k.t > 0) return;
+  if (e.hp > 0 && !e.dead) {
+    THUNDER_NOW = true;
+    hurtEnemy(e, Math.max(3, k.own.dmg * 2), e.x, e.y - 6, true, k.own);
+    THUNDER_NOW = false;
+  }
+  G.markers.push({ kind: 'hzap', x: k.x, y: k.y, t: 0.14, max: 0.14 });
+  Audio_.sfx('zap');
+}
+
+// ---------- Cloud Steps: the Rainbow Slide ----------
+// A special room (type 'slide'): touch the arch and a rainbow carries the team east. Heroes
+// only steer up and down; coins and star bits rush past and a chest rides in at the end.
+// The ride runs on the host clock (skyNow), so every screen draws the same thing.
+const SLIDE_LAYOUT = [
+  '~~~~~~~~~~..~~~~~~~~~~',
+  '~~~~~~~~~~..~~~~~~~~~~',
+  '~~~~~~~~~~..~~~~~~~~~~',
+  '......................',
+  '......................',
+  '......................',
+  '......................',
+  '~~~~~~~~~~..~~~~~~~~~~',
+  '~~~~~~~~~~..~~~~~~~~~~',
+  '~~~~~~~~~~..~~~~~~~~~~',
+];
+const SLIDE_Y0 = OY + 80, SLIDE_Y1 = OY + 144, SLIDE_MID = (SLIDE_Y0 + SLIDE_Y1) >> 1;
+const RIDE_X = 88, SLIDE_V = 130, SLIDE_N = 30, SLIDE_GAP = 0.36, SLIDE_WAIT = 0.8;
+const CHEST_X = RIDE_X + 48, CHEST_T = SLIDE_WAIT + SLIDE_N * SLIDE_GAP + 0.6;
+const SLIDE_END = CHEST_T + (VW + 16 - CHEST_X) / SLIDE_V + 0.3;
+const RIB = [['r', 'R'], ['o', 'O'], ['y', 'Y'], ['G', 'h'], ['c', 'C'], ['B', 'c'], ['2', '3']]; // stripe, its lit top row
+LA('slide_arch', `
+  ....rrrrrrrrr....
+  ..rrRRRRRRRRRrr..
+  .rRRoooooooooRRr.
+  .rRooyyyyyyyyooRr
+  rRooyGGGGGGGGyooR
+  rRoyGGhhhhhhGGyoR
+  rRoyGh......hGyoR
+  rRoyGh......hGyoR
+  rRoyGh......hGyoR
+  rRoyGh......hGyoR
+  wwwwww......wwwww
+  CwwwwC......Cwwww`);
+def('mm_slide', '.000.\n0rrr0\n0y0y0\n0c0c0\n00.00');
+
+// item i: when it sets off, its height and kind; runs of six share a pattern
+function slideItem(room, i) {
+  const h = hash(Math.floor(i / 6), 7, room.seed), pat = h % 3;
+  let y = pat === 0 ? SLIDE_MID + Math.sin(i * 0.9 + (h >> 4)) * 20 : pat === 1 ? SLIDE_MID + ((h >> 4) % 3 - 1) * 18 : SLIDE_MID + (i % 2 * 2 - 1) * 16;
+  const star = i % 6 === 5 && (h >> 8) % 2 === 0;
+  if (star) y = 2 * SLIDE_MID - y; // on the far side: a choice
+  return [SLIDE_WAIT + i * SLIDE_GAP, Math.round(y), star];
+}
+const slideX = t0 => VW + 8 - t0 * SLIDE_V;
+const slideOf = room => room.type === 'slide' ? room.props.find(o => o.kind === 'slide') : null;
+const slideSig = o => { o.sig = o.at + o.got + (o.done ? '!' : ''); };
+function slideStock(room) { const o = { kind: 'slide', x: 40, y: SLIDE_Y0 + 11, t: 0, at: 0, got: '0'.repeat(SLIDE_N), done: false }; slideSig(o); room.props.push(o); }
+// host / solo: the arch was touched
+function slideStart(o, p) {
+  if (o.at) { say(p, o.done ? 'WHAT A RIDE!' : 'WHEEE!'); return; }
+  o.at = skyNow() + SLIDE_WAIT; slideSig(o);
+  G.players.forEach((q, i) => { if (!q.dead) { q.x = RIDE_X; q.y = SLIDE_MID + (i - (G.players.length - 1) / 2) * 12; q.dashT = 0; q.face = 's'; q.flip = false; q.tpN++; } });
+  toast('STEER UP AND DOWN!');
+  Audio_.sfx('swish');
+}
+// host / solo: pick up what the heroes touch, and land the chest
+function slideUpdate(room) {
+  const o = slideOf(room);
+  if (!o || !o.at || o.done) return;
+  const u = skyNow() - o.at;
+  for (let i = 0; i < SLIDE_N; i++) {
+    if (o.got[i] === '1') continue;
+    const [t0, y, star] = slideItem(room, i), x = slideX(u - t0);
+    if (x > RIDE_X + 12 || x < RIDE_X - 12) continue;
+    const p = G.players.find(q => alive(q) && Math.abs(q.x - x) < 10 && Math.abs(q.y - 3 - y) < 11);
+    if (!p) continue;
+    o.got = o.got.slice(0, i) + '1' + o.got.slice(i + 1); slideSig(o);
+    if (star) { addCharge(p, 0.34); Audio_.sfx('graze'); } else { gainCoins(1); Audio_.sfx('coin'); }
+    burst(x, y - 5, 6, star ? ['Y', 'y', 'w'] : ['y', 'O', 'w'], 60, 0.35, { g: -30 });
+  }
+  if (u < SLIDE_END) return;
+  o.done = true; slideSig(o);
+  room.props.push({ kind: 'chest', x: CHEST_X, y: SLIDE_MID + 8, t: 0, open: false });
+  dust(CHEST_X, SLIDE_MID + 8, 6, 10);
+  Audio_.sfx('land');
+}
+// every screen, for its own heroes: held on the ribbon while it runs; speed lines
+function slideEvery(dt, room) {
+  const o = slideOf(room);
+  if (!o || !o.at || o.done) return;
+  const u = skyNow() - o.at;
+  if (u > SLIDE_END) return;
+  for (const p of G.players) {
+    if ((NET.role === 'client' ? p !== G.player : p.remote) || !alive(p)) continue;
+    p.x = RIDE_X; p.y = Math.max(SLIDE_Y0 + 10, Math.min(SLIDE_Y1 - 3, p.y)); p.face = 's'; p.flip = false;
+    if (u > 0 && Math.random() < 0.3) part(p.x - 6, p.y - rnd(0, 4), -rnd(60, 90), rnd(-8, 8), 0.4, RIB[Math.floor(Math.random() * 7)][1], { drag: 0.98 });
+  }
+  if (u > 0 && u < CHEST_T + 1 && Math.random() < 0.7) part(VW - 16, rnd(SLIDE_Y0 + 4, SLIDE_Y1 - 4), -rnd(260, 320), 0, 1.4, 'w', { drag: 1 });
+}
+// layer 0: the ribbon, its dashes running at the ride's speed; layer 1: coins, star bits, the chest
+function slideDraw(ox, oy, room, layer) {
+  const o = slideOf(room);
+  if (!o) return;
+  const u = o.at ? skyNow() - o.at : -1, run = u > 0 && u < SLIDE_END;
+  if (layer === 0) {
+    const s = G.time * 12 + (o.at ? Math.max(0, Math.min(u, SLIDE_END)) * SLIDE_V : 0);
+    rect(ox + 16, oy + SLIDE_Y0 - 1, VW - 32, 1, '0');
+    RIB.forEach(([c, l], k) => {
+      const y = oy + SLIDE_Y0 + k * 9;
+      rect(ox + 16, y, VW - 32, 9, c);
+      rect(ox + 16, y, VW - 32, 1, l);
+      for (let x = 16 + (((k * 11 - s) % 32) + 32) % 32; x < VW - 22; x += 32) rect(ox + x, y + 4, run ? 8 : 4, 1, l);
+    });
+    rect(ox + 16, oy + SLIDE_Y1 - 1, VW - 32, 1, '0');
+    return;
+  }
+  if (layer !== 1 || !o.at || o.done) return;
+  const f = Math.floor(G.time * 8) % 4;
+  for (let i = 0; i < SLIDE_N; i++) {
+    if (o.got[i] === '1') continue;
+    const [t0, y, star] = slideItem(room, i), x = Math.round(slideX(u - t0));
+    if (x < -8 || x > VW + 8) continue;
+    const sp = S(star ? 'starbit' : COIN_FR[f]);
+    drawS(sp, ox + x - (sp.w >> 1), oy + y - sp.h, !star && f === 3 ? 1 : 0);
+  }
+  if (u > CHEST_T) { const x = Math.max(CHEST_X, VW + 16 - (u - CHEST_T) * SLIDE_V); shadow(ox + x, oy + SLIDE_MID + 8, 12); drawFeet(S('chest_0'), ox + x, oy + SLIDE_MID + 9); }
+}

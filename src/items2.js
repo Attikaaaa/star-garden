@@ -229,6 +229,7 @@ function drawEnemyStatus(e, ox, oy) {
 // ---------- Rooms ----------
 // SLEEPY BELL: a room's foes start asleep.
 function itemRoomStart() {
+  for (const p of G.players) if (p.umbrella) p.umbOpen = true; // UMBRELLA opens again
   if (!teamHas('bell')) return;
   for (const e of G.enemies) if (!e.boss) e.sleepT = 1.6 + grand() * 0.6;
 }

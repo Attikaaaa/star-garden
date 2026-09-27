@@ -3,7 +3,8 @@
 //
 //   node tools/dev.mjs layouts              every room layout: size, characters, open door lanes,
 //                                           doors and enemy slots reachable (BFS), sealed pockets
-//   node tools/dev.mjs sheet [regex] [zoom] contact sheet of the sprites whose name matches, 3x by default,
+//   node tools/dev.mjs sheet [regex] [zoom] [all] contact sheet of the sprites whose name matches, 3x by default
+//                                           (all: every frame, not one per sprite family),
 //                                           written to /tmp/star-garden/sheet.png
 //   node tools/dev.mjs bot [land] [floors]  an invulnerable bot clears every room of a run (from
 //                                           the given land, or the default road), then reports
@@ -90,7 +91,7 @@ function checkLayout(L) {
   if (L.length !== 10) return ['has ' + L.length + ' rows, expected 10'];
   L.forEach((r, y) => {
     if (r.length !== 22) bad.push('row ' + y + ' has ' + r.length + ' chars');
-    const u = r.replace(/[.#b~epsg]/g, '');
+    const u = r.replace(/[.#b~epsgou]/g, '');
     if (u) bad.push('row ' + y + ' has unknown "' + u + '"');
   });
   if (bad.length) return bad;
@@ -103,20 +104,21 @@ function checkLayout(L) {
     seen[10] = 1;
     while (q.length) {
       const [x, y] = q.pop();
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = x + dx, ny = y + dy;
+      // an updraft vent ('u') hops a hero up to 4 tiles on, over the sky
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let k = 1; k <= (at(x, y) === 'u' ? 4 : 1); k++) {
+        const nx = x + dx * k, ny = y + dy * k;
         if (nx < 0 || ny < 0 || nx > 21 || ny > 9 || seen[ny * 22 + nx] || !pass.includes(at(nx, ny))) continue;
         seen[ny * 22 + nx] = 1; q.push([nx, ny]);
       }
     }
     return seen;
   };
-  const walk = flood('.e'), dig = flood('.ebg');
+  const walk = flood('.eou'), dig = flood('.eoubg');
   for (const [d, cells] of Object.entries(lanes)) for (const [x, y] of cells) if (!walk[y * 22 + x]) bad.push(d + ' door unreachable');
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
     const c = at(x, y), i = y * 22 + x;
     if (c === 'e' && !walk[i]) bad.push('enemy slot ' + x + ',' + y + (dig[i] ? ' only reachable by breaking' : ' sealed off'));
-    if (c === '.' && !dig[i]) bad.push('sealed floor pocket at ' + x + ',' + y);
+    if ('.ou'.includes(c) && !dig[i]) bad.push('sealed floor pocket at ' + x + ',' + y);
   }
   return bad;
 }
@@ -146,12 +148,12 @@ async function layouts() {
 }
 
 // ---------- sheet ----------
-async function sheet(re = '.', zoom = 3) {
+async function sheet(re = '.', zoom = 3, all = false) {
   const b = await open();
   try {
     const url = await b.ev(`(() => {
       const re = new RegExp(${JSON.stringify(re)}), seen = new Set(), names = Object.keys(SPR).filter(n => re.test(n)).sort()
-        .filter(n => { const k = n.replace(/#\\d+$/, '').replace(/_[dus]\\d[a-z]?$/, '').replace(/(_p?(\\d+|move|tell|atk|stag|die))+$|@(beach|crystal)$/, ''); return !seen.has(k) && seen.add(k); });
+        .filter(n => { if (${all}) return true; const k = n.replace(/#\\d+$/, '').replace(/_[dus]\\d[a-z]?$/, '').replace(/(_p?(\\d+|move|tell|atk|stag|die))+$|@(beach|crystal)$/, ''); return !seen.has(k) && seen.add(k); });
       const Z = ${zoom}, pad = 6, lab = 10, W = ${zoom > 3 ? 4000 : 1200};
       let x = pad, y = pad, rowH = 0; const at = [];
       for (const n of names) {
@@ -256,7 +258,7 @@ async function room(land, js = '', ms = 1500, type = 'normal') {
       for (const p of G.players) p.inv = 99;
       return 1; })()`);
     await sleep(800);
-    if (js) await b.ev(js);
+    if (js) { const v = await b.ev(js); if (v !== 1 && v !== undefined) console.log(v); }
     await sleep(ms);
     console.log(await b.shot('room_' + land + '.png'));
   } finally {
@@ -268,7 +270,7 @@ async function room(land, js = '', ms = 1500, type = 'normal') {
 
 const [cmdName, ...args] = process.argv.slice(2);
 if (cmdName === 'layouts') await layouts();
-else if (cmdName === 'sheet') await sheet(args[0], +args[1] || 3);
+else if (cmdName === 'sheet') await sheet(args[0], +args[1] || 3, args[2] === 'all');
 else if (cmdName === 'bot') await bot(args[0] && args[0] !== '-' ? args[0] : null, +args[1] || 3);
 else if (cmdName === 'room') await room(args[0] || 'meadow', args[1], +args[2] || 1500, args[3]);
 else console.log('usage: node tools/dev.mjs layouts | sheet [regex] | bot [land] [floors] | room [land] [js] [ms] [type]');

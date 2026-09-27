@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.8.0', lines: ['A NEW LAND ON THE STAR ROAD: THE CLOUD STEPS', 'HOP FROM SUNSTONE TO SUNSTONE BEFORE THE CLOUDS PUFF AWAY', 'TWO NEW BOSSES IN THE SKY: THE THUNDER WHALE AND THE STORM RAM'] },
   { v: '1.7.0', lines: ['THE STAR CASINO OPENS: FIND IT ON THE TITLE SCREEN', 'SLOTS, BLACKJACK, POKER, ROULETTE, SIC BO AND SCRATCH CARDS', 'PLAY FOR STAR CHIPS, NEVER FOR REAL MONEY'] },
   { v: '1.6.0', lines: ['A NEW BOSS IN THE CRYSTAL CAVE: THE GEODE SPIDER'] },
   { v: '1.5.1', lines: ['CO-OP: RUNS ARE SAVED, CONTINUE THEM FROM THE LOBBY', 'CO-OP: THE HOST CAN GO BACK TO THE LOBBY FROM THE PAUSE MENU'] },

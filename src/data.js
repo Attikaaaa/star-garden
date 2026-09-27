@@ -34,7 +34,7 @@ const LANDS = [
   { id: 'crystal', theme: 'crystal', song: 'crystal', rooms: 11, slime: 'pink', boss: 'golem', bossName: 'CRYSTAL GOLEM',
     rule: 'PRISM PILLARS', hint: 'PRISMS SPLIT EVERY SHOT', danger: 2,
     pool: [['slime', 2], ['bat', 3], ['shroom', 2], ['wisp', 3], ['crab', 1]] },
-  { id: 'cloud', wip: true, theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
+  { id: 'cloud', theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
     rule: 'PUFF FLOOR', hint: 'CLOUDS PUFF UNDER YOUR FEET', danger: 2,
     pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
 ];

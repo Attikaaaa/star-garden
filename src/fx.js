@@ -111,7 +111,7 @@ function drawAmbient(ox, oy) {
 
 // ---------- Moving water / twinkling void in pits ----------
 function drawPitLife(room, theme, ox, oy) {
-  if (!room.pits) return;
+  if (!room.pits || theme === 'cloud') return; // the open sky is still
   const crystal = theme === 'crystal' || theme === 'well', key = crystal ? 'Y' : THEMES[theme].h;
   for (const [x, y, h] of room.pits) {
     if (crystal) {

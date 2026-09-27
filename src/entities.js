@@ -372,6 +372,7 @@ function drawPlayer(p, ox, oy) {
     const r = ringSprite(11, Math.floor(G.time * 6) % 2 ? 'c' : 'C');
     ctx.drawImage(r, Math.round(ox + p.x - 11), Math.round(oy + p.y - 20));
   }
+  if (p.umbOpen && !p.down) drawS(S('umb_open'), ox + p.x - 6, oy + p.y - 27 - (p.leapZ || 0)); // held just over the hat
   drawBuddies(p, ox, oy);
 }
 // Co-op: every hero's name over their head, in their robe colour.
@@ -1024,6 +1025,7 @@ function drawHazards(ox, oy) {
 // ---------- Combo: quick successive kills pay out coins ----------
 const COMBO_T = 2.4;
 function onKill(e, own) {
+  if (own && own.thunder) thunderCall(e, own);
   const c = G.combo;
   c.n++; c.t = COMBO_T;
   addCharge(own, e.elite ? 0.22 : 0.1);

@@ -23,11 +23,17 @@ Object.assign(EDEF, {
       : S(geodeSet(e) + (e.p2 ? '_pwalk' : '_walk') + (Math.floor(e.anim * GEODE_WALK[e.state]) % 4))),
     glint: (e) => (e.state === 'walk' && e.n > geodeGap(e) - 0.45 ? [0, -28] : null),
     under: (e, ox, oy) => EDEF.spider.under(e, ox, oy) },
+  whale: { hp: 560, r: 16, h: 24, hw: 16, hh: 8, sw: 44, boss: true, fly: true, intro: 'CALLS THE STORM', phases: [0.66, 0.33], colors: ['B', 'c', 'y'],
+    sprite: (e) => bossFrame(e, { rise: 'tell', aloft: 'move', storm: 'tell' }[e.state] || bob(e, 3, 1, 0)),
+    glint: (e) => (e.state === 'swim' && e.n > whaleGap(e) - 0.45 ? [e.flip ? 12 : -12, -30] : null) },
+  ram: { hp: 540, r: 14, h: 24, hw: 14, hh: 7, sw: 38, boss: true, intro: 'CHARGES THE STORM', phases: [0.66, 0.33], colors: ['m', 'L', 'y'],
+    sprite: (e) => bossFrame(e, { aim: 'tell', charge: 'atk', skid: 'atk', walk: bob(e, 6, 'move', 0) }[e.state] || bob(e, 2, 1, 0)),
+    glint: (e) => (e.state === 'walk' && e.n > ramGap(e) - 0.45 && e.t > 0.9 ? [e.flip ? 3 : -3, -22] : null) },
   hill: { hp: 10, r: 7, h: 11, hw: 7, hh: 4, sw: 18, still: true, colors: ['N', 'n', 'h'], sprite: (e) => S(e.state === 'aim' ? 'mhill_1' : 'mhill_0'),
     glint: (e) => (e.state === 'aim' ? [0, -10] : null) },
 });
-Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE', geode: 'GEODE SPIDER' });
-LAND.meadow.alt = ['queen', 'mayor']; LAND.shore.alt = ['octo', 'turtle']; LAND.crystal.alt = ['cmoth', 'geode'];
+Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE', geode: 'GEODE SPIDER', whale: 'THUNDER WHALE', ram: 'STORM RAM' });
+LAND.meadow.alt = ['queen', 'mayor']; LAND.shore.alt = ['octo', 'turtle']; LAND.crystal.alt = ['cmoth', 'geode']; LAND.cloud.alt = ['ram'];
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
 const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
@@ -456,6 +462,103 @@ Object.assign(AI, {
         break;
     }
   },
+  // Thunder Whale: swims through the sky puffing rain from its spout, dives up out of sight and
+  // belly-flops onto a hero's spot (the cloud there puffs away); from phase 2 it calls lightning on
+  // every other 2x2 block of the room (sunstone grounds it), in phase 3 twice, the other half next.
+  whale(e, dt, room, p) {
+    e.t -= dt;
+    if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+    if (e.hp < e.maxHp * 0.33) bossPhase(e, 3);
+    if (e.state === 'swim' || e.state === 'storm' || e.state === 'intro') e.z = 10 + Math.sin(e.anim * 2.2) * 2;
+    switch (e.state) {
+      case 'intro': if (e.t <= 0) { e.state = 'swim'; e.t = 2.4; e.n = 0; e.w = 0; e.tx = 192; } break;
+      case 'swim':
+        hover(e, e.tx, 84 + Math.sin(e.anim * 0.9) * 14, 40, dt, room);
+        if (Math.abs(e.tx - e.x) < 12) e.tx = e.x < VW / 2 ? grnd(230, VW - 50) : grnd(50, 154);
+        e.flip = p.x > e.x; // the art faces left
+        if ((e.n += dt) > whaleGap(e)) {
+          e.n = 0;
+          const sx = e.x + (e.flip ? 12 : -12), sy = e.y - 10;
+          fan(sx, sy, Math.atan2(p.y - sy, p.x - sx), e.phase > 1 ? 5 : 3, 0.3, 64, 'rain');
+          Audio_.sfx('bubble');
+        }
+        if (e.t > 0) break;
+        e.n = 0; e.vx = e.vy = 0;
+        if (e.phase > 1 && e.w++ % 2) { e.state = 'storm'; e.t = 1.3; e.wave = 0; whaleStorm(room, 0); }
+        else { e.state = 'rise'; e.t = 0.6; Audio_.sfx('charge'); }
+        break;
+      case 'rise':
+        e.z = 10 + (1 - Math.max(0, e.t) / 0.6) * 190; e.ghost = e.z > 12;
+        if (e.t <= 0) {
+          e.x = Math.max(40, Math.min(VW - 40, p.x)); e.y = Math.max(56, Math.min(190, p.y));
+          G.markers.push({ x: e.x, y: e.y, t: 1.2, max: 1.2, src: 'whale', fall: '', n: e.phase > 2 ? 14 : 10, r: 24, c: 'y' });
+          e.state = 'aloft'; e.t = 1.2;
+        }
+        break;
+      case 'aloft':
+        e.z = Math.min(200, Math.max(0, e.t) / 0.4 * 200);
+        if (e.t <= 0) {
+          e.z = 0; e.ghost = false; dust(e.x, e.y, 16, 30); G.shake = Math.max(G.shake, 5); hapticAll('slam');
+          if (G.floor.land === LAND.cloud) {
+            const c0 = Math.floor(e.x / 16), r0 = Math.floor((e.y - 1 - OY) / 16);
+            for (let r = r0 - 1; r <= r0 + 1; r++) for (let c = c0 - 1; c <= c0 + 1; c++) if (c > 0 && c < COLS - 1 && r > 1 && r < ROWS - 1) puffAt(room, r * COLS + c);
+          }
+          stagger(e, 2); e.state = 'swim'; e.t = 2.4; e.n = 0;
+        }
+        break;
+      case 'storm':
+        hover(e, 192, 70, 50, dt, room);
+        if (e.t > 0) break;
+        G.shake = Math.max(G.shake, 4); Audio_.sfx('boom'); hapticAll('slam');
+        if (e.phase > 2 && !e.wave) { e.wave = 1; e.t = 1.6; whaleStorm(room, 1); break; }
+        stagger(e, 2.2); e.state = 'swim'; e.t = 2.4; e.n = 0;
+        break;
+    }
+  },
+  // Storm Ram: trots after the heroes puffing sparks from its horns, then charges down a lane,
+  // three times (four in phase 3), each aimed anew; where it stops, its horns strike the tiles
+  // round it with lightning. From phase 2 its path is struck too, and in phase 3 it throws a
+  // spark ring as it stops. After the last charge it stands there dizzy.
+  ram(e, dt, room, p) {
+    e.t -= dt;
+    if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+    if (e.hp < e.maxHp * 0.33) bossPhase(e, 3);
+    switch (e.state) {
+      case 'intro': if (e.t <= 0) { e.state = 'walk'; e.t = 2; e.n = 0; } break;
+      case 'walk': {
+        const d = Math.hypot(p.x - e.x, p.y - e.y), v = towardPlayer(e), sp = d > 100 ? 30 : d < 60 ? -24 : 0;
+        moveBox(room, e, v.x * sp * dt, v.y * sp * dt, 'enemy');
+        e.flip = p.x > e.x; // the art faces left
+        // no sparks just before a charge, so dodging its lane never means running into them
+        if ((e.n += dt) > ramGap(e) && e.t > 0.9) {
+          e.n = 0;
+          const hx = e.x + (e.flip ? 3 : -3), hy = e.y - 20;
+          fan(hx, hy, Math.atan2(p.y - hy, p.x - hx), e.phase > 1 ? 5 : 3, 0.32, 64, 'spark');
+          Audio_.sfx('zap');
+        }
+        if (e.t <= 0) { e.w = 0; ramAim(e, p); }
+        break;
+      }
+      case 'aim': if (e.t <= 0) { e.state = 'charge'; e.t = 2; e.trail = []; } break;
+      case 'charge': {
+        if (Math.random() < 0.6) part(e.x + rnd(-12, 12), e.y - 1, 0, -8, 0.4, Math.random() < 0.5 ? 'w' : 'Y', { size: 2 });
+        const sp = e.phase > 2 ? 185 : 170, i = Math.floor(e.x / 16) + Math.floor((e.y - 1 - OY) / 16) * COLS;
+        if (e.trail[e.trail.length - 1] !== i) e.trail.push(i);
+        if (moveBox(room, e, Math.cos(e.la) * sp * dt, Math.sin(e.la) * sp * dt, 'enemy') || e.t <= 0) {
+          G.shake = Math.max(G.shake, 4); Audio_.sfx('boom'); dust(e.x, e.y, 10, 26); hapticAll('slam');
+          ramStrike(e, room);
+          if (e.phase > 2) ring(e.x, e.y - 14, 8, 58, 'spark', grand());
+          e.state = 'skid'; e.t = 0.45;
+        }
+        break;
+      }
+      case 'skid':
+        if (e.t > 0) break;
+        if (++e.w < (e.phase > 2 ? 4 : 3)) ramAim(e, p);
+        else { stagger(e, 1.8); e.state = 'walk'; e.t = 2.4; e.n = 0; }
+        break;
+    }
+  },
   // A molehill: in turn, lobs a clod at a hero; the ring shows where it lands.
   hill(e, dt, room, p) {
     e.t -= dt;
@@ -475,6 +578,36 @@ const geodeSet = (e) => (e.phase > 2 ? 'geode3' : 'geode');
 const geodeGap = (e) => (e.phase > 1 ? 1.7 : 1.4);
 const GEODE_WALK = { walk: 8, skit: 16, center: 8 };
 const GEODE_LANES = [[60, 100, 140, 180], [60, 148, 236, 324]]; // rows (y) for sideways webs, columns (x) for upright ones
+const whaleGap = (e) => (e.phase > 1 ? 1.6 : 1.3);
+// lightning on every other 2x2 block of open floor (parity 0 or 1); sunstone stays safe
+function whaleStorm(room, par) {
+  const t = par ? 1.6 : 1.3;
+  for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
+    const i = r * COLS + c;
+    if (((c >> 1) + (r >> 1)) % 2 !== par || (room.tiles[i] !== T_FLOOR && room.tiles[i] !== T_PUFF) || (room.stone && room.stone[i])) continue;
+    G.markers.push({ kind: 'bolt', x: c * 16 + 8, y: OY + r * 16 + 8, t, max: t, src: 'whale', q: 1, zt: 0.4 });
+  }
+  Audio_.sfx('charge');
+}
+const ramGap = (e) => (e.phase > 1 ? 1.5 : 1.2);
+// the ram lowers its horns: the lane is fixed now, so stepping aside is always safe
+function ramAim(e, p) {
+  e.state = 'aim'; e.t = e.phase > 2 ? 0.5 : 0.6; lane(e, p); e.flip = Math.cos(e.la) > 0;
+  Audio_.sfx('charge');
+}
+// lightning on the tiles round the spot where the ram stopped (the tile it stands on too),
+// and from phase 2 on every other tile of the path it charged down; sunstone stays safe
+function ramStrike(e, room) {
+  const c0 = Math.floor(e.x / 16), r0 = Math.floor((e.y - 1 - OY) / 16), at = new Set();
+  for (let r = r0 - 1; r <= r0 + 1; r++) for (let c = c0 - 1; c <= c0 + 1; c++) at.add(r * COLS + c);
+  if (e.phase > 1) e.trail.forEach((i, k) => { if (k % 2 && k < e.trail.length - 2) at.add(i); });
+  for (const i of at) {
+    const c = i % COLS, r = (i / COLS) | 0;
+    if (c < 1 || c > COLS - 2 || r < 2 || r > ROWS - 2 || (room.tiles[i] !== T_FLOOR && room.tiles[i] !== T_PUFF) || (room.stone && room.stone[i])) continue;
+    G.markers.push({ kind: 'bolt', x: c * 16 + 8, y: OY + r * 16 + 8, t: 0.8, max: 0.8, src: 'ram', q: 1, zt: 1.2 });
+  }
+  e.trail = [];
+}
 const mayorGap = (e) => (e.phase > 1 ? 1.8 : 1.4);
 // A floor tile can sink if nobody stands on it, it keeps clear of the doors and the rest of
 // the floor stays in one piece.
@@ -520,5 +653,7 @@ BEASTS.push(
   { t: 'mayor', spr: 'mayor_0', boss: true, lore: ['THE MOLE MAYOR RUNS THE MEADOW FROM BELOW.', 'WHEN THE GROUND BULGES, HE IS RIGHT UNDER IT.', 'HE LOST HIS HAT ONCE, AND NEVER GOT OVER IT.'] },
   { t: 'turtle', spr: 'turtle_0', boss: true, lore: ['THE TIDE TURTLE HAS SWUM EVERY SEA.', 'WHEN SHE BLOWS HER HORN, THE TIDE COMES IN.', 'THE PEARL ON HER SHELL IS A BIG STAR.'] },
   { t: 'geode', spr: 'geode_0', boss: true, lore: ['THE GEODE SPIDER HANGS IN THE DARK OF THE CAVE.', 'ITS WEBS GLOW JUST BEFORE THEY SNAP TIGHT.', 'THE GEODE ON ITS BACK HOLDS A BIG STAR.'] },
+  { t: 'whale', spr: 'whale_0', boss: true, lore: ['THE THUNDER WHALE SWIMS THROUGH THE CLOUDS.', 'WHEN IT CALLS THE STORM, STAND ON SUNSTONE.', 'ON QUIET NIGHTS IT SINGS TO THE STARS.'] },
+  { t: 'ram', spr: 'ram_0', boss: true, lore: ['THE STORM RAM BUTTS THE CLOUDS ALONG.', 'WHERE IT STOPS, ITS HORNS CALL LIGHTNING.', 'ITS WOOL IS MADE OF THE SOFTEST STORM.'] },
   { t: 'nmoth', spr: 'nmoth_0', boss: true, lore: ['THE NIGHT MOTH ATE THE STARLIGHT.', 'IN ITS DARK, ONLY YOUR OWN GLOW IS SAFE.', 'IT WAS ONCE A LITTLE MOTH THAT FEARED THE DARK.'] },
 );
