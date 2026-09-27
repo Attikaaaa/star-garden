@@ -9,7 +9,7 @@ function dailySpec(kind, key) {
   key = key || (kind === 'weekly' ? utcWeek() : utcDay());
   const seed = hashSeed('star-garden', kind, key);
   return withSeed(seed, () => {
-    const land = kind === 'daily' ? grndi(0, LANDS.length - 1) : 0;
+    const land = kind === 'daily' ? grndi(0, CLASSIC_ROAD.length - 1) : 0;
     const wand = gpick(WAND_IDS);
     let mods = gshuffle(Object.keys(MODS).filter(k => !MODS[k].trial && !MODS[k].event)).slice(0, kind === 'daily' ? 1 : 2);
     // the season's featured twist leads the weekly challenge; a full moon joins the daily run
@@ -46,7 +46,7 @@ function startDaily(kind, key) {
   Save.write();
   G.diff = 1;
   startRun('adv', [{ pid: 0, wand: D.wand, up: {}, name: Save.name, skin: Save.skin, hero: D.hero, aspect: 0 }], {
-    seed: D.seed, depth: D.land, mods: D.mods, daily: { kind, key: D.key, ranked, spec: D },
+    seed: D.seed, depth: D.land, path: CLASSIC_ROAD.slice(), mods: D.mods, daily: { kind, key: D.key, ranked, spec: D },
   });
   const p = G.player;
   for (const id of D.items) giveItemQuiet(id, p);

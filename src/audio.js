@@ -40,6 +40,7 @@ const Audio_ = (() => {
     o.connect(g); g.connect(bus || sfxBus);
     o.start(t); o.stop(t + dur + 0.02);
   }
+  function bell(f, at) { osc('sine', f, f, 0.7, 0.14, at); osc('triangle', f * 2, f * 2, 0.25, 0.04, at); }
   function noise(dur, vol, freq, type, at, freq1, bus) {
     const t = ac.currentTime + (at || 0);
     const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
@@ -98,7 +99,25 @@ const Audio_ = (() => {
     tshoot() { osc('p12', 1200, 1800, 0.05, 0.05); },
     graze() { osc('p25', 1760, 2349, 0.05, 0.06); osc('triangle', 2637, 2637, 0.08, 0.05, 0.03); },
     quest() { [659, 880, 1109, 1319].forEach((f, i) => osc('triangle', f, f, 0.16, 0.13, i * 0.07)); osc('p25', 1760, 1760, 0.3, 0.07, 0.28); },
+    clack() { osc('triangle', 1900, 1200, 0.035, 0.12); osc('triangle', 2600, 1700, 0.03, 0.06, 0.04); noise(0.025, 0.06, 5000, 'highpass'); },
+    wave() { noise(1.2, 0.12, 250, 'lowpass', 0, 1500); noise(1.0, 0.08, 2200, 'bandpass', 0.35, 500); },
+    prism() { [1568, 1976, 2349].forEach((f, i) => osc('triangle', f, f * 1.01, 0.1, 0.06, i * 0.025)); },
+    // Crystal Clock bells (C E G A, a bell's sine with a faint octave), and the gate opening
+    bell0() { bell(1047); }, bell1() { bell(1319); }, bell2() { bell(1568); }, bell3() { bell(1760); },
+    cgate() { noise(0.3, 0.12, 900, 'lowpass'); [1047, 1319, 1568, 1760, 2093].forEach((f, i) => bell(f, 0.08 + i * 0.07)); },
     star() { [1047, 1319, 1568, 2093].forEach((f, i) => osc('p25', f, f * 1.005, 0.12, 0.09, i * 0.05)); },
+    // the Star Casino
+    chip() { osc('triangle', 2400, 1800, 0.03, 0.09); osc('triangle', 3100, 2500, 0.03, 0.06, 0.035); },
+    card() { noise(0.05, 0.14, 3500, 'bandpass', 0, 1500); },
+    shuffle() { for (let i = 0; i < 7; i++) noise(0.035, 0.1, 3000 + i * 150, 'bandpass', i * 0.045); },
+    reel() { noise(0.09, 0.05, 1800, 'bandpass'); osc('p12', 330, 300, 0.05, 0.03); },
+    rstop() { osc('triangle', 180, 90, 0.07, 0.22); noise(0.03, 0.1, 2400, 'highpass'); },
+    tick() { osc('triangle', 2200, 1700, 0.02, 0.07); },
+    ball() { osc('triangle', 1500, 1200, 0.03, 0.06); noise(0.02, 0.05, 6000, 'highpass'); },
+    dice() { for (let i = 0; i < 4; i++) { osc('triangle', 900 + i * 170, 600, 0.03, 0.09, i * 0.06); noise(0.02, 0.08, 4000, 'highpass', i * 0.06); } },
+    cwin() { [784, 988, 1175, 1568].forEach((f, i) => osc('p25', f, f, 0.09, 0.1, i * 0.06)); osc('triangle', 2093, 2093, 0.2, 0.06, 0.24); },
+    bigwin() { [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => { osc('p25', f, f, 0.12, 0.11, i * 0.07); bell(f * 2, 0.5 + i * 0.05); }); osc('triangle', 131, 131, 0.9, 0.25, 0.45); },
+    scratch() { noise(0.05, 0.05, 5200, 'highpass'); },
   };
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;
@@ -118,6 +137,7 @@ const Audio_ = (() => {
   const CHORD = {
     C: ['C3', 'G3'], G: ['G2', 'D3'], Am: ['A2', 'E3'], F: ['F2', 'C3'], Em: ['E2', 'B2'], D: ['D3', 'A3'],
     Bm: ['B2', 'F#3'], A: ['A2', 'E3'], 'F#m': ['F#2', 'C#3'], FG: ['F2', 'G2'], CD: ['C3', 'D3'],
+    Dm: ['D3', 'A3'], Gm: ['G2', 'D3'], Bb: ['Bb2', 'F3'], E: ['E2', 'B2'],
   };
   const SONGS = {
     meadow: {
@@ -156,6 +176,21 @@ const Audio_ = (() => {
       chords: 'Em C D Em Em C D Em',
       lead: 'E5 E5 G5 E5 B5 E5 A5 G5 E5 E5 G5 E5 C6 B5 A5 G5 F#5 F#5 A5 F#5 D6 C6 B5 A5 B5 - E6 - B5 - G5 - ' +
         'E6 D6 B5 G5 E6 D6 B5 G5 E6 C6 G5 E5 E6 C6 G5 E5 F#6 D6 A5 F#5 F#6 D6 A5 F#5 E6 - - - B5 - E6 -',
+    },
+    // the Star Casino floor: a bouncy lounge tune; and the VIP room, slower and moodier
+    lounge: {
+      bpm: 112, wave: 'p12', drum: 'k . h s . h k h',
+      chords: 'F Dm Gm C F Dm Bb C Gm C Am Dm Bb C F F',
+      lead: 'A5 - C6 - F6 - E6 D6 C6 - A5 - F5 - . . Bb5 - D6 - G6 - F6 E6 D6 - C6 - Bb5 - G5 - ' +
+        'A5 C6 . F6 . C6 A5 F5 D6 - - - A5 - . . D6 - F6 - D6 Bb5 F5 - E6 - D6 - C6 - . . ' +
+        'G5 Bb5 D6 Bb5 G5 - D5 - E5 G5 C6 G5 E5 - C5 - A5 C6 E6 C6 A5 - E5 - F5 A5 D6 A5 F5 - D5 - ' +
+        'F6 - D6 - Bb5 - F5 - G5 - Bb5 - E6 - G6 - F6 - - - C6 - A5 - F5 - - - . . . .',
+    },
+    vip: {
+      bpm: 96, wave: 'triangle', drum: 'k . . h s . . h',
+      chords: 'Am Dm E Am F Dm E E',
+      lead: 'E5 - A5 - C6 - B5 A5 F5 - A5 - D6 - C6 - B5 - G#5 - E5 - B5 - A5 - - - E5 - . . ' +
+        'F5 - A5 - C6 - F6 - E6 - D6 - A5 - F5 - E5 - G#5 - B5 - D6 - C6 - B5 - G#5 - - -',
     },
   };
   for (const k in SONGS) {

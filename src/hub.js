@@ -10,16 +10,18 @@ const TRAILS = {
   comet: { name: 'COMET', cols: ['O', 'o', 'y', 'Y'], how: 'THE STORM' },
   rainbow: { name: 'RAINBOW', cols: ['r', 'O', 'y', 'h', 'c', '3'], how: 'THE STAR OF THE DAY' },
 };
-// Every pet is free to pick in the wardrobe; the constellations that list one as a reward
+// Every pet but the casino's cat is free to pick in the wardrobe; the constellations that list one as a reward
 // still grant it, but nothing is locked.
 const PETS = {
   bun: { name: 'BUNNY', how: 'THE COLLECTOR' },
   bee: { name: 'BEE', how: 'THE FRIENDS' },
   slime: { name: 'SLIME', how: 'THE ODDITIES' },
+  cat: { name: 'LUCKY CAT', how: 'THE PRIZE COUNTER' },
 };
 // Titles come from constellations and letters; how: where they come from.
 const TITLES = {
   GARDENER: 'THE GARDENER', STARKEEPER: 'THE NIGHT SKY', 'OLD FRIEND': "THE FROG'S LAST LETTER",
+  'HIGH ROLLER': 'A STAR CARD AT THE CASINO', 'LUCKY STAR': 'THE PRIZE COUNTER',
 };
 // Co-op: every screen draws every hero's pet and trail (net.js adds these to snapshots).
 const PF_EXTRA = ['pet', 'trail', 'buddies', 'charmCd', 'hero', 'leapZ'];
@@ -114,7 +116,7 @@ function openHubCard(id) {
   if (id === 'up' || id === 'wands') { setState('kert'); G.gTab = id === 'up' ? 0 : 1; }
   else if (id === 'quests') { refreshQuests(); setState('quests'); }
   else if (id === 'stars') { setState('stars'); G.starOpen = null; }
-  else if (id === 'book') { setState('book'); G.bookTab = 0; }
+  else if (id === 'book') { setState('book'); G.bookTab = 0; G.bookTop = 0; }
   else if (id === 'mail') setState('mail');
   else if (id === 'wardrobe') setState('wardrobe');
   else if (id === 'library') setState('library');
@@ -196,7 +198,7 @@ function wardList(row) {
   if (row === 'title') return [''].concat(Object.keys(TITLES));
   return ROBES.map((r, i) => i);
 }
-const wardOwned = (row, v) => v === '' || (row === 'robe' ? v >= 8 || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? true : Save.unl.titles.includes(v));
+const wardOwned = (row, v) => v === '' || (row === 'robe' ? v >= 8 || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? v !== 'cat' || !!(Save.casino && Save.casino.own && Save.casino.own.includes('cat')) : Save.unl.titles.includes(v));
 const wardCur = (row) => (row === 'robe' ? Save.skin : row === 'trail' ? Save.trail : row === 'pet' ? Save.pet : Save.title);
 function wardSet(row, v) {
   if (row === 'robe') Save.skin = v; else if (row === 'trail') Save.trail = v; else if (row === 'pet') Save.pet = v; else Save.title = v;

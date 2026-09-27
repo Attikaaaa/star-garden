@@ -73,8 +73,10 @@ const BEASTS = [
   { t: 'golem', spr: 'golem_0', boss: true, lore: ['THE CRYSTAL GOLEM SLEPT FOR A THOUSAND YEARS.', 'A FALLEN STAR WOKE IT UP.', 'IT DREAMS OF THE SKY IT CANNOT REACH.'] },
 ];
 const beastN = (b) => cnt((b.boss ? 'b:' : 'k:') + b.t);
-const loreN = (b) => { const n = beastN(b), s = b.boss ? [1, 3, 5] : [1, 10, 50]; return s.filter(k => n >= k).length; };
-const loreNext = (b) => { const n = beastN(b), s = b.boss ? [1, 3, 5] : [1, 10, 50]; return s.find(k => n < k); };
+// bosses and wardens are met once a run, so their pages fill sooner
+const loreSteps = (b) => b.boss || (EDEF[b.t] && EDEF[b.t].warden) ? [1, 3, 5] : [1, 10, 50];
+const loreN = (b) => { const n = beastN(b); return loreSteps(b).filter(k => n >= k).length; };
+const loreNext = (b) => { const n = beastN(b); return loreSteps(b).find(k => n < k); };
 
 // ---------- Text helper ----------
 function wrapText(str, w) {
@@ -96,14 +98,22 @@ function bookCount() {
   const t = G.bookTab;
   return t === 0 ? Object.keys(ITEMS).length : t === 1 ? BEASTS.length : t === 2 ? SYNERGIES.length : t === 3 ? Save.hist.length : 0;
 }
-const BOOK_COLS = [8, 7, 3, 1, 1];
+// columns, row pitch and visible rows per tab; longer lists scroll by rows (G.bookTop)
+const BOOK_GRID = [[8, 22, 6], [7, 26, 5], [3, 24, 5], [1, 13, 9]];
 function bookCell(i) {
-  const t = G.bookTab;
-  if (t === 0) return [BK.x + (i % 8) * 22, BK.y + Math.floor(i / 8) * 22, 20, 20];
-  if (t === 1) return [BK.x + (i % 7) * 26, BK.y + Math.floor(i / 7) * 26, 24, 25];
-  if (t === 2) return [BK.x + (i % 3) * 110, BK.y + Math.floor(i / 3) * 24, 106, 22];
-  if (t === 3) { const k = i - (G.bookTop || 0); return [BK.x, BK.y + 4 + k * 13, 324, 12]; }
-  return null;
+  const t = G.bookTab, g = BOOK_GRID[t];
+  if (!g) return null;
+  const col = i % g[0], row = Math.floor(i / g[0]) - (G.bookTop || 0);
+  if (row < 0 || row >= g[2]) return null;
+  const y = BK.y + row * g[1];
+  return t === 0 ? [BK.x + col * 22, y, 20, 20] : t === 1 ? [BK.x + col * 26, y, 24, 25] : t === 2 ? [BK.x + col * 110, y, 106, 22] : [BK.x, y + 4, 324, 12];
+}
+// The scroll arrows in the left margin: [x, y, w, h] of the up and down tap areas.
+function bookArrows() {
+  const g = BOOK_GRID[G.bookTab];
+  if (!g || Math.ceil(bookCount() / g[0]) <= g[2]) return null;
+  const top = BK.y + (G.bookTab === 3 ? 4 : 0), h = g[1] * g[2] / 2;
+  return [[22, top, 8, h], [22, top + h, 8, h]];
 }
 function updateBook() {
   // tabs: Q / E, LB / RB, Tab, or a click
@@ -113,7 +123,7 @@ function updateBook() {
     G.bookTab = (tab + BOOK_TABS.length) % BOOK_TABS.length; G.menuSel = 0; G.bookTop = 0;
     Audio_.sfx('select'); return false;
   }
-  const n = bookCount(), cols = BOOK_COLS[G.bookTab];
+  const n = bookCount(), g = BOOK_GRID[G.bookTab], cols = g ? g[0] : 1;
   let s = G.menuSel;
   if (s < n) {
     if (cols > 1) {
@@ -125,14 +135,21 @@ function updateBook() {
     }
     if (pressed(...K_UP) && s >= cols) s -= cols;
   } else if (pressed(...K_UP) && n) s = n - 1;
-  if (pressed(...K_DOWN) && s < n) s = s + cols < n ? s + cols : n;
+  if (pressed(...K_DOWN) && s < n) s = Math.floor(s / cols) < Math.floor((n - 1) / cols) ? Math.min(s + cols, n - 1) : n;
   if (cols === 1 && n === 0 && (pressed(...K_RIGHT) || pressed(...K_LEFT))) {
     G.bookTab = (G.bookTab + (pressed(...K_RIGHT) ? 1 : BOOK_TABS.length - 1)) % BOOK_TABS.length; G.menuSel = 0; Audio_.sfx('select'); return false;
   }
+  if (g) {
+    // long lists scroll: follow the selection, the wheel and the margin arrows
+    let top = G.bookTop || 0;
+    if (s !== G.menuSel && s < n) { const r = Math.floor(s / cols); if (r < top) top = r; else if (r >= top + g[2]) top = r - g[2] + 1; }
+    top += Input.wheel;
+    const ar = bookArrows();
+    if (ar && mouseOn() && Input.mouseHit) ar.forEach(([x, y, w, h], k) => { if (Input.mx >= x && Input.mx < x + w && Input.my >= y && Input.my < y + h) top += k ? 1 : -1; });
+    G.bookTop = Math.max(0, Math.min(top, Math.ceil(n / cols) - g[2]));
+  }
   if (s !== G.menuSel) { G.menuSel = s; Audio_.sfx('select'); }
-  // the run list scrolls
-  if (G.bookTab === 3) { const top = G.bookTop || 0; if (s < n && s < top) G.bookTop = s; else if (s < n && s > top + 8) G.bookTop = s - 8; }
-  for (let i = 0; i < n; i++) { const c = bookCell(i); if (c && (G.bookTab !== 3 || (i >= (G.bookTop || 0) && i <= (G.bookTop || 0) + 8))) hoverRow(i, c[0], c[1], c[2], c[3]); }
+  for (let i = 0; i < n; i++) { const c = bookCell(i); if (c) hoverRow(i, c[0], c[1], c[2], c[3]); }
   const bw = textW('BACK') + 20;
   if (hoverRow(n, VW / 2 - bw / 2, 199, bw, 13) && Input.mouseHit) return true;
   return pressed(...K_BACK) || (pressed(...K_OK) && G.menuSel === n);
@@ -150,6 +167,14 @@ function drawBook() {
   });
   if (Input.lastAim === 'pad') { text('LB', 28, 31, 'l', 0); text('RB', 346, 31, 'l', 0); }
   [drawBookItems, drawBookFoes, drawBookCombos, drawBookRuns, drawBookStats][G.bookTab]();
+  const ar = bookArrows(), g = BOOK_GRID[G.bookTab];
+  if (ar) {
+    const top = G.bookTop || 0, more = top + g[2] < Math.ceil(bookCount() / g[0]);
+    for (let k = 0; k < 3; k++) {
+      rect(26 - k, ar[0][1] + 2 + k, 1 + k * 2, 1, top ? 'Y' : '3');
+      rect(26 - k, ar[1][1] + ar[1][3] - 3 - k, 1 + k * 2, 1, more ? 'Y' : '3');
+    }
+  }
   const back = G.menuSel === bookCount();
   text('BACK', VW / 2, 202, back ? 'Y' : 'l', 2, 1);
   if (back) pointer(VW / 2 - textW('BACK') / 2 - 10, 202);
@@ -159,7 +184,8 @@ function paneLines(lines, y, col) { for (const l of lines) { for (const w of wra
 function drawBookItems() {
   const ids = Object.keys(ITEMS), found = new Set(Save.found), unl = new Set(Save.unl.items);
   ids.forEach((id, i) => {
-    const [x, y] = bookCell(i);
+    const c = bookCell(i); if (!c) return;
+    const [x, y] = c;
     rect(x, y, 20, 20, '0'); rect(x + 1, y + 1, 18, 18, unl.has(id) ? '2' : '1');
     if (unl.has(id)) drawS(S('icon_' + id), x + 2, y + 2, found.has(id) ? 0 : 4);
     else text('?', x + 10, y + 7, 'l', 1, 1);
@@ -182,9 +208,11 @@ function drawBookItems() {
 }
 function drawBookFoes() {
   BEASTS.forEach((b, i) => {
-    const [x, y, w, h] = bookCell(i), n = beastN(b);
+    const c = bookCell(i); if (!c) return;
+    const [x, y, w, h] = c, n = beastN(b);
     rect(x, y, w, h, '0'); rect(x + 1, y + 1, w - 2, h - 2, n ? '2' : '1');
-    if (n) { const sp = S(b.boss ? 'mm_boss' : b.spr); drawFeet(sp, x + w / 2, y + (b.boss ? 15 : h - 2)); }
+    const icon = b.boss || (EDEF[b.t] || 0).warden; // big ones show their map mark
+    if (n) { const sp = S(b.boss ? 'mm_boss' : icon ? 'mm_warden' : b.spr); drawFeet(sp, x + w / 2, y + (icon ? 15 : h - 2)); }
     else text('?', x + w / 2, y + 12, 'l', 1, 1);
     if (i === G.menuSel) boxFrame(x, y, w, h, 'Y');
   });
@@ -206,7 +234,8 @@ function drawBookFoes() {
 }
 function drawBookCombos() {
   SYNERGIES.forEach((s, i) => {
-    const [x, y, w, h] = bookCell(i), got = Save.syn.includes(s.id);
+    const c = bookCell(i); if (!c) return;
+    const [x, y, w, h] = c, got = Save.syn.includes(s.id);
     rect(x, y, w, h, '0'); rect(x + 1, y + 1, w - 2, h - 2, got ? '2' : '1');
     text(got ? s.name : '???', x + w / 2, y + 8, got ? (i === G.menuSel ? 'Y' : 'w') : 'l', 1, 1);
     if (i === G.menuSel) boxFrame(x, y, w, h, 'Y');

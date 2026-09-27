@@ -42,6 +42,76 @@
     ................................`;
   A('fountain_0', fountain(0));
   A('fountain_1', fountain(1));
+  // Campfire (between acts): crossed logs in a ring of stones, the flame in three frames
+  const CAMP_BASE = [
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '........................',
+    '...Ae..............eA...',
+    '..AeNN............NNeA..',
+    '...uNNNn........nNNNu...',
+    '....unNNNn....nNNNnu....',
+    '.lLl..unnNNnnNNnnu..lLl.',
+    'lLmmd..unnnnnnnnu..lLmmd',
+    '.mmd..lLl..nn..lLl..mmd.',
+    '......mmdd....mmdd......',
+    '........................',
+  ];
+  const CAMP_FLAMES = [[
+    '...........o............',
+    '..........oo............',
+    '..........oOo...........',
+    '.........oOOo..o........',
+    '.......o.oOyOo.oo.......',
+    '.......ooOOyyOooOo......',
+    '.......oOOyyYyOOOo......',
+    '......oOOyYYwYyyOo......',
+    '......oOyYYwwwYyOo......',
+    '......oOyYwwwwYyOo......',
+    '.......oOyYwwYyOo.......',
+    '........oOyyyyOo........',
+    '.........ooOOoo.........',
+  ], [
+    '............o...........',
+    '...........oo...........',
+    '.....o.....oOo..........',
+    '.....oo...oOOo..........',
+    '......oo..oOyOo.o.......',
+    '......oOooOyyOooo.......',
+    '.......oOOyyYyOOo.......',
+    '......oOOyYYwYyOOo......',
+    '......oOyYYwwYYyOo......',
+    '......oOyYwwwwYyOo......',
+    '.......oOyYwwYyOo.......',
+    '........oOyyyyOo........',
+    '.........ooOOoo.........',
+  ], [
+    '........................',
+    '..........o.............',
+    '..........oo.......o....',
+    '..........oOo..o........',
+    '.........oOOo.oo........',
+    '........oOOyOooO........',
+    '.......oOOyyYOOOo.......',
+    '......oOOyYYwYyyOo......',
+    '......oOyYYwwwYyOo......',
+    '......oOyYwwwwYyOo......',
+    '.......oOyYwwYyOo.......',
+    '........oOyyyyOo........',
+    '.........ooOOoo.........',
+  ]];
+  CAMP_FLAMES.forEach((f, k) => A('camp_' + k, CAMP_BASE.map((r, y) => {
+    const fl = f[y - 1] || '';
+    return r.split('').map((c, x) => fl[x] && fl[x] !== '.' ? fl[x] : c).join('');
+  })));
   // Rescue cage: bars in front of a little friend (drawn between two layers)
   A('cage_back', `
     ................

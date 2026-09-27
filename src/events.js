@@ -145,7 +145,7 @@ function bossOfWeek(key) {
 function startBossWeek() {
   const B = bossOfWeek();
   G.diff = 1;
-  startRun('adv', null, { quick: true, depth: B.land, mods: [B.mod], bow: B });
+  startRun('adv', null, { quick: true, depth: B.land, path: CLASSIC_ROAD.slice(), mods: [B.mod], bow: B });
   track('bow_start', { key: B.key, boss: B.boss });
 }
 onNote((ev, a) => {

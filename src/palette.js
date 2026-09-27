@@ -41,6 +41,9 @@ const PAL = {
   'u': '#5c3629', // dark brown (hair)
   'x': '#363049', // charcoal (black clothes)
   'X': '#4f4868', // charcoal light
+  'v': '#6a2a63', // plum (the casino's carpet and velvet)
+  'V': '#8e3a7e', // light plum
+  'z': '#15694a', // deep felt (card and roulette tables)
 };
 
 // Semi-transparent shade used for drop shadows under everything that stands.
@@ -81,4 +84,14 @@ THEMES.well = {
   'a': '1', 'b': '2', 'c': '4', 'i': 'Y', 'j': 'C',
   'e': '0', 'f': '1', 'g': '2', 'h': 'Y',
 };
-const THEME_ORDER = ['meadow', 'beach', 'crystal', 'well'];
+// Cloud Steps: a floor of soft clouds over an open sky, with sunstone slabs that hold (the
+// clouds and slabs are painted by THEMES.cloud.paint in lands.js). Its pits are the sky itself,
+// its walls cloud banks on sunstone bricks.
+THEMES.cloud = {
+  name: 'CLOUD STEPS',
+  '1': 'l', '2': 'L', '3': 'w', '4': 'Y', '5': 'y', '6': 'q',
+  '7': 'l', '8': 'L', '9': 'w',
+  'a': 'e', 'b': 'a', 'c': 'A', 'i': 'y', 'j': 'Y',
+  'e': 'C', 'f': 'c', 'g': 'C', 'h': 'w',
+};
+const THEME_ORDER = ['meadow', 'beach', 'crystal', 'cloud', 'well'];

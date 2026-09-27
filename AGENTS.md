@@ -18,7 +18,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
   data → level → entities → enemies → fx → ui → meta → the progress and content files →
-  couch → cloud → yard → events → main → qr → net). `net.js` loads last because it wraps a few
+  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
@@ -35,13 +35,16 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `art_ui.js` | HUD bits, cursor, item icons, frog, title logo |
 | `audio.js` | `Audio_`: sound effects and 4 songs on a step sequencer, cross-fades, volumes |
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
-| `data.js` | `ITEMS`, `LANDS`, `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
-| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors |
+| `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
+| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, land mechanic hooks (`LAND_MECH`), page turns |
 | `entities.js` | players (input, movement, combat, down/revive, robes), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
-| `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits |
+| `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
 | `ui.js` | HUD, minimap, banners, menus, settings, collection, pause, end screens, touch overlay |
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
+| `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`) and the campfire between acts |
+| `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock; each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
+| `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
 | `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |
@@ -59,7 +62,20 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `heroes.js`, `options.js` | the four heroes; wand aspects, Star Trials, Quick Run, assist, bullet shapes, key remapping, the arena save |
 | `daily.js`, `events.js` | the Daily Star Run, Weekly Challenge and share card; the sky calendar (Star Rain, Moon Night), seasons, Boss of the Week |
 | `couch.js`, `cloud.js` | couch co-op (extra controllers); save codes, cloud backup, leaderboards and friend codes, the community goal, bloom reminders |
+| `casino.js` | the Star Casino (`G.state` `casino`, from the title menu): chip wallet `cas()` (in `Save.casino`), house edges (`EDGE`), `CASINO_TUNING` (live-tunable), comp tiers, the walkable hall, `wheelRaster` for both wheels |
+| `slot.js`, `cards.js`, `roulette.js`, `scratch.js`, `lounge.js` | the Star Slot and three land slots (fixed reel strips, jackpot); blackjack and video poker; European roulette and the Big Wheel; scratch cards; the VIP lounge's Sic Bo and the Prize Counter |
+| `art_casino.js` | chips, the hall's furniture, playing cards, dice and prizes |
 | `art_heroes/more/items/foes/bosses/rooms/garden.js` | art for the content added after the first release |
+
+`tools/dev.mjs` holds developer checks that drive the real game in headless Chromium (Node 22+,
+nothing ships): `layouts` (every `*LAYOUT(S)` const: size, door lanes, BFS reachability),
+`sheet [regex]` (sprite contact sheet at 3x) and `bot [land] [floors]` (an invulnerable bot
+clears a run and reports errors and frame times). Run `layouts` after touching any layout.
+
+`tools/casino_check.mjs` works out every casino game's return to player from its real
+tables (reel strips, paytables, all 216 Sic Bo rolls); run it after touching any odds. Chips
+are never money. The Prize Counter sells cosmetics, plus the Lucky Charm (+25 coins at the next
+run's start); keep it that small.
 
 `server/server.js` is the optional game server (Node 18+, no dependencies, JSON files in
 `DATA_DIR`): stats, cloud saves and transfer codes, leaderboards with friend codes, the
@@ -90,6 +106,8 @@ stays hidden and the game is complete offline.
    (overlays, HUD corners, touch buttons).
 
 ## Making sprites
+
+The step-by-step method, the tool reference and a contact-sheet snippet are in `PIXELART.md`.
 
 - `def(name, art, { flip, flash, glow, sil, legend })` — `art` is a string or an array of
   rows; `.` is transparent, every other character is a `PAL` key. `flip` bakes a mirrored
@@ -122,7 +140,9 @@ stays hidden and the game is complete offline.
 
 - `G.state`: `title`, `prep` (wand / robe / difficulty before a solo run), `kert` (the
   Garden), `collection`, `settings` (`G.back` says where to return), `coop`, `entry`
-  (text entry: join codes and names, `G.entry`), `lobby`, `play`, `pause`, `over`, `win`.
+  (text entry: join codes and names, `G.entry`), `lobby`, `play`, `pause`, `fork` (picking the next
+  land, `G.fork`; the host picks for a co-op team), `over`, `win`, `casino` (the Star Casino
+  hall and its games, solo only).
 - `G.mode` is `adv` or `arena`; `G.diff` indexes `DIFFS`. `G.players` holds every hero,
   `G.player` is the one this device controls. Never assume a single hero: loop over
   `G.players`, pick targets with `nearestHero`, and check `alive(p)` (not dead, not down).
@@ -155,7 +175,56 @@ stays hidden and the game is complete offline.
   branches, optionally `glintAt` (pre-shot sparkle), then add the type to a `LANDS[].pool`.
   At most two stationary (`still`) enemies spawn per room.
 - **Land:** a new `THEMES` entry and `THEME_ORDER`, a `LANDS` entry, `rock_<theme>` and
-  `brk_<theme>` sprites, a song in `SONGS` in `audio.js`, ambient life in `fx.js`.
+  `brk_<theme>` sprites, a song in `SONGS` in `audio.js`, ambient life in `fx.js`, and its
+  place on the Star Road (`ROAD` in `data.js`). A run walks one path of land ids
+  (`G.run.path`, saved with the run); `roadLand(depth)` gives the land at a depth, and lands
+  not in `LAND` yet are skipped. Daily, weekly and Boss of the Week runs keep `CLASSIC_ROAD`.
+  Each land needs `rule`, `hint` (two card lines at most, in every language) and `danger`
+  (1-3) for the fork cards in `road.js`.
+  When an act's last boss falls (`campHere()`), the boss room also gets the campfire
+  (`stockCamp`): a `camp` prop that heals the team once and saves the run, a small shop and the
+  frog reading a letter (`CAMP_LETTERS`, one per act, every line in every language).
+- **Land mechanic:** `LAND_MECH[land id] = { enter, update, kill, every, drawLayer, leave }`
+  (hooks in `level.js`, the lands' own rules and art in `lands.js`). `enter` / `update` /
+  `kill` (a non-boss foe died) / `leave` run only on the host or solo; `every(dt, room)` runs
+  on every screen each frame of play, for state both sides can work out alone (it starts
+  from `G.wind = G.wind0`, the room's own wind, so a land may add a gust);
+  `drawLayer(ox, oy, room, layer)` runs on every screen: layer 0 on the floor, 1 over foes
+  and heroes but under shots and bullets, 2 over everything. Change tiles only through
+  `setTile`. Anything placed from `room.seed` with `hash()` looks the same on every screen;
+  a shared clock is `performance.now() - NET.off` on a client.
+- **Meadow (Bloom Loop):** flower patches (`meadowPatches`) flatten under heroes and
+  regrow; a foe that dies on a bloom leaves a `seed` pickup (never collected, `k.pot` holds
+  its reward) that grows into a half heart, coins or a `starbit` (Starfall charge) unless
+  someone stands on it. A gust every 12 s from floor 2 on (petals first) nudges hero shots.
+- **Land rooms:** `LAND_LAYOUTS[land id]` holds a land's own 22x10 fight rooms, mixed into
+  normal rooms about one time in three (`room.lay` names the one in use); `LAY_RULE[lay]` can
+  give that room its own foe `pool`, `max` and `calm`. Check them with
+  `node tools/dev.mjs layouts`. A curated first run uses `FIRST_POOL` (`firstrun.js`).
+- **Shore (tide):** `tideU(room)` is a 24 s clock shared by every screen (-1 where there is
+  no tide). At high tide the pools are shallow water: heroes and foes wade at `WADE` speed,
+  shots pass; when it ebbs, waders are set on dry sand and shells wash up. Pier rooms draw
+  boardwalks over fixed tile cells (`PIER_V` / `PIER_H`, symmetric so flips keep them).
+- **Crystal Cave:** layout chars `p` (prism pillar, `T_PRISM`: splits hero shots in three,
+  foe bullets into a fan), `s` (bell crystal, `T_BELL`) and `g` (gate, `T_GATE`). All three are
+  solid (prisms and bells not for `fly`). The Crystal Clock room plays a four-note tune on its
+  bells; shooting them in order opens the gate's alcove. Its state is an off-screen `clock`
+  prop so clients draw it from snapshots. Change tiles through `setTile`, and before carving
+  or sinking a tile ask `keepsJoined(room, i, v)` so no floor is cut off. A bullet with
+  `b.shard` (a Shard Sprite's) breaks into five small pieces on a prism instead of three.
+- **Warden:** one per land, in a spare dead end (`rooms.js` turns it into room type
+  `warden`, laid out like a boss room). A warden is an ordinary enemy with `EDEF.warden`
+  (the HUD bar finds it, knockback and sleep do not move it) and follows every boss rule
+  below: tells, `stagger`, a safe gap, a second phase. Add one with an `EDEF` entry, `AI.<type>`,
+  art through `bossFrames`, the land's entry in `WARDENS`, a name in `FOE_NAMES`, a Book entry
+  and `lang_hu.js` strings; `wardenCleared` pays an item per hero, coins and vault.
+- **Darkness:** each frame `lightReset(ambient)`, `lightAdd(x, y, r)` per light, then
+  `drawLight(ox, oy, alpha)` from a layer-1 hook: a dithered `'0'` tint in 2px cells, never
+  black. Game logic asks `lightAt(x, y)` (0 dark .. 4 lit). Keep bullets above the mask.
+- **Page turn:** `pageCurl(room, corner)` is the 1 s tell, `turnPage(room, layout, corner)`
+  swaps the interior to another 22x10 layout (same mirroring as the room), pushes anyone
+  inside a new solid tile to free ground (`nudgeOut`, never damage) and draws the fold over
+  0.6 s. Corners: 0 top left, 1 top right, 2 bottom left, 3 bottom right.
 - **Garden upgrade:** entry in `UPGRADES` plus its effect in `applyUpgrades(p, up)`
   (it gets the player's own levels, because co-op clients bring theirs).
 - **Wand:** entry in `WANDS` (stat multipliers, cost), a `wand_<id>` icon, its projectile

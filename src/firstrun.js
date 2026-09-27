@@ -97,6 +97,8 @@ function drawTutorialPrompt() {
 // ---------- A hand-picked first run ----------
 // The first treasure room shows off items you can see working; one golden slime appears;
 // the first two tries at each boss are a little gentler.
+// The first run's Meadow: the plain foes, and none of the ones that block or hide behind a shell
+const FIRST_POOL = [['slime', 4], ['bee', 2], ['courier', 2], ['bunny', 2], ['flower', 1], ['shroom', 1], ['puff', 1]];
 const FIRST_PICKS = ['triple', 'moon', 'firework', 'homing', 'big', 'bounce'];
 function firstRunItems(n) {
   const ok = FIRST_PICKS.filter(id => Save.unl.items.includes(id));

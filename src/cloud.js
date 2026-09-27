@@ -191,7 +191,7 @@ onNote((ev, a) => {
   if (online() && a.kills > 0) api('/api/goal', { kills: a.kills }).then(g => { if (g && g.id) ONLINE.goal = g; });
   if (!G.daily && !couchOn()) {
     if (a.mode === 'arena' && a.wave > 0) postScore('arena', utcWeek(), a.wave);
-    else if (a.won && a.mode === 'adv' && !G.run.quick) postScore('win', 'all', a.time);
+    else if (a.won && a.mode === 'adv' && !G.run.quick && !G.run.span) postScore('win', 'all', a.time);
   }
   cloudBackup(false);
 });

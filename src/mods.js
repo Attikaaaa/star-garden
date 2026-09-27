@@ -37,10 +37,10 @@ function setMods(mods) {
   G.diffX = G.mods.length ? modDiff(DIFFS[G.diff], G.mods) : null;
 }
 function applyMods(p) { for (const id of G.mods || []) if (MODS[id].player) MODS[id].player(p); }
-const coinMul = () => (modOn('rich') ? 2 : 1);
+const coinMul = () => (modOn('rich') ? 2 : 1) * (boonOn('gold') ? 2 : 1);
 
 // WINDY: each room has its own wind; shots drift and leaves blow across the floor.
-function roomWind() { G.wind = modOn('windy') ? (grand() < 0.5 ? -1 : 1) * grnd(45, 70) : 0; }
+function roomWind() { G.wind = G.wind0 = modOn('windy') ? (grand() < 0.5 ? -1 : 1) * grnd(45, 70) : 0; }
 function windFx() {
   if (!G.wind || Math.random() > 0.35) return;
   const x = G.wind > 0 ? 4 : VW - 4;
@@ -72,7 +72,7 @@ function drawNight(ox, oy) {
   g.globalAlpha = 0.35;
   for (const e of G.enemies) if (!e.dead) { const r = e.r + 6; g.drawImage(ellipseSprite(r * 2, Math.round(r * 1.6), '0'), Math.round(SCR.ox + ox + e.x - r), Math.round(SCR.oy + oy + e.y - e.h / 2 - r * 0.8)); }
   g.globalAlpha = 1;
-  for (const o of G.room.props) if (o.kind === 'portal' || o.kind === 'frog') hole(SCR.ox + ox + o.x, SCR.oy + oy + o.y - 10, 26);
+  for (const o of G.room.props) if (o.kind === 'portal' || o.kind === 'frog' || o.kind === 'camp') hole(SCR.ox + ox + o.x, SCR.oy + oy + o.y - 10, 26);
   // a boss glows faintly in its own dark
   if (G.boss && !G.boss.dead) hole(SCR.ox + ox + G.boss.x, SCR.oy + oy + G.boss.y - G.boss.h / 2 - (G.boss.z || 0), 16);
   ctx.save();

@@ -9,7 +9,7 @@ function ebullet(x, y, ang, speed, color, big) {
   speed *= DIFF().bullet * bulletSlow();
   b.x = x; b.y = y; b.vx = Math.cos(ang) * speed; b.vy = Math.sin(ang) * speed;
   b.life = 6; b.r = big ? 3.5 : 2.5; b.key = (big ? 'ebb_' : 'eb_') + color; b.spr = S(b.key); b.t = 0; b.src = E_SRC;
-  b.grazed = false; b.soft = false; b.echo = false;
+  b.grazed = false; b.soft = false; b.echo = false; b.gust = false; b.shard = false; b.prism = -1; b.letter = null;
   return b;
 }
 function muzzle(x, y) { part(x, y, 0, 0, 0.14, null, { spr: 'sparkle', drag: 1 }); }
@@ -21,13 +21,31 @@ function fan(x, y, ang, n, step, speed, color, big) {
   muzzle(x + Math.cos(ang) * 5, y + Math.sin(ang) * 4);
   for (let i = 0; i < n; i++) ebullet(x, y, ang + (i - (n - 1) / 2) * step, speed, color, big);
 }
+// Crystal Cave: an enemy bullet that meets a prism pillar leaves it as a fan of three (once;
+// the pieces pop on the next pillar). Same speed, so the fan's gaps widen as it flies.
+const SHARD_FAN = [-0.5, -0.25, 0, 0.25, 0.5];
+function splitBullet(b, idx) {
+  const x = (idx % COLS) * 16 + 8, y = OY + ((idx / COLS) | 0) * 16 + 3;
+  const a = Math.atan2(b.vy, b.vx), sp = Math.hypot(b.vx, b.vy), { key, spr, r, src, soft, gust, echo } = b;
+  b.life = 0;
+  // a Shard Sprite's shard breaks into five small cyan pieces
+  const five = b.shard;
+  for (const da of five ? SHARD_FAN : [-PRISM_FAN, 0, PRISM_FAN]) {
+    const n = ebullet(x, y, 0, 0, five ? 'cyan' : 'pink'); // b's own slot may come back as one of the pieces
+    Object.assign(n, { vx: Math.cos(a + da) * sp, vy: Math.sin(a + da) * sp, soft, gust, echo, prism: idx, src }, five ? {} : { key, spr, r });
+  }
+  prismFlash(idx, b);
+}
 function updateEBullets(dt) {
   const room = G.room;
   for (const b of EBULLETS) {
     if (b.life <= 0) continue;
     b.life -= dt; b.t += dt;
+    if (b.gust) b.vx += G.wind * dt * 1.2; // seeds ride the Meadow's gust
     b.x += b.vx * dt; b.y += b.vy * dt;
-    if (solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
+    const pi = prismAt(room, b.x, b.y + 5);
+    if (pi >= 0 && pi !== b.prism && b.prism < 0) { splitBullet(b, pi); continue; }
+    if (pi !== b.prism && solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
       // ECHO: every enemy bullet bounces off the first wall it meets
       if (!b.echo && modOn('echo')) {
         b.echo = true;
@@ -105,7 +123,7 @@ function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.boss) addCharge(own, dmg * 0.004 / crewHp(true));
   if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
   if (e.flashCd <= 0) { e.flash = 0.07; e.flashCd = 0.14; }
-  if (!e.boss && !e.still) {
+  if (!e.boss && !e.still && !EDEF[e.type].warden) {
     const d = Math.hypot(e.x - fx, e.y - fy) || 1;
     e.kx = (e.x - fx) / d * 90; e.ky = (e.y - fy) / d * 90;
   }
@@ -127,6 +145,7 @@ function killEnemy(e, own) {
   poof(cx, cy);
   burst(cx, cy, e.boss ? 40 : 10, enemyColors(e), e.boss ? 160 : 90, e.boss ? 1.1 : 0.5, { g: 120 });
   if (e.boss) { bossDefeated(e); return; }
+  mechKill(e);
   Audio_.sfx('kill');
   G.shake = Math.max(G.shake, 1.5);
   G.hitstop = Math.max(G.hitstop, 0.035);
@@ -134,6 +153,7 @@ function killEnemy(e, own) {
   if (e.type === 'slime' && e.color === 'blue') {
     for (let i = 0; i < 2; i++) { const m = spawnEnemy('mini', e.x + (i ? 5 : -5), e.y, { instant: true }); m.state = 'idle'; m.t = 0.4; }
   }
+  if (EDEF[e.type].die) EDEF[e.type].die(e);
   if (e.affix) affixDeath(e);
   if (e.grudge) nemesisDeath(e);
   if (e.elite) maybeScroll(e.x, e.y - 2, 0.04);
@@ -158,7 +178,7 @@ function killEnemy(e, own) {
 function enemyColors(e) {
   switch (e.type) {
     case 'gold': return ['y', 'Y', 'w'];
-    case 'slime': case 'mini': case 'king': return e.color === 'blue' ? ['B', 'c', 'C'] : e.color === 'pink' ? ['P', 'q', 'w'] : ['G', 'h', 'H'];
+    case 'slime': case 'mini': case 'king': return e.color === 'blue' ? ['B', 'c', 'C'] : e.color === 'pink' ? ['P', 'q', 'w'] : e.color === 'sky' ? ['3', '4', 'w'] : ['G', 'h', 'H'];
     case 'bee': return ['y', 'Y', '1'];
     case 'shroom': return ['P', 'q', 'w'];
     case 'flower': return ['P', 'y', 'G'];
@@ -192,7 +212,7 @@ function updateEnemies(dt) {
     e.flash = Math.max(0, e.flash - dt);
     e.flashCd -= dt;
     if (e.spawnT > 0) { e.spawnT -= dt; continue; }
-    if (e.kx || e.ky) {
+    if ((e.kx || e.ky) && !EDEF[e.type].warden) { // wardens stand their ground
       moveBox(room, e, e.kx * dt, e.ky * dt, e.fly ? 'fly' : 'enemy');
       e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
       if (Math.abs(e.kx) + Math.abs(e.ky) < 5) e.kx = e.ky = 0;
@@ -207,7 +227,7 @@ function updateEnemies(dt) {
     if (e.stag > 0) { e.stag -= dt; continue; } // a staggered boss is harmless for a moment
     AI[e.type](e, dt * pace * k * (e.elite ? 1.25 : 1), room, p);
     // contact damage
-    if (e.passive || e.ghost || e.z >= 8) continue;
+    if (e.passive || e.ghost || e.calm || e.z >= 8) continue;
     for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, (q.y - 5) - (e.y - e.h / 2)) < e.r + 4) hurtPlayer(q, 1, e.type);
   }
   for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
@@ -575,7 +595,7 @@ function stagger(e, t) { e.stag = t || 1.5; e.vx = e.vy = 0; Audio_.sfx('tele');
 const bossFrame = (e, f, t) => S((t || e.type) + (e.stag > 0 ? '_stag' : '_' + (e.p2 ? 'p' : '') + f));
 const bob = (e, sp, a, b) => Math.floor(e.anim * sp) % 2 ? a : b;
 // a charge picks its lane when the tell starts and shows it, so stepping aside is always safe
-function lane(e, p) { e.la = Math.atan2(p.y - e.y, p.x - e.x); G.markers.push({ kind: 'lane', x: e.x, y: e.y - 6, a: e.la, t: e.t, max: e.t }); }
+function lane(e, p, len) { e.la = Math.atan2(p.y - e.y, p.x - e.x); G.markers.push({ kind: 'lane', x: e.x, y: e.y - 6, a: e.la, t: e.t, max: e.t, len }); }
 const crabGap = (e) => e.hp < e.maxHp * 0.5 ? 0.6 : 0.85;
 // Falling crystals (golem), rocks and clods (mayor): telegraph ring, then shatter into bullets.
 // kind 'zone' is only a warning ring; fall '' drops nothing (a burst from below).
@@ -585,6 +605,14 @@ function updateMarkers(dt) {
     const k = m[i];
     k.t -= dt;
     if (k.kind === 'beam') for (const p of G.players) if (alive(p) && beamHit(k, p)) hurtPlayer(p, 1, 'geode');
+    if (k.kind === 'zap') for (const p of G.players) if (alive(p) && zapHit(k, p)) hurtPlayer(p, 1, 'stormwisp');
+    if (k.t <= 0 && k.kind === 'bolt') {
+      // lightning strikes the whole tile, which stays charged for a while
+      for (const p of G.players) if (alive(p) && zapHit(k, p)) hurtPlayer(p, 1, k.src || 'stormwisp');
+      burst(k.x, k.y - 2, 12, ['y', 'Y', 'w'], 100, 0.35, { g: 150 });
+      G.shake = Math.max(G.shake, 2); Audio_.sfx('boom');
+      m.push({ kind: 'zap', x: k.x, y: k.y, t: 3, max: 3 });
+    }
     if (k.t <= 0 && k.kind === 'web') {
       // the web snaps tight: it hurts along its line and hangs there as silk for a while
       for (const p of G.players) if (alive(p) && webHit(k, p)) hurtPlayer(p, 1, 'geode');
@@ -592,8 +620,8 @@ function updateMarkers(dt) {
     }
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode' }[k.src] || 'shard', grand());
-      burst(k.x, k.y - 4, 10, ['c', 'C', 'w'], 90, 0.4, { g: 150 });
+      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan' }[k.src] || 'shard', grand());
+      burst(k.x, k.y - 4, 10, k.src === 'bomber' ? ['P', 'q', 'w'] : k.src === 'castle' ? ['a', 'A', 'e'] : ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
       for (const p of G.players) if (alive(p) && Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(p, 1, k.src || 'golem');
@@ -603,6 +631,8 @@ function updateMarkers(dt) {
 }
 // The Geode Spider's web lines (sideways at y, or upright at x when a) and its beam, which
 // rocks stop. Shared with net.js, where a client judges its own hero.
+// a lightning bolt and the charged tile it leaves (the hero's feet in that tile)
+const zapHit = (k, p) => Math.abs(p.x - k.x) < 8 && Math.abs(p.y - 1 - k.y) < 8;
 const webHit = (k, p) => Math.abs(k.a ? p.x - k.x : p.y - k.y) < 6;
 function beamLen(k) {
   let d = 8;
@@ -615,7 +645,7 @@ function beamHit(k, p) {
 }
 function drawMarkers(ox, oy) {
   for (const k of G.markers) {
-    if (k.kind === 'lane') { if (Math.floor(k.t * 8) % 2) for (let d = 20; d < 400; d += 14) drawS(S('sparkle_c'), ox + k.x + Math.cos(k.a) * d - 1, oy + k.y + Math.sin(k.a) * d - 1); continue; }
+    if (k.kind === 'lane') { if (Math.floor(k.t * 8) % 2) for (let d = 20; d < (k.len || 400); d += 14) drawS(S('sparkle_c'), ox + k.x + Math.cos(k.a) * d - 1, oy + k.y + Math.sin(k.a) * d - 1); continue; }
     if (k.kind === 'tide') { if (Math.floor(k.t * 8) % 2) for (let y = 36; y <= 190; y += 14) if (Math.abs(y - k.y) > 14) { const l = k.x < VW / 2; drawS(S('tide_arrow'), ox + k.x + (l ? 4 : -10), oy + y - 3, l ? 0 : 1); drawS(S('sparkle_c'), ox + k.x + (l ? 22 : -24), oy + y - 1); } continue; }
     if (k.kind === 'web') { if (Math.floor(k.t * 8) % 2) for (let d = 24; d < (k.a ? 200 : 368); d += 14) drawS(S('sparkle_c'), ox + (k.a ? k.x : d) - 1, oy + (k.a ? d : k.y) - 1); continue; }
     if (k.kind === 'silk') { if (k.t > 0.6 || Math.floor(k.t * 10) % 2) rect(Math.round(ox + (k.a ? k.x : 16)), Math.round(oy + (k.a ? 36 : k.y)), k.a ? 1 : VW - 32, k.a ? 166 : 1, 'l'); continue; }
@@ -626,13 +656,36 @@ function drawMarkers(ox, oy) {
       for (let d = 8; d < len; d += 1) rect(Math.round(ox + k.x + c * d) - 1, Math.round(oy + k.y + s * d) - 1, 2, 2, 'w');
       continue;
     }
+    if (k.kind === 'zap') { drawZap(k, ox, oy); continue; }
     if (k.kind === 'line') { if (Math.floor(k.t * 8) % 2) for (let i = 0; i < 20; i++) if (Math.abs(i - k.x) > 1) drawS(S('sparkle_c'), ox + 23 + i * 17, oy + k.y - 1); continue; }
     const r = ringSprite(10, Math.floor(k.t * 10) % 2 ? 'P' : 'w');
     ctx.drawImage(r, Math.round(ox + k.x - 10), Math.round(oy + k.y - 6));
     if (k.kind || k.fall === '') continue;
     const fall = Math.min(1, k.t / 0.6), s = S(k.fall || 'rock_crystal');
-    if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - fall * 150); }
+    if (k.t < 0.6) { shadow(ox + k.x, oy + k.y, 12); drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - fall * (k.h || 150)); }
   }
+}
+
+// A struck tile: the bolt itself for a moment, then sparks crawling round the tile's edge,
+// blinking out over the last half second.
+function drawZap(k, ox, oy) {
+  const x = Math.round(ox + k.x), y = Math.round(oy + k.y), age = k.max - k.t;
+  if (age < 0.14) {
+    for (let yy = y - 150, i = 0; yy < y; yy += 6, i++) {
+      const dx = (i * 7) % 5 - 2;
+      rect(x + dx - 3, yy, 6, 7, '0'); rect(x + dx - 2, yy, 4, 7, 'y'); rect(x + dx - 1, yy, 2, 7, 'w');
+    }
+    rect(x - 8, y - 8, 16, 16, '0'); rect(x - 7, y - 7, 14, 14, 'y'); rect(x - 5, y - 5, 10, 10, 'w');
+    return;
+  }
+  if (k.t < 0.5 && Math.floor(k.t * 12) % 2) return;
+  const f = Math.floor(G.time * 12);
+  for (let j = 0; j < 4; j++) {
+    const s = (f + j * 15) % 60, side = (s / 15) | 0, o = s % 15;
+    const px = side === 0 ? o : side === 1 ? 15 : side === 2 ? 15 - o : 0, py = side === 0 ? 0 : side === 1 ? o : side === 2 ? 15 : 15 - o;
+    drawS(S(j & 1 ? 'sparkle_0' : 'sparkle_1'), x - 8 + px - 1, y - 8 + py - 1);
+  }
+  if (f % 3 === 0) rect(x - 2 + (f * 5) % 4, y - 3 + (f * 3) % 4, 1, 3, 'y');
 }
 
 // ---------- Drawing ----------

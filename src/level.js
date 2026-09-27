@@ -1,7 +1,7 @@
 'use strict';
 // Floors, rooms, tile collision and the cached static room layer.
 const COLS = 24, ROWS = 13, OY = 8;
-const T_FLOOR = 0, T_WALL = 1, T_ROCK = 2, T_BRK = 3, T_PIT = 4, T_DOOR = 5;
+const T_FLOOR = 0, T_WALL = 1, T_ROCK = 2, T_BRK = 3, T_PIT = 4, T_DOOR = 5, T_PRISM = 6, T_BELL = 7, T_GATE = 8, T_PUFF = 9; // T_PUFF: a Cloud Steps cloud about to puff away (still walkable)
 const DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
 // Passable part of an open door, in room pixels: [x, y, w, h]
@@ -37,8 +37,9 @@ function genFloor(depth, land) {
   return withSeed(hashSeed(G.run.seed, 'floor', depth), () => makeFloor(depth, land));
 }
 function makeFloor(depth, landOverride) {
-  const land = landOverride || LANDS[depth % LANDS.length];
-  const target = land.rooms + Math.floor(depth / LANDS.length) * 2;
+  const land = landOverride || roadLand(depth);
+  // a quick run's land is a little smaller (about five minutes)
+  const target = (G.run.quick ? Math.min(land.rooms, 8) : land.rooms) + Math.floor(depth / runPath().length) * 2;
   for (let attempt = 0; attempt < 500; attempt++) {
     const map = new Map(), list = [];
     const at = (x, y) => map.get(x + ',' + y);
@@ -68,54 +69,128 @@ function makeFloor(depth, landOverride) {
     }
     const ends = list.filter(r => r !== start && Object.keys(r.doors).length === 1).sort((a, b) => b.dist - a.dist);
     if (ends.length < 3 || ends[0].dist < 3) continue;
+    // a fork's treasure boon needs a spare dead end for its second treasure room
+    const chest = boonAt('chest', depth);
+    if (chest && ends.length < 4 && attempt < 400) continue;
     ends[0].type = 'boss';
     ends[1].type = 'item';
     ends[2].type = 'shop';
     if (ends[3]) ends[3].type = 'challenge';
-    addSpecialRooms(list, at, add, depth);
+    if (chest && ends[3]) (ends[4] || ends[3]).type = 'item';
+    addSpecialRooms(list, at, add, depth, land);
     assignRewards(list);
-    for (const r of list) buildRoom(r);
+    for (const r of list) buildRoom(r, land);
     return { depth, land, theme: land.theme, rooms: list, start };
   }
   throw new Error('floor generation failed');
 }
 
-function buildRoom(room) {
+function buildRoom(room, land) {
   const t = new Uint8Array(COLS * ROWS);
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     t[r * COLS + c] = (c === 0 || c === COLS - 1 || r <= 1 || r === ROWS - 1) ? T_WALL : T_FLOOR;
   }
   for (const d in room.doors) if (!hiddenDoor(room, d)) for (const [c, r] of DOOR_CELLS[d]) t[r * COLS + c] = T_DOOR;
   let layout = null;
-  if (FIGHT_ROOMS.has(room.type)) layout = gpick(LAYOUTS);
-  else if (room.type === 'boss' || room.type === 'arena') layout = BOSS_LAYOUT;
+  const own = land && LAND_LAYOUTS[land.id];
+  if (own && room.type === 'normal' && grand() < 0.35) layout = own[room.lay = gpick(Object.keys(own))];
+  else if (FIGHT_ROOMS.has(room.type)) layout = gpick(LAYOUTS);
+  else if (room.type === 'boss' || room.type === 'arena' || room.type === 'warden') layout = BOSS_LAYOUT;
   if (layout) {
-    const flipX = grand() < 0.5, flipY = grand() < 0.5;
-    for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
-      const ch = layout[flipY ? 9 - y : y][flipX ? 21 - x : x];
-      const i = (y + 2) * COLS + x + 1;
-      if (ch === '#') t[i] = T_ROCK;
-      else if (ch === 'b') t[i] = T_BRK;
-      else if (ch === '~') t[i] = T_PIT;
-      else if (ch === 'e') room.slots.push([x * 16 + 24, y * 16 + OY + 32 + 12]);
-    }
+    room.flip = [grand() < 0.5, grand() < 0.5];
+    stampLayout(t, layout, room.flip[0], room.flip[1], room.slots);
   }
   room.tiles = t;
   room.pits = [];
   for (let i = 0; i < t.length; i++) if (t[i] === T_PIT) room.pits.push([(i % COLS) * 16, OY + ((i / COLS) | 0) * 16, hash(i, 3, room.seed)]);
-  room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'arena';
+  room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'warden' && room.type !== 'arena';
+}
+
+// Writes a 22x10 layout into the interior of tiles t (and its enemy slots into slots).
+function stampLayout(t, layout, flipX, flipY, slots) {
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
+    const ch = layout[flipY ? 9 - y : y][flipX ? 21 - x : x];
+    const i = (y + 2) * COLS + x + 1;
+    t[i] = ch === '#' ? T_ROCK : ch === 'b' ? T_BRK : ch === '~' ? T_PIT : ch === 'p' ? T_PRISM : ch === 's' ? T_BELL : ch === 'g' ? T_GATE : T_FLOOR;
+    if (ch === 'e' && slots) slots.push([x * 16 + 24, y * 16 + OY + 32 + 12]);
+  }
 }
 
 // Changes a tile of the room in play (sinkholes open and close) and tells co-op clients.
 function setTile(room, c, r, v) {
   const i = r * COLS + c;
+  (room.tAt || (room.tAt = new Map())).set(i, G.time); // when it changed, for animations on every screen
   room.tiles[i] = v; room.dirty = true; flowKey = -1;
   room.pits = room.pits.filter(q => q[0] !== c * 16 || q[1] !== OY + r * 16);
   if (v === T_PIT) room.pits.push([c * 16, OY + r * 16, hash(i, 3, room.seed)]);
   if (typeof netFx === 'function') netFx('tile', c, r, v);
 }
 
+// ---------- Land mechanics ----------
+// A land's own rule (the tide, puffing clouds, lantern light...): LAND_MECH[land id] =
+// { enter(room), update(dt, room), kill(e, room), every(dt, room), drawLayer(ox, oy, room, layer),
+// leave(room) }, every hook optional. enter, update, kill (a foe that is not a boss died) and
+// leave run only where the game runs (solo or the host); what a client must see travels in
+// snapshots and tile events. every runs on every screen, each frame of play, after G.wind was
+// reset to the room's own wind (G.wind0): for what both sides can work out alone. drawLayer runs on every screen three
+// times: layer 0 on the floor (under props and foes), 1 over props, foes and heroes but under
+// ambient life, shots and bullets (Lantern Woods' darkness), 2 over everything. Tiles change
+// through setTile, which rebuilds the room's cached layer.
+const LAND_MECH = {};
+let mechOn = null; // { m, room }: the mechanic running in the room in play
+const landMech = () => (G.floor && LAND_MECH[G.floor.land.id]) || null;
+function mechLeave() { if (mechOn && mechOn.m.leave) mechOn.m.leave(mechOn.room); mechOn = null; }
+function mechEnter(room) {
+  mechLeave();
+  const m = landMech();
+  if (m) { mechOn = { m, room }; if (m.enter) m.enter(room); }
+}
+function mechUpdate(dt) { if (mechOn && mechOn.m.update) mechOn.m.update(dt, mechOn.room); }
+function mechKill(e) { if (mechOn && mechOn.m.kill) mechOn.m.kill(e, mechOn.room); }
+function mechEvery(dt) {
+  G.wind = G.wind0 || 0;
+  const m = landMech();
+  if (m && m.every && G.room) m.every(dt, G.room);
+}
+function mechDraw(ox, oy, layer) { const m = landMech(); if (m && m.drawLayer) m.drawLayer(ox, oy, G.room, layer); }
+
+// ---------- Page turn (Story Library) ----------
+// The room's interior becomes another layout (walls and doors stay). Anyone left inside a tile
+// that turned solid is pushed to the nearest free spot, never hurt. corner (0 top left, 1 top
+// right, 2 bottom left, 3 bottom right) is where the fold starts; drawPageTurn shows it.
+const PAGE_T = 0.6, CURL_T = 1;
+// The tell before a turn: the corner's dog-ear lifts for CURL_T seconds.
+function pageCurl(room, corner) { room.curl = { at: G.time, corner }; }
+function turnPage(room, layout, corner) {
+  if (room.dirty) renderRoomStatic(room, G.floor.theme);
+  const old = room.turn ? room.turn.cv : document.createElement('canvas');
+  old.width = VW; old.height = VH;
+  old.getContext('2d').drawImage(room.canvas, 0, 0);
+  const t = room.tiles.slice();
+  stampLayout(t, layout, room.flip ? room.flip[0] : false, room.flip ? room.flip[1] : false, null);
+  for (let i = 0; i < t.length; i++) if (t[i] !== room.tiles[i]) setTile(room, i % COLS, (i / COLS) | 0, t[i]);
+  room.turn = { cv: old, at: G.time, corner };
+  for (const p of G.players) if (!p.dead && nudgeOut(room, p, heroMoveMode(p))) p.tpN++;
+  for (const e of G.enemies) if (!e.dead) nudgeOut(room, e, e.fly ? 'fly' : 'enemy');
+  for (const k of room.pickups) nudgeOut(room, k, 'enemy');
+}
+// Moves e to the closest spot where its feet box is free; true if it had to move.
+function nudgeOut(room, e, mode) {
+  const hw = e.hw || 4, hh = e.hh || 4;
+  if (!boxSolid(room, e.x, e.y, hw, hh, mode)) return false;
+  for (let d = 2; d <= 96; d += 2) for (let a = 0; a < 16; a++) {
+    const x = e.x + Math.cos(a * Math.PI / 8) * d, y = e.y + Math.sin(a * Math.PI / 8) * d;
+    if (!boxSolid(room, x, y, hw, hh, mode)) { e.x = x; e.y = y; return true; }
+  }
+  return false;
+}
+
 const tileAt = (room, c, r) => (c < 0 || r < 0 || c >= COLS || r >= ROWS) ? T_WALL : room.tiles[r * COLS + c];
+// Crystal Cave prism pillars: the tile index of the pillar a ground point is in, else -1
+function prismAt(room, x, gy) {
+  const c = Math.floor(x / 16), r = Math.floor((gy - OY) / 16);
+  return tileAt(room, c, r) === T_PRISM ? r * COLS + c : -1;
+}
 
 function doorPass(room, x, y) {
   if (!room.cleared) return false;
@@ -131,9 +206,9 @@ function solidPx(room, x, y, mode) {
   const c = Math.floor(x / 16), r = Math.floor((y - OY) / 16);
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return true;
   switch (room.tiles[r * COLS + c]) {
-    case T_FLOOR: return false;
-    case T_ROCK: case T_BRK: return mode !== 'fly';
-    case T_PIT: return mode === 'player' || mode === 'enemy';
+    case T_FLOOR: case T_PUFF: return false;
+    case T_ROCK: case T_BRK: case T_PRISM: case T_BELL: return mode !== 'fly';
+    case T_PIT: return (mode === 'player' || mode === 'enemy') && !room.flood; // high tide on the Shore: shallows
     case T_DOOR: return mode === 'player' ? !doorPass(room, x, y) : true;
     default: return true;
   }
@@ -153,6 +228,8 @@ function boxSolid(room, x, y, hw, hh, mode) {
 // Move with axis-separated sliding. Returns true if something blocked the move.
 function moveBox(room, e, dx, dy, mode) {
   let blocked = false;
+  // wading through the Shore's shallows at high tide
+  if (room.flood && (mode === 'player' || mode === 'enemy') && room.tiles[Math.floor((e.y - 1 - OY) / 16) * COLS + Math.floor(e.x / 16)] === T_PIT) { dx *= WADE; dy *= WADE; }
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
   const sx = dx / steps, sy = dy / steps;
   for (let i = 0; i < steps; i++) {
@@ -203,7 +280,7 @@ function updateFlow(room, players) {
     for (const k in DIRS) {
       const nc = c + DIRS[k][0], nr = r + DIRS[k][1], ni = nr * COLS + nc;
       if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS || FLOW[ni] !== -1) continue;
-      if (room.tiles[ni] !== T_FLOOR) continue;
+      if (room.tiles[ni] !== T_FLOOR && room.tiles[ni] !== T_PUFF && !(room.flood && room.tiles[ni] === T_PIT)) continue;
       FLOW[ni] = FLOW[i] + 1;
       _fq.push(ni);
     }
@@ -256,6 +333,7 @@ function renderRoomStatic(room, theme) {
     const n = h < 10 ? 'floor_2' : h < 22 ? 'floor_3' : h < 61 ? 'floor_0' : 'floor_1';
     blit(g, T(n), c * 16, OY + r * 16);
   }
+  if (th.paint) th.paint(g, room); // a land's own floor (Cloud Steps: clouds and sunstone)
   // walls: caps everywhere, faces on the top wall
   for (let c = 0; c < COLS; c++) blit(g, capS, c * 16, OY - 16);
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -296,10 +374,10 @@ function renderRoomStatic(room, theme) {
   // obstacles with contact shadows
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const t = room.tiles[r * COLS + c];
-    if (t !== T_ROCK && t !== T_BRK) continue;
+    if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE)) continue;
     const x = c * 16, y = OY + r * 16;
     g.drawImage(ellipseSprite(14, 5, SHADOW), x + 1, y + 12);
-    blit(g, S((t === T_ROCK ? 'rock_' : 'brk_') + theme), x, y);
+    blit(g, S(t >= T_PRISM ? tileArt(room, c, r, t) : (t === T_ROCK ? 'rock_' : 'brk_') + theme), x, y);
   }
   room.dirty = false;
 }
@@ -308,7 +386,7 @@ function renderRoomStatic(room, theme) {
 function doorKind(room, d) {
   const o = room.doors[d];
   if (room.type === 'boss' || o.type === 'boss') return 'b';
-  if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion') return 'c';
+  if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion' || room.type === 'warden' || o.type === 'warden') return 'c';
   const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret'];
   if (T.includes(room.type) || T.includes(o.type)) return 't';
   return 'n';

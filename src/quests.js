@@ -21,7 +21,7 @@ const QUEST_T = {
   potion: { ns: [2, 3], rew: [10, 14], ev: 'potion', text: (q) => 'DRINK ' + q.n + ' POTIONS' },
   item: { ns: [4, 6], rew: [10, 14], ev: 'item', text: (q) => 'TAKE ' + q.n + ' MAGIC ITEMS' },
   buy: { ns: [2, 3], rew: [10, 14], ev: 'buy', text: (q) => 'BUY ' + q.n + ' THINGS FROM THE FROG' },
-  land: { ns: [2, 3], rew: [14, 20], ev: 'land', max: true, add: (a) => a + 1, need: (n) => cnt('land') >= n, text: (q) => 'REACH ' + THEMES[THEME_ORDER[q.n - 1]].name },
+  land: { ns: [2, 3], rew: [14, 20], ev: 'land', max: true, add: (a) => a + 1, need: (n) => cnt('land') >= n, text: (q) => 'REACH ' + THEMES[roadLand(q.n - 1, roadPath()).theme].name },
   wave: { ns: [5, 8, 12], rew: [12, 16, 20], ev: 'wave', max: true, need: (n) => menuOpen('arena') && Save.stats.bestWave >= n - 3, text: (q) => 'REACH ARENA WAVE ' + q.n },
   daily: { ns: [1], rew: [12], ev: 'daily', need: () => menuOpen('daily') && typeof dailyReady === 'function', text: () => "PLAY TODAY'S STAR RUN" },
   wandk: { ns: [30, 50], rew: [12, 16], ev: 'kill', ok: (q) => G.player && G.player.wand === q.a, need: () => Save.wands.length > 1, arg: () => gpick(Save.wands.filter(w => w !== 'wand')), text: (q) => 'DEFEAT ' + q.n + ' FOES WITH THE ' + WANDS[q.a].name },
@@ -46,7 +46,7 @@ const plural = (w) => (/Y$/.test(w) && !/[AEIOU]Y$/.test(w) ? w.slice(0, -1) + '
 // Foes a quest may ask for: the ones in lands the player has reached.
 function questFoes() {
   const out = [];
-  LANDS.forEach((l, i) => { if (i < Math.max(1, cnt('land'))) for (const [t] of l.pool) if (!out.includes(t)) out.push(t); });
+  roadPath().forEach((id, i) => { if (i < Math.max(1, cnt('land'))) for (const [t] of LAND[id].pool) if (!out.includes(t)) out.push(t); });
   return out.length ? out : ['slime'];
 }
 

@@ -98,7 +98,7 @@ function prepAdjust(row, dir) {
     for (let k = 0; k < DIFFS.length; k++) { d = (d + dir + DIFFS.length) % DIFFS.length; if (diffUnlocked(d)) break; }
     if (d !== Save.settings.diff) { Save.settings.diff = d; ok(); } else no();
   } else if (row === 'trial') { const m = trialMax(); G.prepTrial = ((G.prepTrial || 0) + dir + m + 1) % (m + 1); ok(); }
-  else if (row === 'length') { G.prepQuick = !G.prepQuick; ok(); }
+  else if (row === 'length') { const l = runLens(); if (l.length > 1) { Save.settings.runLen = cycle(l, runLen(), dir); ok(); } else no(); }
 }
 function updatePrep() {
   const rows = prepRows();
@@ -124,7 +124,7 @@ function prepValue(row) {
     case 'robe': return [ROBES[Save.skin], robeList().length < ROBES.length ? 'MORE ROBES SHINE IN THE CONSTELLATIONS' : ''];
     case 'diff': return [d.name, d.desc + (d.vault !== 1 ? '  VAULT X' + d.vault : '') + (!diffUnlocked(2) ? '  (WIN TO UNLOCK HARD)' : !diffUnlocked(3) ? '  (WIN ON HARD FOR MORE)' : '')];
     case 'trial': { const n = G.prepTrial || 0; return [n ? 'STAR TRIAL ' + n : 'OFF', n ? 'NEW: ' + MODS[TRIALS[n - 1]].desc + '  VAULT +' + n * 5 + '%' : 'EVERY TRIAL ADDS A TWIST ON TOP OF THE LAST'] }
-    case 'length': return [G.prepQuick ? 'QUICK RUN' : 'FULL RUN', G.prepQuick ? 'ONE LAND AND ITS BOSS: ABOUT FIVE MINUTES' : 'THREE LANDS, THREE BOSSES'];
+    case 'length': return lenValue(runLen());
   }
   return ['', ''];
 }
@@ -147,16 +147,13 @@ function drawPrep() {
     text(v, VW / 2 + 30, y, on ? 'Y' : 'w', 1, 1);
     if (on) { const bob = Math.floor(G.time * 4) % 2, hw = textW(v) / 2; text('<', VW / 2 + 30 - hw - 9 - bob, y, 'Y', 1); text('>', VW / 2 + 30 + hw + 5 + bob, y, 'Y', 1); }
   });
-  const [, desc] = sel && sel !== 'start' && sel !== 'back' ? prepValue(sel) : ['', G.prepQuick && G.prep.mode === 'adv' ? 'QUICK RUN: ONE LAND' : ''];
+  const [, desc] = sel && sel !== 'start' && sel !== 'back' ? prepValue(sel) : ['', prepRows().includes('length') && runLen() !== 'full' ? lenValue(runLen())[0] : ''];
   if (desc) wrapText(desc, 280).slice(0, 2).forEach((l, i) => text(l, VW / 2, 150 + i * 9, 'c', 1, 1));
   const si = rows.indexOf('start');
   drawMenu(['START!', 'BACK'], 172, 13, G.menuSel - si);
   drawCouchJoin();
 }
 
-// ---------- Quick Run ----------
-// One land (one you have reached) and its boss.
-function quickLand() { return withSeed(newSeed(), () => grndi(0, Math.max(0, Math.min(LANDS.length, cnt('land') || 1) - 1))); }
 
 // ---------- Assist mode, colour-blind shapes, left-handed touch ----------
 const ASSIST_SPEED = 0.85;

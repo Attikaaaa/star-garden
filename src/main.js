@@ -22,10 +22,10 @@ function saveBest() {
 function setState(s) {
   if (s === 'title' && !MENU_STATES.has(G.state)) resetAmbient('meadow');
   // back in the menus: the last run's modifiers and daily state are over
-  if (MENU_STATES.has(s) && s !== 'settings') { G.daily = null; G.mods = null; G.diffX = null; G.wind = 0; }
+  if (MENU_STATES.has(s) && s !== 'settings') { G.daily = null; G.mods = null; G.diffX = null; G.wind = G.wind0 = 0; }
   G.state = s; G.menuSel = 0; G.menuHover = -1;
 }
-const MENU_STATES = new Set(['title', 'settings', 'keys', 'daily', 'yard', 'garden', 'library', 'kert', 'quests', 'stars', 'book', 'mail', 'wardrobe', 'prep', 'coop', 'entry', 'lobby']);
+const MENU_STATES = new Set(['title', 'settings', 'keys', 'daily', 'yard', 'garden', 'library', 'kert', 'quests', 'stars', 'book', 'mail', 'wardrobe', 'prep', 'coop', 'entry', 'lobby', 'casino']);
 function toast(msg) { G.toast = { msg, t: 1.6 }; }
 
 // Forget every in-flight effect of a previous run or floor.
@@ -33,6 +33,7 @@ function resetRunFx() {
   G.combo = { n: 0, t: 0 }; G.comboPop = null; G.fall = null; G.warp = null; G.corpse = null; G.tide = null;
   G.flashT = 0; G.boss = null; G.reward = null; G.cine = null; G.banner = null; G.bannerNext = null; G.overT = 0;
   G.turrets.length = 0; BOLTS.length = 0;
+  mechLeave();
 }
 
 // The heroes of a run. roster: [{ pid, wand, up, remote }] (one entry when playing alone).
@@ -64,11 +65,11 @@ function startRun(mode, roster, opts) {
   if (mode === 'adv' && !NET.role && !G.daily) clearRun();
   if (mode === 'arena' && !NET.role) clearArena();
   G.mode = mode;
-  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), quick: !!opts.quick, bow: opts.bow || null, duel: !!opts.duel };
+  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), quick: !!opts.quick, span: opts.span || null, bow: opts.bow || null, duel: !!opts.duel, path: opts.path || roadPath() };
   // Star Trials stack their twists (solo runs)
-  G.trial = !NET.role && opts.trial ? opts.trial : 0;
+  G.trial = G.run.trial = !NET.role && opts.trial ? opts.trial : 0;
   setMods((opts.mods || []).concat(trialMods(G.trial)));
-  if (G.trial && G.diffX) G.diffX.vault *= 1 + 0.05 * G.trial;
+  applyRunX();
   reseed(G.run.seed, 'heroes');
   makePlayers(roster || soloRoster());
   G.stats = { kills: 0, coins: 0, items: 0, time: 0 };
@@ -84,22 +85,24 @@ function startRun(mode, roster, opts) {
   noteTeam('start', mode, G.players.length);
   // assist mode: two extra hearts
   if (assistOn()) for (const p of G.players) if (!p.remote) { p.maxHp += 4; p.hp = p.maxHp; }
-  if (mode === 'arena') startArena(); else loadFloor(opts.quick && opts.depth === undefined ? quickLand() : opts.depth || 0);
-  if (G.run.quick && G.floorBanner) G.floorBanner.small = 'QUICK RUN';
+  if (mode === 'adv' && !G.daily && !G.run.bow) starterKit(opts.depth || 0);
+  if (mode === 'arena') startArena(); else loadFloor(opts.depth || 0);
+  if (G.run.span && G.floorBanner) G.floorBanner.small = G.run.quick ? 'QUICK RUN' : actName(roadSlots()[G.run.span[0]].act);
   setState('play');
 }
 
 function loadFloor(depth) {
-  G.floor = genFloor(depth, G.run.well && depth === LANDS.length ? WELL : null);
+  G.floor = genFloor(depth);
   G.floor.boss = chooseBoss(G.floor);
   resetRunFx();
   netFloor();
   enterRoom(G.floor.start, null);
   placeHeroes(192, 128, 'u');
+  arriveBoon(depth);
   if (teamHas('starmap')) for (const r of G.floor.rooms) r.seen = true;
   if (depth === 0 && tutNeeded()) startTutorial(G.room);
   saveRun();
-  const loop = Math.floor(depth / LANDS.length);
+  const loop = Math.floor(depth / runPath().length);
   G.floorBanner = { t: 2.8, text: THEMES[G.floor.theme].name + (loop ? ' ' + '+'.repeat(Math.min(loop, 5)) : ''), small: 'LAND ' + (depth + 1) };
   Audio_.play(G.floor.land.song);
   if (!G.daily) noteTeam('land', depth);
@@ -110,8 +113,8 @@ function nextFloor() {
   Audio_.sfx('portal');
   // the Night Moth is beaten: the true ending
   if (G.floor.land === WELL) { startEnding(); return; }
-  // a quick run is one land too
-  if (G.run.quick && !G.daily && !G.won) {
+  // a quick run is one land, an act run its act's lands
+  if ((G.run.quick || spanDone()) && !G.daily && !G.won) {
     G.won = true; G.warp = null;
     Audio_.stop(); Audio_.sfx('win');
     saveBest(); noteCoins();
@@ -122,7 +125,7 @@ function nextFloor() {
     return;
   }
   // a daily run is one land; the weekly challenge ends after the third
-  if (G.daily && !G.won && (G.daily.kind === 'daily' || G.floor.depth === LANDS.length - 1)) {
+  if (G.daily && !G.won && (G.daily.kind === 'daily' || G.floor.depth === runPath().length - 1)) {
     G.won = true; G.warp = null;
     Audio_.stop(); Audio_.sfx('win');
     noteCoins();
@@ -132,7 +135,7 @@ function nextFloor() {
     return;
   }
   saveBest();
-  if (G.floor.depth === LANDS.length - 1 && !G.won) {
+  if (G.floor.depth === runPath().length - 1 && !G.won) {
     const st = Save.stats;
     G.won = true; st.wins++;
     st.bestTime = st.bestTime ? Math.min(st.bestTime, G.stats.time) : G.stats.time;
@@ -150,6 +153,9 @@ function nextFloor() {
     if (NET.role === 'host') netState('win');
     return;
   }
+  // the road forks here: the team picks the next land first
+  const f = forkChoices();
+  if (f) { openFork(f); return; }
   G.nextLock = true;
   wipe(() => { G.nextLock = false; loadFloor(G.floor.depth + 1); });
   if (NET.role === 'host') netState('wipe');
@@ -184,12 +190,14 @@ function enterRoom(room, from) {
   if (room.dirty) renderRoomStatic(room, G.floor.theme);
   if (!room.stocked) stockRoom(room);
   roomWind();
+  mechEnter(room);
   room.doorT = room.cleared ? 1 : 1.25; // uncleared rooms slam their doors shut just after you step in
   if (NET.role === 'host') netRoom(from);
   if (room.type === 'arena') return;
   if (room.cleared) saveRun();
   else {
     if (room.type === 'champion') spawnChampion(room);
+    else if (room.type === 'warden') spawnWarden();
     else if (room.type === 'rescue') { spawnRoomEnemies(room, 0); G.banner = { title: 'A CRITTER IN A CAGE!', sub: 'DEFEAT THE GUARDS TO SET IT FREE', t: 2.2, icon: null }; }
     else if (room.type === 'challenge') {
       room.waves = 1;
@@ -221,6 +229,8 @@ function stockRoom(room) {
   room.stocked = true;
   stockSpecial(room);
   const n = G.players.length;
+  if (room.lay === 'clock') clockStock(room);
+  if (room.lay === 'picnic') room.props.push({ kind: 'rug', spr: 'blanket', x: 192, y: 128, t: 0 });
   if (room.type === 'item') {
     // co-op: one extra choice per extra hero, everyone takes one
     const k = Math.min(5, 2 + n), ids = G.first && !G.run.picked ? firstRunItems(k) : itemPool(k), w = 48;
@@ -245,12 +255,13 @@ function spawnRoomEnemies(room, bonus) {
   const slots = room.slots.filter(s => G.players.every(p => Math.hypot(s[0] - p.x, s[1] - p.y) > 72));
   gshuffle(slots);
   const want = 3 + Math.min(depth, 5) + grndi(0, 1) + (room.dist >= 3 ? 1 : 0) + bonus * 2 + D.count + (crew - 1);
-  const n = Math.max(2, Math.min(slots.length, want, 12));
-  const eliteP = Math.min(0.3, 0.06 + depth * 0.03) + (room.type === 'challenge' || room.skull ? 0.15 : 0) + D.elite + 0.04 * (crew - 1);
+  const rule = LAY_RULE[room.lay] || {}, pool = rule.pool || (G.first && !depth ? FIRST_POOL : land.pool);
+  const n = Math.max(2, Math.min(slots.length, want, rule.max ? rule.max + crew - 1 : 12));
+  const eliteP = rule.calm || (G.first && !depth) ? 0 : Math.min(0.3, 0.06 + depth * 0.03) + (room.type === 'challenge' || room.skull ? 0.15 : 0) + D.elite + 0.04 * (crew - 1);
   let still = 0, elites = 0;
   for (let i = 0; i < n; i++) {
-    let type = pickWeighted(land.pool);
-    for (let k = 0; k < 6 && EDEF[type].still && still >= 2; k++) type = pickWeighted(land.pool);
+    let type = pickWeighted(pool);
+    for (let k = 0; k < 6 && EDEF[type].still && still >= 2; k++) type = pickWeighted(pool);
     if (EDEF[type].still) still++;
     const elite = elites < 1 + crew && grand() < eliteP;
     if (elite) elites++;
@@ -300,10 +311,12 @@ function roomCleared(room) {
     ids.forEach((id, i) => { addPedestal(room, 192 + (i - (ids.length - 1) / 2) * 48, 128, id); room.props[room.props.length - 1].group = 'champ'; });
     earnVault(8);
     toast('THE CHAMPION FALLS!');
-  } else if (room.type === 'normal') {
+  } else if (room.type === 'warden') wardenCleared(room);
+  else if (room.type === 'normal') {
     payReward(room, x, y);
     const r = grand(), luck = teamLuck();
-    if (r < 0.14 + luck * 0.05) room.props.push({ kind: 'chest', x, y, t: 0, open: false });
+    if (room.lay === 'picnic') room.props.push({ kind: 'chest', x: 192, y: 126, t: 0, open: false });
+    else if (r < 0.14 + luck * 0.05) room.props.push({ kind: 'chest', x, y, t: 0, open: false });
     else if (r < 0.55 + luck * 0.1) dropLoot(x, y);
   }
   saveRun();
@@ -368,6 +381,7 @@ function giveBossReward() {
   for (let i = 0; i < 4; i++) spawnPickup('coin', 192 + grnd(-10, 10), 120);
   // the first win over each boss always teaches something new
   for (const p of G.players) maybeScroll(192 + grnd(-16, 16), 124, cnt('b:' + (G.floor.boss || G.floor.land.boss)) <= 1 ? 1 : 0.4);
+  if (campHere()) stockCamp(room);
   Audio_.sfx('portal');
   Audio_.play(G.floor.land.song);
   saveRun();
@@ -558,12 +572,12 @@ function update(dt) {
   if (updateWipe(dt)) return;
   if (modalUp()) { updateModal(dt); return; }
   const onTitle = MENU_STATES.has(G.state) && (G.state !== 'settings' || G.back === 'title');
-  if (onTitle) { updateAmbient(dt, 'meadow'); Audio_.play('meadow'); }
+  if (onTitle && G.state !== 'casino') { updateAmbient(dt, 'meadow'); Audio_.play('meadow'); }
   const mp = !!NET.role;
   switch (G.state) {
     case 'title': {
       if (!G.noticesShown) titleNotices();
-      const items = titleItems(), c = menu(items, TITLE_Y, TITLE_GAP), id = items[c];
+      const items = titleItems(), c = titleMenu(items), id = items[c];
       if (id) clearBadge(TITLE_BADGE[id]);
       if (id === 'PLAY') { Audio_.sfx('confirm'); G.diff = 1; wipe(() => startRun('adv')); }
       else if (id === 'CONTINUE') { Audio_.sfx('confirm'); wipe(() => { if (!loadRun()) toast('THE SAVE COULD NOT BE LOADED'); }); }
@@ -571,16 +585,18 @@ function update(dt) {
       else if (id === 'ADVENTURE' || id === 'NEW ADVENTURE' || id === 'ARENA') { Audio_.sfx('confirm'); G.prep = { mode: id === 'ARENA' ? 'arena' : 'adv' }; setState('prep'); }
       else if (id === 'CO-OP') { Audio_.sfx('confirm'); setState('coop'); }
       else if (id === 'THE GARDEN') { Audio_.sfx('confirm'); openGarden(); }
+      else if (id === 'CASINO') { Audio_.sfx('confirm'); wipe(enterCasino); }
       else if (id === 'DAILY STAR RUN') { Audio_.sfx('confirm'); setState('daily'); G.menuSel = 0; G.dailyYard = false; }
       else if (id === 'SETTINGS') { Audio_.sfx('confirm'); G.back = 'title'; setState('settings'); }
       return;
     }
+    case 'casino': updateCasino(dt); return;
     case 'prep': {
       if (updateCouchJoin()) { for (const k in Input.hit) delete Input.hit[k]; return; }
       const r = updatePrep();
       if (r === 'back' && G.prep.yard) { Audio_.sfx('select'); enterYard(); }
       else if (r === 'back') { Audio_.sfx('select'); titleReturn(G.prep.mode === 'arena' ? 'ARENA' : hasRun() ? 'NEW ADVENTURE' : 'ADVENTURE'); }
-      else if (r === 'start') { Audio_.sfx('confirm'); const o = { trial: G.prepTrial || 0, quick: G.prep.mode === 'adv' && G.prepQuick }; wipe(() => startRun(G.prep.mode, G.couch && G.couch.length ? couchRoster() : null, o)); }
+      else if (r === 'start') { Audio_.sfx('confirm'); const o = Object.assign({ trial: G.prepTrial || 0 }, prepRows().includes('length') ? lenOpts(runLen()) : {}); wipe(() => startRun(G.prep.mode, G.couch && G.couch.length ? couchRoster() : null, o)); }
       return;
     }
     case 'coop': updateCoop(); return;
@@ -628,6 +644,7 @@ function update(dt) {
       }
       break;
     case 'ending': updateEnding(dt); return;
+    case 'fork': updateFork(dt); return;
     case 'pause': {
       const items = pauseItems(), c = menu(items, 118), id = items[c];
       if (pressed('Escape', 'KeyP', 'PadStart', 'PadB') || id === 'CONTINUE') { setState('play'); Audio_.sfx('select'); }
@@ -704,6 +721,8 @@ function update(dt) {
   updateCombo(dt);
   updateStarfall(dt);
   updateTide(dt);
+  mechUpdate(dt);
+  mechEvery(dt);
   if (G.corpse) updateCorpse(dt);
   if (G.reward && (G.reward.t -= dt) <= 0) { G.reward = null; giveBossReward(); }
   if (G.mode === 'arena') { if (!G.corpse && !G.reward && !G.boss) updateArena(dt); }
@@ -797,6 +816,8 @@ function renderWorld(ox, oy) {
   if (room.dirty) renderRoomStatic(room, theme);
   ctx.drawImage(room.canvas, ox, oy);
   drawPitLife(room, theme, ox, oy);
+  mechDraw(ox, oy, 0);
+  if (room.turn) drawPageTurn(room, ox, oy);
   drawDoors(room, ox, oy);
   drawEmblems(room, ox, oy);
   drawCracks(room, ox, oy);
@@ -826,19 +847,22 @@ function renderWorld(ox, oy) {
     else drawPlayer(d.o, ox, oy);
   }
   for (const p of G.players) if (p.orbitals && alive(p)) drawOrbitals(p, ox, oy);
+  mechDraw(ox, oy, 1);
   drawAmbient(ox, oy);
   drawShots(ox, oy);
   drawBolts(ox, oy);
   drawEBullets(ox, oy);
   drawStarfall(ox, oy);
   drawParts(ox, oy);
+  mechDraw(ox, oy, 2);
+  if (G.room.curl) drawPageCurl(G.room, ox, oy);
   drawTags(ox, oy);
   drawDoorWait(ox, oy);
   drawAimReticle(ox, oy);
 }
 
 const MM_ICON = { boss: 'mm_boss', item: 'mm_item', shop: 'mm_shop', challenge: 'mm_chal', shrine: 'mm_shrine', altar: 'mm_altar', fountain: 'mm_fount',
-  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock' };
+  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock', warden: 'mm_warden' };
 function drawEmblems(room, ox, oy) {
   for (const d in room.doors) {
     const t = room.doors[d].type;
@@ -916,10 +940,11 @@ function render() {
   const s = G.state;
   if (HUD.on) hctx.clearRect(0, 0, hudCv.width, hudCv.height);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (G.floor && (s === 'play' || s === 'pause' || s === 'over' || s === 'win' || (s === 'settings' && G.back !== 'title'))) drawBackdrop(G.floor.theme);
+  if (G.floor && (s === 'play' || s === 'pause' || s === 'fork' || s === 'over' || s === 'win' || (s === 'settings' && G.back !== 'title'))) drawBackdrop(G.floor.theme);
   else if (s === 'yard') drawBackdrop('meadow');
   ctx.setTransform(1, 0, 0, 1, SCR.ox, SCR.oy);
   if (s === 'title') drawTitle();
+  else if (s === 'casino') drawCasino();
   else if (s === 'daily') drawDaily();
   else if (s === 'yard') drawYard();
   else if (s === 'garden') drawHub();
@@ -943,6 +968,7 @@ function render() {
     else if (s === 'settings') drawSettings();
     else if (s === 'over') drawOver();
     else if (s === 'win') drawWin();
+    else if (s === 'fork') drawFork();
   }
   if (Input.lastAim === 'touch' && s === 'play' && !G.trans) drawTouch();
   drawWipe();

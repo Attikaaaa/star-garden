@@ -51,8 +51,8 @@ function heroBlink(p) {
   p.dashT = 0.08; // a sliver of rolling, so a bullet on the way still counts as a graze
   p.inv = Math.max(p.inv, 0.35);
 }
-// Collision mode while the hero moves: Bramble's leap sails over water and pits.
-const heroMoveMode = (p) => (p.dashT > 0 && heroOf(p).move === 'leap' ? 'shot' : 'player');
+// Collision mode while the hero moves: Bramble's leap and a Cloud Steps hop sail over water and pits.
+const heroMoveMode = (p) => (p.hopT > 0 || (p.dashT > 0 && heroOf(p).move === 'leap') ? 'shot' : 'player');
 // Bramble's leap lasts until he is back on solid ground.
 function heroLeapEnd(p, dt) {
   if (heroOf(p).move !== 'leap') return;

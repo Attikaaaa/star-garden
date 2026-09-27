@@ -6,7 +6,7 @@ const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform
 const Input = {
   down: Object.create(null),   // currently held (by e.code)
   hit: Object.create(null),    // pressed this frame
-  mx: VW / 2, my: VH / 2, mouseDown: false, mouseHit: false, mouseSeen: false,
+  mx: VW / 2, my: VH / 2, mouseDown: false, mouseHit: false, mouseSeen: false, wheel: 0,
   lastAim: IS_TOUCH ? 'touch' : 'mouse', // 'mouse' | 'keys' | 'pad' | 'touch'
   touchSlot: -1,  // belt slot tapped in the HUD
 };
@@ -91,6 +91,7 @@ cv.addEventListener('mousedown', e => {
   if (e.button === 0) { Input.mouseDown = true; Input.mouseHit = true; Input.lastAim = 'mouse'; }
   Audio_.unlock();
 });
+cv.addEventListener('wheel', e => { Input.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });
 window.addEventListener('mouseup', e => { if (e.button === 0) Input.mouseDown = false; });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -98,7 +99,7 @@ const key = (c) => !!Input.down[c];
 const pressed = (...codes) => codes.some(c => Input.hit[c]);
 function endInputFrame() {
   for (const k in Input.hit) delete Input.hit[k];
-  Input.mouseHit = false;
+  Input.mouseHit = false; Input.wheel = 0;
 }
 
 // ---------- Gamepad (standard mapping) ----------
@@ -160,7 +161,7 @@ cv.addEventListener('pointerdown', e => {
   Input.mx = x; Input.my = y; Input.mouseSeen = true;
   if (G.state === 'title') goFullscreen();
   if (G.state === 'settings' && G.tapFull && y >= G.tapFull[0] && y < G.tapFull[1]) toggleFullscreen();
-  if (G.state !== 'play') { Input.mouseHit = true; return; }
+  if (G.state !== 'play') { Input.mouseHit = true; Input.mouseDown = true; return; }
   const B = touchBtns();
   if (_inBtn(B.pause, x, y)) { Input.hit.TouchPause = true; return; }
   if (_inBtn(B.dash, x, y)) { Input.hit.TouchDash = true; return; }
@@ -176,6 +177,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   if (e.pointerType !== 'touch') return;
   const T = Input.touch, [x, y] = _tpos(e);
+  if (G.state !== 'play') { Input.mx = x; Input.my = y; } // a finger drags like a mouse (scratch cards)
   for (const s of [T.move, T.aim]) {
     if (!s || s.id !== e.pointerId) continue;
     s.x = x; s.y = y;
@@ -185,7 +187,7 @@ cv.addEventListener('pointermove', e => {
   }
 });
 function _tend(e) {
-  if (e.pointerType === 'touch') _touchT = performance.now();
+  if (e.pointerType === 'touch') { _touchT = performance.now(); Input.mouseDown = false; }
   const T = Input.touch;
   if (T.move && T.move.id === e.pointerId) T.move = null;
   if (T.aim && T.aim.id === e.pointerId) T.aim = null;

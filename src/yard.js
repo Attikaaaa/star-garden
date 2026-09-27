@@ -30,6 +30,9 @@ const DECOR = [
   { id: 'bush', name: 'A ROUND BUSH', price: 40, spr: 'brk_meadow', x: 320, y: 60, w: 7, h: 4 },
   { id: 'crystal', name: 'A CRYSTAL', price: 120, spr: 'rock_crystal', x: 24, y: 196, w: 6, h: 4 },
   { id: 'flowers', name: 'A FLOWER BED', price: 100, spr: 'g_plant3_R', x: 360, y: 196, w: 6, h: 3 },
+  // prizes from the casino's counter (cas: not sold at the stall)
+  { id: 'minislot', name: 'A TOY SLOT', price: 0, spr: 'cz_minislot', x: 232, y: 62, w: 6, h: 4, cas: true },
+  { id: 'coinfount', name: 'A COIN FOUNTAIN', price: 0, spr: 'cz_fount', x: 292, y: 128, w: 13, h: 4, cas: true },
 ];
 
 let YARD_ROOM = null;
@@ -133,7 +136,7 @@ function updateYard(dt) {
   Y.t = (Y.t || 0) + dt;
 }
 // A walking path around the garden's things: breadth-first search on an 8 px grid.
-function yardPath(x0, y0, x1, y1) {
+function yardPath(x0, y0, x1, y1, blocked = yardBlocked) {
   const C = 8, W = Math.ceil(VW / C), H = Math.ceil(VH / C), idx = (x, y) => y * W + x;
   const sx = Math.floor(x0 / C), sy = Math.floor(y0 / C), tx = Math.floor(x1 / C), ty = Math.floor(y1 / C);
   const prev = new Int32Array(W * H).fill(-1), q = [idx(sx, sy)];
@@ -147,7 +150,7 @@ function yardPath(x0, y0, x1, y1) {
       const n = idx(nx, ny);
       if (prev[n] >= 0) continue;
       const goal = nx === tx && ny === ty;
-      if (!goal && yardBlocked(nx * C + C / 2, ny * C + C / 2)) continue;
+      if (!goal && blocked(nx * C + C / 2, ny * C + C / 2)) continue;
       prev[n] = c;
       if (goal) { found = n; break; }
       q.push(n);
@@ -226,7 +229,7 @@ function stallStock() {
   return withSeed(hashSeed('stall', dayKey(), Save.born), () => {
     const out = [{ kind: 'seed', price: 30 }];
     if (scrollsLeft() > 0) out.push({ kind: 'scroll', price: 45 });
-    const d = gshuffle(DECOR.filter(x => !Save.decor.includes(x.id)))[0];
+    const d = gshuffle(DECOR.filter(x => !x.cas && !Save.decor.includes(x.id)))[0];
     if (d) out.push({ kind: 'decor', id: d.id, price: d.price });
     return out;
   });

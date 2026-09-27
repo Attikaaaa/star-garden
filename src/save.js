@@ -63,7 +63,7 @@ const Save = (() => {
     trials: { max: 0, best: {} },
     story: { stars: [], ending: false, lines: {} },
     nemesis: null, frog: 0, cloud: null, ver: '',
-    friends: [], me: null, season: null,
+    friends: [], me: null, season: null, casino: null,
   };
   const arr = (v, d) => (Array.isArray(v) ? v : d);
   const obj = (v, d) => (v && typeof v === 'object' && !Array.isArray(v) ? v : d);
@@ -97,6 +97,7 @@ const Save = (() => {
         Object.assign(s.trials, obj(raw.trials, {})); Object.assign(s.story, obj(raw.story, {}));
         s.nemesis = obj(raw.nemesis, null); s.cloud = obj(raw.cloud, null);
         s.friends = arr(raw.friends, []).filter(c => typeof c === 'string').slice(0, 30); s.me = obj(raw.me, null); s.season = obj(raw.season, null);
+        s.casino = obj(raw.casino, null);
       } else {
         // a player from before progress tracking: keep everything they could already use
         s.unl.items = FIRST_ITEMS.slice();

@@ -6,7 +6,7 @@
 const FOE_NAMES = {
   slime: 'SLIME', mini: 'MINI SLIME', gold: 'GOLDEN SLIME', bee: 'BEE', shroom: 'MUSHROOM', flower: 'FLOWER',
   crab: 'CRAB', wisp: 'WISP', jelly: 'JELLYFISH', bat: 'BAT', dummy: 'PRACTICE DUMMY',
-  king: 'SLIME KING', bcrab: 'GIANT CRAB', golem: 'CRYSTAL GOLEM',
+  king: 'SLIME KING', bcrab: 'GIANT CRAB', golem: 'CRYSTAL GOLEM', sky: 'LONG FALL',
 };
 const foeName = (t) => FOE_NAMES[t] || (EDEF[t] && EDEF[t].name) || String(t || '').toUpperCase();
 const aOrAn = (w) => (/^[AEIOU]/.test(w) ? 'AN ' : 'A ');
@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.7.0', lines: ['THE STAR CASINO OPENS: FIND IT ON THE TITLE SCREEN', 'SLOTS, BLACKJACK, POKER, ROULETTE, SIC BO AND SCRATCH CARDS', 'PLAY FOR STAR CHIPS, NEVER FOR REAL MONEY'] },
   { v: '1.6.0', lines: ['A NEW BOSS IN THE CRYSTAL CAVE: THE GEODE SPIDER'] },
   { v: '1.5.1', lines: ['CO-OP: RUNS ARE SAVED, CONTINUE THEM FROM THE LOBBY', 'CO-OP: THE HOST CAN GO BACK TO THE LOBBY FROM THE PAUSE MENU'] },
   { v: '1.5.0', lines: ['A NEW BOSS ON THE SHORE: THE TIDE TURTLE'] },
@@ -247,12 +248,13 @@ function drawEndScreen(title, col, sub) {
   }
 }
 
-// ---------- NEW badges on menu rows ----------
-function drawNewTags(items, y, gap, keyOf) {
+// ---------- NEW badges on menu rows (posOf(i): the row's [x, y]; default: centred) ----------
+function drawNewTags(items, y, gap, keyOf, posOf) {
   items.forEach((it, i) => {
     const k = keyOf(it);
     if (!k || (k !== true && !hasBadge(k))) return;
-    const sel = i === G.menuSel, x = VW / 2 + textW(it) / 2 + (sel ? 16 : 8);
-    if (Math.floor(G.time * 3) % 3) text('NEW', x, y + i * gap, 'P', 2);
+    const sel = i === G.menuSel, [x, ry] = posOf ? posOf(i) : [VW / 2, y + i * gap];
+    const nx = x + textW(it) / 2 + (sel ? 16 : 8);
+    if (Math.floor(G.time * 3) % 3) text('NEW', nx, ry, 'P', 2);
   });
 }

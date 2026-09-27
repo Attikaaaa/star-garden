@@ -44,6 +44,8 @@ function drawParts(ox, oy) {
       drawS(S(POOF[f]), ox + p.x - 5, oy + p.y - 5);
     } else if (p.spr === 'sparkle') {
       drawS(S(p.life / p.max > 0.5 ? 'sparkle_0' : 'sparkle_1'), ox + p.x - 1, oy + p.y - 1);
+    } else if (p.spr) {
+      drawS(S(p.spr), ox + p.x - 1, oy + p.y - 1, Math.floor(p.life * 6) & 1); // flutters (baked mirror)
     } else {
       rect(ox + p.x, oy + p.y, p.size, p.size, p.key);
     }
@@ -134,7 +136,7 @@ function movePlayer(p, dt) {
   const mx = I.mx, my = I.my;
   p.moving = !!(mx || my);
   if (p.moving) { const l = Math.hypot(mx, my); p.dx = mx / l; p.dy = my / l; }
-  if (I.dash && p.dashCool <= 0 && p.dashT <= 0) {
+  if (I.dash && p.dashCool <= 0 && p.dashT <= 0 && !(p.hopT > 0)) {
     const mv = heroOf(p).move;
     p.dashT = mv === 'leap' ? 0.3 : 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, mv === 'leap' ? 0.4 : 0.28); p.dashN++;
     if (p === G.player) note('roll');
@@ -143,7 +145,12 @@ function movePlayer(p, dt) {
     if (mv === 'blink') heroBlink(p);
   }
   let vx, vy;
-  if (p.dashT > 0) {
+  if (p.hopT > 0) { // a Cloud Steps updraft (lands.js): a hop over the sky, steered a little
+    p.hopT -= dt;
+    vx = p.hopVx + mx * 20; vy = p.hopVy + my * 20;
+    // still over the sky when it ends: hang on a moment longer, drifting on
+    if (p.hopT <= 0 && (p.hopHang += dt) < HOP_HANG && boxSolid(room, p.x + vx * dt, p.y + vy * dt, p.hw, p.hh, 'player')) p.hopT = dt;
+  } else if (p.dashT > 0) {
     p.dashT -= dt;
     const k = p.speed * (heroOf(p).move === 'leap' ? 2 : 2.6) * (p.buff.haste > 0 ? 1.15 : 1);
     vx = p.dx * k; vy = p.dy * k;
@@ -159,6 +166,7 @@ function movePlayer(p, dt) {
   }
   moveBox(room, p, vx * dt, vy * dt, heroMoveMode(p));
   heroLeapEnd(p, dt);
+  if (p.hopT > 0 || p.hopZ) { p.hopZ = p.hopT > 0; p.leapZ = p.hopZ ? Math.max(2, Math.sin(Math.PI * Math.min(1, 1 - p.hopT / HOP_T)) * HOP_Z) : 0; }
   if (p.moving) {
     const f0 = Math.floor(p.walkT / 0.11);
     p.walkT += dt * (p.dashT > 0 ? 2 : 1);
@@ -430,6 +438,33 @@ function fireShot(p, ang, dmg, spMul) {
   SHOTS.push(s);
 }
 
+// Crystal Cave: a shot that flies into a prism pillar leaves it as three narrower ones
+// (a shot splits twice at most; boomerangs and firework sparks just hit it). The pieces
+// ignore the pillar they came out of. Also used for a co-op client's own predicted shots,
+// so both screens split them the same way. Returns false when the shot does not split.
+const PRISM_FAN = 0.35, PRISM_DMG = 0.55;
+function splitShot(s, idx) {
+  if (s.kind === 'boomer' || s.mini || (s.gen || 0) >= 2) return false;
+  const x = (idx % COLS) * 16 + 8, y = OY + ((idx / COLS) | 0) * 16 + 4; // over the pillar's middle
+  const a = Math.atan2(s.vy, s.vx), sp = Math.hypot(s.vx, s.vy);
+  for (const da of [-PRISM_FAN, 0, PRISM_FAN]) SHOTS.push(Object.assign({}, s, {
+    x, y, vx: Math.cos(a + da) * sp, vy: Math.sin(a + da) * sp, dmg: s.dmg * PRISM_DMG, r: Math.max(2, s.r - 1),
+    prism: idx, gen: (s.gen || 0) + 1, hitList: s.hitList && s.hitList.slice(),
+  }));
+  prismFlash(idx, s);
+  return true;
+}
+// Rainbow sparks and a glassy ting. Co-op: the host's copy of a client's shot (ps) keeps the
+// sparks local and tags the sound, since that client's screen already split its own copy.
+function prismFlash(idx, s) {
+  const x = (idx % COLS) * 16 + 8, y = OY + ((idx / COLS) | 0) * 16 + 2;
+  if (s.ps) for (let k = 0; k < 6; k++) part(x, y, rnd(-40, 40), rnd(-30, 10), rnd(0.25, 0.4), PRISM_RAINBOW[k]);
+  else burst(x, y, 6, PRISM_RAINBOW, 45, 0.35);
+  if (s.ps && s.own) NET.sfxPid = s.own.pid;
+  Audio_.sfx('prism');
+  if (s.ps) NET.sfxPid = -1;
+}
+const PRISM_RAINBOW = ['P', 'O', 'y', 'h', 'c', '3'];
 function updateShots(dt) {
   const room = G.room;
   for (let i = SHOTS.length - 1; i >= 0; i--) {
@@ -487,9 +522,12 @@ function updateShots(dt) {
       }
     }
     // shots fly at hand height; their ground point is a few px lower
-    if (s.life > 0 && !s.ret && solidPx(room, s.x, s.y + 4, 'shot')) {
+    const pi = prismAt(room, s.x, s.y + 4);
+    if (s.life > 0 && !s.ret && pi !== s.prism && solidPx(room, s.x, s.y + 4, 'shot')) {
+      if (pi >= 0 && splitShot(s, pi)) { SHOTS[i] = SHOTS[SHOTS.length - 1]; SHOTS.pop(); continue; }
       const c = Math.floor(s.x / 16), r = Math.floor((s.y + 4 - OY) / 16);
       if (tileAt(room, c, r) === T_BRK) breakTile(room, c, r);
+      else if (tileAt(room, c, r) === T_BELL) bellHit(room, c, r);
       else if (room.hidden) shotWall(room, c, r);
       if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
       else if (s.bounce > 0) {
@@ -656,10 +694,10 @@ function breakTile(room, c, r) {
   flowKey = -1;
   const x = c * 16 + 8, y = OY + r * 16 + 10;
   poof(x, y - 2);
-  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
+  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
   noteTeam('brk');
-  if (grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6);
+  if (!(room.fort && room.fort.includes(r * COLS + c)) && grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6); // a warden's sand walls pay nothing
 }
 
 // ---------- Pickups ----------
@@ -759,7 +797,8 @@ function updatePickups(dt) {
       if (!k.z && !k.vz) k.ok = false; // just landed: check that it can be reached
     }
     if (!k.ok && !k.z && !k.vz) settlePickup(room, k);
-    const isHeart = k.type === 'heart' || k.type === 'half', waits = isHeart || k.type === 'pot';
+    if (k.type === 'seed') continue; // a Meadow seed is never picked up: it grows (lands.js)
+    const isHeart = k.type === 'heart' || k.type === 'half' || k.type === 'pollen', waits = isHeart || k.type === 'pot';
     for (const p of G.players) {
       if (!alive(p)) continue;
       const d = Math.hypot(p.x - k.x, p.y - 3 - k.y);
@@ -782,6 +821,10 @@ function updatePickups(dt) {
         noteFor(p, 'stardrop');
         Audio_.sfx('item');
         burst(k.x, k.y - 6, 12, ['Y', 'y', 'w'], 90, 0.5, { g: -30 });
+      } else if (k.type === 'starbit') {
+        addCharge(p, 0.34);
+        Audio_.sfx('graze');
+        burst(k.x, k.y - 5, 10, ['Y', 'y', 'w'], 80, 0.45, { g: -30 });
       } else if (k.type === 'scroll') {
         noteFor(p, 'scroll');
         Audio_.sfx('item');
@@ -803,13 +846,14 @@ function updatePickups(dt) {
 }
 const COIN_FR = ['coin_0', 'coin_1', 'coin_2', 'coin_1'];
 function drawPickup(k, ox, oy) {
+  if (k.type === 'seed') { drawSeed(k, ox, oy); return; }
   const bob = k.z > 0 ? k.z : Math.max(0, Math.sin(k.t * 4)) * 1.5;
   shadow(ox + k.x, oy + k.y, 7);
   let s, v = 0;
   if (k.type === 'coin') { const f = Math.floor(k.t * 8) % 4; s = S(COIN_FR[f]); v = f === 3 ? 1 : 0; }
   else if (k.type === 'scroll') s = S('scroll_' + (Math.floor(k.t * 3) % 2));
   else if (k.type === 'key') s = S('key');
-  else if (k.type === 'stardrop') s = S('stardrop');
+  else if (k.type === 'stardrop' || k.type === 'starbit' || k.type === 'pollen' || k.type === 'shell' || k.type === 'pearl') s = S(k.type);
   else s = S(k.type === 'pot' ? 'pot_' + k.pot : k.type === 'gem' ? 'gem' : k.type === 'heart' ? 'heart' : 'heart_half');
   drawS(s, ox + k.x - (s.w >> 1), oy + k.y - s.h - bob + 1, v);
 }
@@ -915,14 +959,16 @@ function drawProp(o, ox, oy) {
     const say = o.say && o.t < o.say.until ? o.say : null;
     const hop = say && say.happy ? Math.round(Math.abs(Math.sin(o.t * 9)) * 4) : 0;
     drawFeet(S(Math.floor(o.t * 2) % 2 ? 'frog_1' : 'frog_0'), ox + o.x, oy + o.y - hop, G.player.x < o.x ? 1 : 0);
-    if (say || Math.hypot(G.player.x - o.x, G.player.y - o.y) < 90) {
-      const msg = say ? say.msg : G.coins >= 15 ? 'RIBBIT! TAKE A LOOK!' : G.coins >= 4 ? 'RIBBIT! NEED A HEART?' : 'RIBBIT! GO FIND SOME COINS!';
-      const w = textW(msg) + 10, bx = Math.round(ox + o.x - w / 2), by = Math.round(oy + o.y - 34);
+    if (say || o.letter !== undefined || Math.hypot(G.player.x - o.x, G.player.y - o.y) < 90) {
+      const msg = say ? say.msg : o.letter !== undefined ? campLine(o) : G.coins >= 15 ? 'RIBBIT! TAKE A LOOK!' : G.coins >= 4 ? 'RIBBIT! NEED A HEART?' : 'RIBBIT! GO FIND SOME COINS!';
+      // the bubble stays inside the play view; its tail keeps pointing at the frog
+      const w = textW(msg) + 10, tx = Math.round(ox + o.x), by = Math.round(oy + o.y - 34);
+      const bx = Math.max(ox + 4, Math.min(ox + VW - 4 - w, tx - (w >> 1)));
       rect(bx + 1, by, w - 2, 15, '0'); rect(bx, by + 1, w, 13, '0');
       rect(bx + 1, by + 1, w - 2, 13, 'w');
-      rect(bx + w / 2 - 2, by + 14, 5, 1, 'w'); rect(bx + w / 2 - 1, by + 15, 3, 1, 'w'); rect(bx + w / 2, by + 16, 1, 1, '0');
-      rect(bx + w / 2 - 3, by + 14, 1, 1, '0'); rect(bx + w / 2 + 3, by + 14, 1, 1, '0'); rect(bx + w / 2 - 2, by + 15, 1, 1, '0'); rect(bx + w / 2 + 2, by + 15, 1, 1, '0');
-      text(msg, ox + o.x, by + 4, '1', 0, 1);
+      rect(tx - 2, by + 14, 5, 1, 'w'); rect(tx - 1, by + 15, 3, 1, 'w'); rect(tx, by + 16, 1, 1, '0');
+      rect(tx - 3, by + 14, 1, 1, '0'); rect(tx + 3, by + 14, 1, 1, '0'); rect(tx - 2, by + 15, 1, 1, '0'); rect(tx + 2, by + 15, 1, 1, '0');
+      text(msg, bx + (w >> 1), by + 4, '1', 0, 1);
     }
   } else if (o.kind === 'portal') {
     const f = Math.floor(o.t * 8) % 3;
@@ -933,7 +979,8 @@ function drawProp(o, ox, oy) {
     drawFeet(S(o.open ? 'chest_1' : 'chest_0'), ox + o.x, oy + o.y + 1 - pop);
     if (!o.open && Math.floor(o.t * 2) % 3 === 0) drawS(S('sparkle_0'), ox + o.x + 5, oy + o.y - 14);
   } else if (o.kind === 'rug') {
-    drawS(S('rug'), ox + o.x - 88, oy + o.y - 14);
+    const s = S(o.spr || 'rug');
+    drawS(s, ox + o.x - (s.w >> 1), oy + o.y - (s.h >> 1));
   }
 }
 

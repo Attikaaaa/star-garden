@@ -213,6 +213,7 @@ function enemyStatus(e, dt) {
     if ((e.burnTick = (e.burnTick || 0) - dt) <= 0) { e.burnTick = 0.4; hurtEnemy(e, 0.8, e.x, e.y - e.h / 2, true, null); }
   }
   if (e.slowT > 0) e.slowT -= dt;
+  if (e.sleepT > 0 && EDEF[e.type].warden) e.sleepT = 0; // too proud to nap
   if (e.sleepT > 0) { e.sleepT -= dt; return 0; }
   return (e.slowT > 0 ? 0.55 : 1) * (e.affix ? affixTick(e, dt) : 1);
 }

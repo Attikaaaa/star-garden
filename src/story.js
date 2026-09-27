@@ -12,6 +12,7 @@ const FROG_LINES = [
   { id: 'bcrab', when: (r) => r.killer === 'bcrab', text: 'THAT CRAB CHARGES STRAIGHT. STEP ASIDE!' },
   { id: 'golem', when: (r) => r.killer === 'golem', text: 'THE GOLEM IS SLOW. KEEP MOVING AND KEEP SHOOTING.' },
   { id: 'queen', when: (r) => r.killer === 'queen', text: 'THE QUEEN LEAVES HONEY WHERE SHE FLIES. STAY OUT OF IT.' },
+  { id: 'sky', when: (r) => r.killer === 'sky', text: 'WOBBLY CLOUDS PUFF AWAY. REST ON THE GOLDEN STONES.' },
   { id: 'mayor', when: (r) => r.killer === 'mayor', text: 'WHEN THE GROUND BULGES, MOVE. HE POPS UP RIGHT THERE.' },
   { id: 'turtle', when: (r) => r.killer === 'turtle', text: 'WHEN THE HORN SOUNDS, FIND THE GAP OR HIDE BEHIND A ROCK.' },
   { id: 'geode', when: (r) => r.killer === 'geode', text: 'WHEN THE WEBS GLOW, GET OFF THE LINES. THEY SNAP TIGHT.' },
@@ -56,7 +57,7 @@ function enterWell() {
   G.nextLock = true;
   wipe(() => {
     G.nextLock = false;
-    loadFloor(LANDS.length);
+    loadFloor(runPath().length);
     G.floorBanner = { t: 3.4, text: 'THE STAR WELL', small: 'THE SEVEN STARS OPEN THE WAY' };
   });
 }

@@ -254,6 +254,11 @@ defT('pit', `
   def('brk_crystal', stamp(sculpt(16, 16, [
     { e: [8, 10, 6.5, 6], ramp: '1234' }, { r: [5, 1, 6, 5, 1], ramp: '1234', hi: false },
   ]), 6, 9, '.c.\ncCc\n.c.'));
+  // Cloud Steps: a sunstone boulder with a gold sun, and a pink candy-floss puff
+  def('rock_cloud', stamp(rock('eaAY'), 6, 7, '.y.\nyoy\n.y.'));
+  def('brk_cloud', stamp(sculpt(16, 16, [
+    { e: [5, 10, 4.5, 4.5], ramp: 'pPqw' }, { e: [11, 10, 4.5, 4.5], ramp: 'pPqw' }, { e: [8, 7, 5.5, 5], ramp: 'pPqw' },
+  ]), 5, 5, 'Y...\n....\n...w'));
 })();
 
 // ---------- Pickups, shots, props ----------

@@ -6,12 +6,33 @@
 
 // ---------- Floor layout (called while a floor is generated, seeded) ----------
 const SPECIALS = [['shrine', 3], ['altar', 2], ['fountain', 2], ['gamble', 2], ['rescue', 2], ['champion', 2]];
-function addSpecialRooms(list, at, add, depth) {
+function addSpecialRooms(list, at, add, depth, land) {
+  // the land's Warden waits in a spare dead end (never on a first run); with none spare it
+  // gets a new one, grown off a room with an empty neighbour
+  if (WARDENS[land.id] && !G.first) {
+    let w = list.find(r => r.type === 'normal' && Object.keys(r.doors).length === 1 && r.dist >= 2);
+    if (!w) {
+      const spots = [];
+      for (const r of list) if (r.type === 'normal' && r.dist >= 1) for (const k in DIRS) {
+        const x = r.gx + DIRS[k][0], y = r.gy + DIRS[k][1];
+        if (x < 0 || y < 0 || x > 8 || y > 8 || at(x, y)) continue;
+        let n = 0;
+        for (const j in DIRS) if (at(x + DIRS[j][0], y + DIRS[j][1])) n++;
+        if (n === 1) spots.push([r, k, x, y]);
+      }
+      if (spots.length) {
+        const [r, k, x, y] = gpick(spots);
+        w = add(x, y); w.dist = r.dist + 1;
+        r.doors[k] = w; w.doors[OPP[k]] = r;
+      }
+    }
+    if (w) w.type = 'warden';
+  }
   const normals = gshuffle(list.filter(r => r.type === 'normal' && r.dist >= 1));
   const kinds = [];
   for (let k = 0; k < 6 && kinds.length < 2; k++) { const t = pickWeighted(SPECIALS); if (!kinds.includes(t)) kinds.push(t); }
   kinds.forEach((t, i) => { if (normals[i]) normals[i].type = t; });
-  // a spare dead end becomes the vault; one normal room pays its key
+  // a spare dead end may hold the vault
   const ends = list.filter(r => r.type === 'normal' && Object.keys(r.doors).length === 1 && r.dist >= 2);
   if (ends.length && grand() < 0.6) {
     const v = ends[0];
@@ -93,7 +114,7 @@ const CRITTERS = { chick: 'CHICK', hedgehog: 'HEDGEHOG', duck: 'DUCKLING' };
 function nextCritter() { const left = Object.keys(CRITTERS).filter(c => !Save.critters.includes(c)); return left.length ? gpick(left) : gpick(Object.keys(CRITTERS)); }
 
 // ---------- Talking to the special props ----------
-const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar']);
+const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp']);
 // Returns true when the prop was one of ours.
 function roomInteract(o, p) {
   const room = G.room;
@@ -108,6 +129,7 @@ function roomInteract(o, p) {
     G.propsN++;
     return true;
   }
+  if (o.kind === 'camp') { restAtCamp(o, p); return true; }
   if (o.kind === 'fountain') {
     if (o.used) { say(p, 'THE FOUNTAIN IS DRY'); Audio_.sfx('deny'); return true; }
     o.used = true;
@@ -156,6 +178,7 @@ function roomInteract(o, p) {
 // The tip under the hero when they stand at one of our props: [title, line, action].
 function roomPropTip(o) {
   if (o.kind === 'bless') { const B = BLESSINGS[o.bless]; return ['BLESSING: ' + B.name, B.desc, 'TAKE']; }
+  if (o.kind === 'camp') return ['A CAMPFIRE', o.used ? 'THE FIRE CRACKLES' : NET.role || couchOn() ? 'REST: EVERYONE HEALS' : 'REST: HEAL AND SAVE THE RUN', 'REST'];
   if (o.kind === 'fountain') return ['A FOUNTAIN', o.used ? 'THE FOUNTAIN IS DRY' : 'HEALS EVERYONE', 'DRINK'];
   if (o.kind === 'gfrog') return ['THE LUCKY FROG', o.plays >= 3 ? 'NO MORE GAMES TODAY!' : 'A GAME? 8 COINS!', 'PLAY'];
   if (o.kind === 'cage') return ['A CRITTER IN A CAGE!', G.room.cleared ? 'SET IT FREE' : 'DEFEAT THE GUARDS FIRST', 'OPEN'];
@@ -204,6 +227,16 @@ function drawRoomProp(o, ox, oy) {
     } else if (o.t < 99) {
       const c = S('crit_' + o.critter + '_' + (Math.floor(o.t * 6) % 2));
       drawFeet(c, x + Math.sin(o.t * 2) * 20, y + 4);
+    }
+    return true;
+  }
+  if (o.kind === 'camp') {
+    shadow(x, y + 1, 26);
+    drawS(S('camp_' + (Math.floor(o.t * 6) % 3)), x - 12, y - 19);
+    // embers drift up from the fire
+    for (let i = 0; i < 3; i++) {
+      const k = (o.t * 0.7 + i / 3) % 1;
+      rect(Math.round(x - 1 + Math.sin((o.t + i) * 3) * 3), Math.round(y - 20 - k * 26), 1, 1, k < 0.5 ? 'Y' : 'O');
     }
     return true;
   }

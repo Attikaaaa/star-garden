@@ -274,7 +274,7 @@ function hostRejoin(L, rj, seat) {
   G.players.push(p); flowKey = -1;
   sendR(L, { t: 'hi', pid: L.pid });
   sendR(L, startMsg()); sendR(L, floorMsg()); sendR(L, roomFullMsg());
-  if (G.state === 'over' || G.state === 'win') sendR(L, stateMsg(G.state));
+  if (G.state === 'over' || G.state === 'win' || G.state === 'fork') sendR(L, stateMsg(G.state));
   poof(p.x, p.y - 8);
   toast(L.name + ' IS BACK!');
 }
@@ -286,7 +286,7 @@ function hostResync(L, m) {
   if (m.need === 'start') sendR(L, startMsg());
   sendR(L, floorMsg());
   sendR(L, roomFullMsg());
-  if (G.state === 'over' || G.state === 'win') sendR(L, stateMsg(G.state));
+  if (G.state === 'over' || G.state === 'win' || G.state === 'fork') sendR(L, stateMsg(G.state));
 }
 // A client's controls and its hero's position.
 function hostInput(p, L, m) {
@@ -372,18 +372,18 @@ function netFloor() { if (NET.role === 'host') hostAll(floorMsg()); }
 function roomMsg(room) {
   const rooms = G.floor.rooms;
   return {
-    i: rooms.indexOf(room), tiles: Array.from(room.tiles).join(''), pits: room.pits, seed: room.seed,
+    i: rooms.indexOf(room), tiles: Array.from(room.tiles).join(''), pits: room.pits, seed: room.seed, lay: room.lay, flip: room.flip,
     sv: rooms.map(r => (r.seen ? 1 : 0) + (r.visited ? 2 : 0) + (r.cleared ? 4 : 0)).join(''),
   };
 }
-const roomFullMsg = () => Object.assign({ t: 'room', props: G.room.props, pickups: G.room.pickups.map(k => pack(k, KF)) }, roomMsg(G.room));
+const roomFullMsg = () => Object.assign({ t: 'room', wind: G.wind0 || 0, props: G.room.props, pickups: G.room.pickups.map(k => pack(k, KF)) }, roomMsg(G.room));
 function netRoom() {
   if (NET.role !== 'host') return;
   hostAll(roomFullMsg());
   NET.sig = '';
 }
 function netTrans(dir) { hostAll(Object.assign({ t: 'trans', dir }, roomMsg(G.room.doors[dir]))); }
-const stateMsg = (s) => ({ t: 'state', s, record: G.record, stats: G.stats, won: G.won, wave: G.arena && G.arena.wave, depth: G.floor && G.floor.depth, kills: G.players.map(p => [p.pid, p.kills]), tv: G.run.team || 0 });
+const stateMsg = (s) => ({ t: 'state', s, record: G.record, stats: G.stats, won: G.won, wave: G.arena && G.arena.wave, depth: G.floor && G.floor.depth, kills: G.players.map(p => [p.pid, p.kills]), tv: G.run.team || 0, fork: s === 'fork' ? { opts: G.fork.opts, sel: G.fork.sel, act: G.fork.act, more: G.fork.more } : undefined });
 function netState(s) { if (NET.role === 'host') hostAll(stateMsg(s)); }
 // The host takes everyone back to the lobby (a run ended, or the wrong mode was picked):
 // the run is saved if it can be, and friends may join again.
@@ -449,7 +449,7 @@ function liveBullets() {
 const tileSum = (room) => { let h = 0; for (let i = 0; i < room.tiles.length; i++) h = (h * 7 + room.tiles[i]) % 1000003; return h; };
 function propsSig() {
   let s = '';
-  for (const o of G.room.props) s += o.kind + (o.item || '') + (o.open ? 1 : 0) + (o.took ? o.took.join('') : '') + (o.say ? o.say.msg : '') + (o.price || '') + '|';
+  for (const o of G.room.props) s += o.kind + (o.item || '') + (o.open || o.used ? 1 : 0) + (o.took ? o.took.join('') : '') + (o.say ? o.say.msg : '') + (o.price || '') + (o.sig || '') + '|';
   return s;
 }
 function netHostTick(dt) {
@@ -466,7 +466,7 @@ function netHostTick(dt) {
     S: SHOTS.map(s => { const a = pack(s, SF); a.push(s.ps && s.own ? s.own.pid : -1); return a; }),
     B: liveBullets().map(b => pack(b, BF)),
     K: room.pickups.map(k => pack(k, KF)),
-    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall]),
+    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall, m.len, m.h]),
     H: G.hazards.map(h => [r1(h.x), r1(h.y), r1(h.life)]),
     T: G.turrets.map(t => [r1(t.x), r1(t.y), r1(t.life), r1(t.flash)]),
     L: BOLTS.map(b => [b.x0, b.y0, b.x1, b.y1, b.mx, b.my, b.t].map(r1)),
@@ -615,7 +615,7 @@ function netPoll() {
   if (NET.role === 'host' && (NET.beatT = (NET.beatT || 0) + 1) % 60 === 0) {
     // once a second: remind everyone where the game is (a message can get lost on a broker)
     if (G.state === 'lobby') netLobbySync();
-    else if (NET.playing && (G.state === 'over' || G.state === 'win')) netState(G.state);
+    else if (NET.playing && (G.state === 'over' || G.state === 'win' || G.state === 'fork')) netState(G.state);
   }
   if (NET.role === 'client' && NET.linked && now - NET.heard > 15000) { clientLost('CONNECTION LOST'); return; }
   const q = NET.q; NET.q = [];
@@ -685,7 +685,7 @@ function clientFloor(m) {
 function fillRoom(m) {
   const room = G.floor.rooms[m.i];
   room.tiles = Uint8Array.from(m.tiles, c => +c);
-  room.pits = m.pits; room.seed = m.seed; room.dirty = true;
+  room.pits = m.pits; room.seed = m.seed; room.lay = m.lay; room.flip = m.flip; room.dirty = true;
   [...m.sv].forEach((c, i) => { const r = G.floor.rooms[i]; r.seen = !!(+c & 1); r.visited = !!(+c & 2); if (r !== room || +c & 4) r.cleared = !!(+c & 4); });
   return room;
 }
@@ -694,6 +694,7 @@ function clientRoom(m) {
   const room = fillRoom(m);
   G.room = room; G.trans = null;
   room.props = m.props; room.pickups = m.pickups.map(a => unpack(a, KF, {}));
+  G.wind0 = m.wind || 0;
   SHOTS.length = 0; clearEBullets(); G.enemies.length = 0; G.hazards.length = 0; G.markers.length = 0; G.turrets.length = 0; BOLTS.length = 0;
   for (const q of PARTS) q.life = 0;
   resetAmbient(G.floor.theme);
@@ -710,6 +711,7 @@ function clientTrans(m) {
 function clientState(m) {
   if (m.stats) G.stats = m.stats;
   if (m.tv > (NET.tvSeen || 0)) { addVault(m.tv - NET.tvSeen); NET.tvSeen = m.tv; }
+  if (m.fork) G.fork = Object.assign({ t: G.state === 'fork' && G.fork ? G.fork.t : 0 }, m.fork);
   if (m.s === G.state) return; // a reminder of what we already know
   G.won = m.won;
   // our own record, not the host's
@@ -827,7 +829,7 @@ function clientSnap(m) {
     unpack(a, BF, b); b.spr = S(b.key); b.life = 1; b.t = 0;
   }
   G.room.pickups = m.K.map(a => unpack(a, KF, {}));
-  G.markers = m.M.map(([x, y, t, max, kind, a, fall]) => ({ x, y, t, max, kind, a, fall }));
+  G.markers = m.M.map(([x, y, t, max, kind, a, fall, len, h]) => ({ x, y, t, max, kind, a, fall, len, h }));
   G.hazards = m.H.map(([x, y, life]) => ({ x, y, life }));
   G.turrets = m.T.map(([x, y, life, flash]) => ({ x, y, life, flash }));
   BOLTS.length = 0;
@@ -922,12 +924,14 @@ function clientPlay(dt) {
       if (d < 9) { SHOTS.splice(i, 1); continue; }
       s.vx += (dx / d * sp - s.vx) * Math.min(1, dt * 7); s.vy += (dy / d * sp - s.vy) * Math.min(1, dt * 7);
     }
+    if (G.wind && !s.ret) s.vx += G.wind * dt; // as updateShots does
     s.x += s.vx * dt; s.y += s.vy * dt; s.t += dt;
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: 1, drag: 1 });
     if (s.pred && predShot(s, px, py, dt)) SHOTS.splice(i, 1);
   }
   for (const b of EBULLETS) if (b.life > 0) { b.x += b.vx * dt; b.y += b.vy * dt; b.t += dt; }
   clientHits(me);
+  mechEvery(dt);
   for (const k2 of G.room.pickups) k2.t += dt;
   for (const o of G.room.props) o.t = (o.t || 0) + dt;
   for (const t of G.turrets) { t.life -= dt; t.flash -= dt; }
@@ -963,7 +967,9 @@ function predShot(s, px, py, dt) {
       if (s.pierce > 0) { s.pierce--; (s.hitList || (s.hitList = [])).push(e); } else { s.life = 0; break; }
     }
   }
-  if (s.life > 0 && !s.ret && solidPx(room, s.x, s.y + 4, 'shot')) {
+  const pi = prismAt(room, s.x, s.y + 4);
+  if (s.life > 0 && !s.ret && pi !== s.prism && solidPx(room, s.x, s.y + 4, 'shot')) {
+    if (pi >= 0 && splitShot(s, pi)) return true;
     if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
     else if (s.bounce > 0) {
       s.bounce--;
@@ -996,13 +1002,15 @@ function clientHits(me) {
     }
   }
   if (!hit) for (const e of G.enemies) {
-    if (e.dead || e.passive || e.ghost || e.stag > 0 || (e.z || 0) >= 8 || e.spawnT > 0) continue;
+    if (e.dead || e.passive || e.ghost || e.calm || e.stag > 0 || (e.z || 0) >= 8 || e.spawnT > 0) continue;
     if (Math.hypot(me.x - e.x, (me.y - 5) - (e.y - e.h / 2)) < e.r + 4) { hit = true; break; }
   }
   if (!hit) for (const k of G.markers) {
     if (!k.done && !k.kind && k.t <= 0.05 && Math.hypot(me.x - k.x, (me.y - k.y) * 1.6) < 10) { k.done = true; hit = true; break; }
     if (!k.done && k.kind === 'web' && k.t <= 0.05 && webHit(k, me)) { k.done = true; hit = true; break; }
     if (k.kind === 'beam' && beamHit(k, me)) { hit = true; break; }
+    if (!k.done && k.kind === 'bolt' && k.t <= 0.05 && zapHit(k, me)) { k.done = true; hit = true; break; }
+    if (k.kind === 'zap' && zapHit(k, me)) { hit = true; break; }
   }
   if (!hit) return;
   sendR(NET.host, { t: 'hit', b: bullet });

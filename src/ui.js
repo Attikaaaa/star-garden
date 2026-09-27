@@ -80,8 +80,9 @@ function drawHUD() {
   drawKills(right);
   hudOff();
   drawCombo();
-  if (G.boss && !G.boss.dead && G.boss.state !== 'intro') {
-    const b = G.boss, w = 120, x = (VW - w) / 2, y = 15;
+  const b = G.boss && !G.boss.dead && G.boss.state !== 'intro' ? G.boss : wardenOf();
+  if (b) {
+    const w = 120, x = (VW - w) / 2, y = 15;
     rect(x - 1, y - 1, w + 2, 6, '0');
     rect(x, y, w, 4, '1');
     const f = Math.max(0, Math.round(w * b.hp / b.maxHp));
@@ -89,7 +90,7 @@ function drawHUD() {
     rect(x, y, f, 1, b.stag > 0 ? 'C' : 'q');
     // a notch where each new phase begins
     for (const k of EDEF[b.type].phases || [0.5]) rect(x + Math.round(w * k), y, 1, 4, '0');
-    text(curBossName(), VW / 2, 3, 'w', 2, 1);
+    text(b.boss ? curBossName() : foeName(b.type), VW / 2, 3, 'w', 2, 1);
   }
   G.tipRect = null;
   if (G.state !== 'play') return;
@@ -278,16 +279,17 @@ function menu(items, y, gap) {
   return chosen;
 }
 function pointer(x, y) { text('>', x - (Math.floor(G.time * 4) % 2), y, 'Y', 2); }
-function drawMenu(items, y, gap, cur) {
+// posOf(i): the centre of row i as [x, y] (the title menu has two columns; default: centred)
+function drawMenu(items, y, gap, cur, posOf) {
   gap = gap || 14;
   if (cur === undefined) cur = G.menuSel;
   items.forEach((it, i) => {
-    const sel = i === cur;
-    text(it, VW / 2, y + i * gap, sel ? 'Y' : 'l', 2, 1);
+    const sel = i === cur, [x, ry] = posOf ? posOf(i) : [VW / 2, y + i * gap];
+    text(it, x, ry, sel ? 'Y' : 'l', 2, 1);
     if (sel) {
       const w = textW(it), bob = Math.floor(G.time * 4) % 2;
-      text('>', VW / 2 - w / 2 - 9 - bob, y + i * gap, 'Y', 2);
-      text('<', VW / 2 + w / 2 + 6 + bob, y + i * gap, 'Y', 2);
+      text('>', x - w / 2 - 9 - bob, ry, 'Y', 2);
+      text('<', x + w / 2 + 6 + bob, ry, 'Y', 2);
     }
   });
 }
@@ -299,9 +301,12 @@ function keyCap(x, y) {
 }
 
 // ---------- Title ----------
-const TITLE_Y = 116, TITLE_GAP = 11;
+// Two columns: play choices on the left, the extras (and the casino) on the right,
+// Pip and friends beside them. A first launch keeps the classic centred menu.
+const TITLE_Y = 112, TITLE_GAP = 14, TITLE_COL1 = 178, TITLE_COL2 = 306;
 // The title menu grows as the player gets to things: a first launch shows just PLAY.
 const TITLE_BADGE = { ARENA: 'menu:arena', 'CO-OP': 'menu:coop', 'DAILY STAR RUN': 'menu:daily' };
+const TITLE_SIDE = new Set(['CO-OP', 'THE GARDEN', 'CASINO', 'SETTINGS']);
 function titleItems() {
   const first = Save.stats.runs === 0 && !hasRun();
   const out = first ? ['PLAY'] : hasRun() ? ['CONTINUE', 'NEW ADVENTURE'] : ['ADVENTURE'];
@@ -309,7 +314,37 @@ function titleItems() {
   if (menuOpen('arena')) { if (hasArena()) out.push('CONTINUE ARENA'); out.push('ARENA'); }
   if (menuOpen('coop')) out.push('CO-OP');
   if (menuOpen('garden')) out.push('THE GARDEN');
+  if (!first) out.push('CASINO');
   return out.concat(['SETTINGS']);
+}
+// How many items the left (play) column holds.
+const titleCols = (items) => { const n = items.findIndex(it => TITLE_SIDE.has(it)); return n < 0 ? items.length : n; };
+const titleClassic = (items) => items[0] === 'PLAY';
+function titleItemX(items, i) {
+  if (titleClassic(items)) return VW / 2;
+  return i < titleCols(items) ? TITLE_COL1 : TITLE_COL2;
+}
+// Rows sit under their own column's top, not under the whole list's position.
+function titleItemY(items, i) {
+  const n1 = titleCols(items);
+  return TITLE_Y + (titleClassic(items) || i < n1 ? i : i - n1) * TITLE_GAP;
+}
+// The title's own menu(): two columns, up/down walks the list, left/right hops columns.
+function titleMenu(items) {
+  menuNav(items.length);
+  const n1 = titleCols(items);
+  if (!titleClassic(items)) {
+    if (pressed(...K_LEFT) && G.menuSel >= n1) { G.menuSel -= n1; Audio_.sfx('select'); }
+    else if (pressed(...K_RIGHT) && G.menuSel < n1 && n1 < items.length) { G.menuSel = Math.min(items.length - 1, G.menuSel + n1); Audio_.sfx('select'); }
+  }
+  let chosen = -1;
+  const wide = Input.lastAim === 'touch' ? 118 : 0;
+  items.forEach((it, i) => {
+    const w = wide || textW(it) + 22;
+    if (hoverRow(i, titleItemX(items, i) - w / 2, titleItemY(items, i) - 3, w, TITLE_GAP - 1)) chosen = i;
+  });
+  if (pressed(...K_OK)) chosen = G.menuSel;
+  return chosen;
 }
 function drawTitleBg() {
   const t = G.time;
@@ -334,25 +369,27 @@ function drawTitle() {
   const t = G.time;
   drawTitleBg();
   text('THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', VW / 2, 52, 'Y', 2, 1);
-  const hx = VW / 2, hy = 110;
+  const items = titleItems();
+  // Pip and friends stand centred under the logo on a first launch, beside the menu later
+  const hx = titleClassic(items) ? VW / 2 : 68, hy = titleClassic(items) ? 104 : 134;
   shadow(hx, hy, 12);
   drawFeet(S(heroPre(heroUnlocked(Save.hero) ? Save.hero : 'pip') + 'd' + HERO_WALK[Math.floor(t / 0.14) % 4] + SKIN[Save.skin]), hx, hy + 1);
   if (Save.pet) { shadow(hx + 17, hy, 8); drawFeet(S('pet_' + Save.pet + '_' + Math.floor(t * (Save.pet === 'bee' ? 14 : 2)) % 2), hx + 17, hy + 1 - (Save.pet === 'bee' ? 7 : 0), 1); }
-  const sx = hx - 44, sy = 108;
+  const sx = hx - 44, sy = hy - 2;
   const sj = Math.max(0, Math.sin(t * 5)) * 6;
   shadow(sx, sy, 14);
   drawFeet(S(sj > 3 ? 'slime_green_stretch' : sj > 0.5 ? 'slime_green_idle' : 'slime_green_squash'), sx, sy - sj + 1);
-  const bx = hx + 44, by = 104 + Math.sin(t * 4) * 2;
-  shadow(bx, 108, 10);
+  const bx = hx + 44, by = hy - 6 + Math.sin(t * 4) * 2;
+  shadow(bx, hy - 2, 10);
   drawFeet(S('bee_' + Math.floor(t * 16) % 2), bx, by, 1);
-  const items = titleItems();
-  drawMenu(items, TITLE_Y, TITLE_GAP);
-  drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it]);
+  const at = (i) => [titleItemX(items, i), titleItemY(items, i)];
+  drawMenu(items, TITLE_Y, TITLE_GAP, undefined, at);
+  drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it], at);
   const gi = items.indexOf('THE GARDEN'), vs = String(Save.vault);
   // THE GARDEN shows its vault on the right, so its NEW sits on the left
-  if (gi >= 0 && hubBadge() && Math.floor(G.time * 3) % 3) text('NEW', VW / 2 - textW('THE GARDEN') / 2 - (G.menuSel === gi ? 16 : 8) - textW('NEW'), TITLE_Y + gi * TITLE_GAP, 'P', 2);
-  if (Save.vault) {
-    const x = VW / 2 + textW('THE GARDEN') / 2 + 16 + (G.menuSel === gi ? 6 : 0), y = TITLE_Y + gi * TITLE_GAP;
+  if (gi >= 0 && hubBadge() && Math.floor(G.time * 3) % 3) text('NEW', titleItemX(items, gi) - textW('THE GARDEN') / 2 - (G.menuSel === gi ? 16 : 8) - textW('NEW'), titleItemY(items, gi), 'P', 2);
+  if (gi >= 0 && Save.vault) {
+    const x = titleItemX(items, gi) + textW('THE GARDEN') / 2 + 10 + (G.menuSel === gi ? 6 : 0), y = titleItemY(items, gi);
     drawS(S('coin_0'), x, y - 1);
     text(vs, x + 11, y, 'Y', 2);
   }
@@ -486,7 +523,8 @@ function endItems() {
 }
 function drawOver() { drawEndScreen(G.players.length > 1 ? 'THE TEAM FELL!' : 'OOPS!', 'P', G.players.length > 1 ? 'EVERYONE RAN OUT OF HEARTS...' : 'YOU RAN OUT OF HEARTS...'); }
 function drawWin() {
-  drawEndScreen('VICTORY!', 'Y', isDuel() ? 'BIG GRIN IS BEATEN!' : 'THE STAR GARDEN SHINES AGAIN!');
+  const r = G.run || {}, span = r.span && G.floor && !G.daily;
+  drawEndScreen('VICTORY!', 'Y', isDuel() ? 'BIG GRIN IS BEATEN!' : span && r.quick ? THEMES[G.floor.theme].name + ' IS SAFE AGAIN!' : span ? 'THE ' + ROAD[roadSlots()[r.span[0]].act].act + ' IS OVER!' : 'THE STAR GARDEN SHINES AGAIN!');
   for (let i = 0; i < 10; i++) {
     const a = G.time * 0.7 + i * 0.63;
     drawS(S(i % 2 ? 'sparkle_0' : 'sparkle_1'), VW / 2 + Math.cos(a) * 116 - 1, 108 + Math.sin(a) * 92 - 1);

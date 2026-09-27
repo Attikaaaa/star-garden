@@ -86,6 +86,7 @@ function note(ev, a, b) {
     case 'ending': bump('ending'); break;
     case 'nemesis': bump('nemesis'); break;
     case 'rescue': bump('rescue'); break;
+    case 'warden': bump('warden'); bump('wd:' + a); break;
   }
   for (const fn of NOTE_HOOKS) fn(ev, a, b);
   // the end of a run: everything the hooks just recorded goes to disk

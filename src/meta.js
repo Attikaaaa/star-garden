@@ -195,11 +195,11 @@ function saveRun() {
   const rooms = G.floor.rooms;
   const strip = (q) => { const o = {}; for (const k in q) if (k !== 'orbitHit' && k !== 'in') o[k] = q[k]; return o; };
   const data = {
-    v: 2, depth: G.floor.depth, cur: rooms.indexOf(room), start: rooms.indexOf(G.floor.start),
+    v: 3, depth: G.floor.depth, cur: rooms.indexOf(room), start: rooms.indexOf(G.floor.start),
     rooms: rooms.map(r => ({
       gx: r.gx, gy: r.gy, type: r.type, dist: r.dist, cleared: r.cleared, visited: r.visited, seen: r.seen,
       stocked: r.stocked, seed: r.seed, tiles: Array.from(r.tiles), slots: r.slots, pits: r.pits,
-      pickups: r.pickups, props: r.props, reward: r.reward, skull: r.skull, hidden: r.hidden, keyRoom: r.keyRoom,
+      pickups: r.pickups, props: r.props, reward: r.reward, skull: r.skull, hidden: r.hidden, keyRoom: r.keyRoom, lay: r.lay, flip: r.flip,
     })),
     player: strip(p), stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff, mods: G.mods || [], boss: G.floor.boss,
   };
@@ -214,14 +214,19 @@ function saveRun() {
 // d: a co-op save from coopRuns() (the host, in the lobby), or nothing for the solo save.
 function loadRun(d) {
   if (!d) { try { d = JSON.parse(localStorage.getItem(RUN_KEY)); } catch (e) { d = null; } }
-  if (!d || (d.v !== 1 && d.v !== 2)) { clearRun(); return false; }
+  if (!d || !(d.v >= 1 && d.v <= 3)) { clearRun(); return false; }
   const rooms = d.rooms.map(r => Object.assign(newRoom(r.gx, r.gy), r, { tiles: Uint8Array.from(r.tiles), doors: {}, dirty: true, canvas: null }));
   const at = (x, y) => rooms.find(r => r.gx === x && r.gy === y);
   for (const r of rooms) for (const k in DIRS) { const o = at(r.gx + DIRS[k][0], r.gy + DIRS[k][1]); if (o) r.doors[k] = o; }
-  const land = d.run && d.run.well && d.depth === LANDS.length ? WELL : LANDS[d.depth % LANDS.length];
+  // version 3 keeps the road's path; older runs walked the first three lands
+  G.run = d.run && d.run.vault !== undefined ? d.run : { vault: 0, keep: 0 };
+  if (!G.run.path) G.run.path = CLASSIC_ROAD.slice();
+  const land = roadLand(d.depth);
   G.mode = 'adv'; G.arena = null; G.daily = null;
   G.diff = d.diff !== undefined ? d.diff : 1;
   setMods(d.mods);
+  G.trial = G.run.trial || 0;
+  applyRunX();
   G.floor = { depth: d.depth, land, theme: land.theme, rooms, start: rooms[d.start], boss: d.boss || land.boss };
   const fresh = { orbitHit: new Map(), in: newInput(), inv: 1, dashT: 0, cool: 0, hurtT: 0, down: false };
   if (d.players) {
@@ -237,7 +242,6 @@ function loadRun(d) {
   }
   G.coins = d.coins !== undefined ? d.coins : d.player.coins || 0;
   G.stats = d.stats; G.won = d.won; G.bestBefore = d.bestBefore;
-  G.run = d.run && d.run.vault !== undefined ? d.run : { vault: 0, keep: 0 };
   if (!G.run.seed) G.run.seed = newSeed();
   resetRunFx();
   const room = rooms[d.cur];

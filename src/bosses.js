@@ -27,7 +27,7 @@ Object.assign(EDEF, {
     glint: (e) => (e.state === 'aim' ? [0, -10] : null) },
 });
 Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CRYSTAL MOTH', nmoth: 'NIGHT MOTH', mayor: 'MOLE MAYOR', hill: 'MOLEHILL', turtle: 'TIDE TURTLE', geode: 'GEODE SPIDER' });
-LANDS[0].alt = ['queen', 'mayor']; LANDS[1].alt = ['octo', 'turtle']; LANDS[2].alt = ['cmoth', 'geode'];
+LAND.meadow.alt = ['queen', 'mayor']; LAND.shore.alt = ['octo', 'turtle']; LAND.crystal.alt = ['cmoth', 'geode'];
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
 const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
@@ -39,13 +39,13 @@ function chooseBoss(floor) {
   if (G.run.bow && L === LANDS[G.run.bow.land]) return G.run.bow.boss;
   if (!L.alt) return L.boss;
   return withSeed(hashSeed(G.run.seed, 'boss', floor.depth), () => {
-    const known = G.daily || cnt('b:' + L.boss) > 0 || Save.stats.bestDepth > (floor.depth % LANDS.length) + 1;
+    const known = G.daily || cnt('b:' + L.boss) > 0 || Save.stats.bestDepth > (floor.depth % runPath().length) + 1;
     return known ? gpick([L.boss].concat(L.alt)) : L.boss;
   });
 }
 
 // ---------- The Star Well: a fourth land behind the third, for players with seven Big Stars ----------
-const WELL = { theme: 'well', song: 'well', rooms: 6, slime: 'pink', boss: 'nmoth', bossName: 'NIGHT MOTH',
+const WELL = { id: 'well', theme: 'well', song: 'well', rooms: 6, slime: 'pink', boss: 'nmoth', bossName: 'NIGHT MOTH',
   pool: [['gmoth', 3], ['wisp', 3], ['spider', 2], ['bat', 2], ['gemlet', 1], ['slime', 1]] };
 const BIG_STARS = ['king', 'bcrab', 'golem', 'queen', 'octo', 'cmoth', 'secret'];
 const wellOpen = () => !G.daily && G.mode === 'adv' && !NET.role && BIG_STARS.every(s => Save.story.stars.includes(s));
@@ -482,12 +482,16 @@ function pitOk(room, c, r) {
   if (tileAt(room, c, r) !== T_FLOOR || c < 3 || c > 20 || r < 3 || r > 10 || (room.sunk || []).length >= 12) return false;
   const x = c * 16 + 8, y = OY + r * 16 + 8;
   for (const o of G.players.concat(G.enemies)) if (!o.dead && Math.abs(o.x - x) < 10 + o.hw && Math.abs(o.y - y) < 10 + o.hh) return false;
-  const t = room.tiles, seen = new Uint8Array(t.length), q = [];
-  t[r * COLS + c] = T_PIT;
+  return keepsJoined(room, r * COLS + c, T_PIT);
+}
+// Would setting tile i to v cut some floor off from the rest? (tried in place, then undone)
+function keepsJoined(room, i, v) {
+  const t = room.tiles, old = t[i], seen = new Uint8Array(t.length), q = [];
+  t[i] = v;
   let floor = 0;
-  for (let i = 0; i < t.length; i++) if (t[i] === T_FLOOR) { floor++; if (!q.length) { q.push(i); seen[i] = 1; } }
+  for (let k = 0; k < t.length; k++) if (t[k] === T_FLOOR) { floor++; if (!q.length) { q.push(k); seen[k] = 1; } }
   for (let h = 0; h < q.length; h++) for (const d of [1, -1, COLS, -COLS]) { const j = q[h] + d; if (t[j] === T_FLOOR && !seen[j]) { seen[j] = 1; q.push(j); } }
-  t[r * COLS + c] = T_FLOOR;
+  t[i] = old;
   return q.length === floor;
 }
 // Four floor tiles near the hero, marked a second before they sink.

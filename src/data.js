@@ -22,15 +22,49 @@ const ITEMS = {
   shield: { name: 'BUBBLE SHIELD', desc: 'BLOCKS ONE HIT IN EVERY ROOM', unique: true, apply: p => { p.shield = true; p.shieldUp = true; } },
 };
 
-// Lands. Floors past the third loop through them with rising difficulty.
+// Lands. A land's index here never changes (old saves, co-op and the Boss of the Week use
+// it); its id is how the Star Road and newer code name it.
 const LANDS = [
-  { theme: 'meadow', song: 'meadow', rooms: 8, slime: 'green', boss: 'king', bossName: 'SLIME KING',
+  { id: 'meadow', theme: 'meadow', song: 'meadow', rooms: 8, slime: 'green', boss: 'king', bossName: 'SLIME KING',
+    rule: 'BLOOM LOOP', hint: 'FLOWERS REGROW AND GIVE', danger: 1,
     pool: [['slime', 4], ['bee', 2], ['shroom', 2], ['flower', 2]] },
-  { theme: 'beach', song: 'beach', rooms: 10, slime: 'blue', boss: 'bcrab', bossName: 'GIANT CRAB',
+  { id: 'shore', theme: 'beach', song: 'beach', rooms: 10, slime: 'blue', boss: 'bcrab', bossName: 'GIANT CRAB',
+    rule: 'TIDE', hint: 'THE SEA COMES AND GOES', danger: 1,
     pool: [['slime', 3], ['bee', 1], ['crab', 3], ['flower', 2], ['jelly', 3]] },
-  { theme: 'crystal', song: 'crystal', rooms: 11, slime: 'pink', boss: 'golem', bossName: 'CRYSTAL GOLEM',
+  { id: 'crystal', theme: 'crystal', song: 'crystal', rooms: 11, slime: 'pink', boss: 'golem', bossName: 'CRYSTAL GOLEM',
+    rule: 'PRISM PILLARS', hint: 'PRISMS SPLIT EVERY SHOT', danger: 2,
     pool: [['slime', 2], ['bat', 3], ['shroom', 2], ['wisp', 3], ['crab', 1]] },
+  { id: 'cloud', theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
+    rule: 'PUFF FLOOR', hint: 'CLOUDS PUFF UNDER YOUR FEET', danger: 2,
+    pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
 ];
+const LAND = {};
+for (const l of LANDS) LAND[l.id] = l;
+
+// The Star Road: three acts, each a fixed land, then a fork where the team picks the next
+// lands. A run walks one path through it (G.run.path, land ids, one per depth). Lands that
+// are not built yet are skipped, so the road grows as they join.
+const ROAD = [
+  { act: 'MORNING', fixed: 'meadow', fork: ['shore', 'crystal', 'cloud'], pick: 2 },
+  { act: 'DUSK', fixed: 'lantern', fork: ['toy', 'snow', 'sun'], pick: 2 },
+  { act: 'NIGHT', fixed: 'library', fork: ['forge', 'deep'], pick: 1, finale: 'moon' },
+];
+// The three lands of the first release: old run saves, daily and weekly runs, the Boss of the Week.
+const CLASSIC_ROAD = ['meadow', 'shore', 'crystal'];
+// The road walked when nobody chooses: each act's fixed land, the first built lands of its fork, the finale.
+function roadPath() {
+  const out = [];
+  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(id => LAND[id]).slice(0, a.pick), a.finale || []).filter(id => LAND[id]));
+  return out;
+}
+const runPath = () => (G.run && G.run.path) || CLASSIC_ROAD;
+// The land at a depth of a path (the run's by default). Past the end the road loops; one step
+// past it lies the Star Well for a run that opened it.
+function roadLand(depth, path) {
+  path = path || runPath();
+  if (depth === path.length && G.run && G.run.well) return WELL;
+  return LAND[path[depth % path.length]];
+}
 
 // Room interiors: 22 x 10. '.' floor, '#' rock, 'b' breakable, '~' pit, 'e' enemy slot.
 // Door approaches (top/bottom centre, left/right middle) must stay open; checked at load.

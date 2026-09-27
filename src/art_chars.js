@@ -753,6 +753,7 @@ const MEME_SKINS = [
     green: null,
     blue: { g: 'b', G: 'B', h: 'c', H: 'C' },
     pink: { g: 'p', G: 'P', h: 'q', H: 'w', q: 'R' },
+    sky: { g: '2', G: '3', h: '4', H: 'w', q: 'P' }, // Cloud Steps
     pumpkin: { g: 'n', G: 'o', h: 'O', H: 'Y', q: 'y' }, // Halloween week
   };
   for (const c in SLIME_COL) for (const f in SLIME) def('slime_' + c + '_' + f, SLIME[f], { flash: true, glow: true, legend: SLIME_COL[c] });

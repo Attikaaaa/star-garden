@@ -62,15 +62,18 @@ function spawnAmbient(theme, anywhere) {
     amb('glint', rnd(20, VW - 20), rnd(44, 196), 0, 0, 0.6);
     const pits = G.room && G.room.pits;
     if (pits && pits.length) { const p = pick(pits); amb('bubble', p[0] + rnd(3, 13), p[1] + rnd(6, 13), 0, -6, 0.9); }
+  } else if (theme === 'cloud') {
+    // little clouds drifting by, over the margins and the room alike
+    amb('wisp', anywhere ? rnd(xl, xr) : xl - 16, rnd(-SCR.oy, SCR.h - SCR.oy), rnd(5, 11), 0, rnd(80, 100));
   } else {
     amb('mote', rnd(16, VW - 16), anywhere ? rnd(40, 200) : rnd(120, 205), rnd(-3, 3), rnd(-9, -4), rnd(3, 6));
   }
 }
-const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, well: 4 };
+const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, cloud: 0.25, well: 4 };
 let ambAcc = 0;
 function resetAmbient(theme) {
   for (const a of AMB) a.life = 0;
-  if (theme !== 'beach') for (let i = 0; i < 10; i++) spawnAmbient(theme, true);
+  if (theme !== 'beach') for (let i = 0; i < (theme === 'cloud' ? 5 : 10); i++) spawnAmbient(theme, true);
 }
 function updateAmbient(dt, theme) {
   ambAcc += dt * AMB_RATE[theme];
@@ -100,6 +103,7 @@ function drawAmbient(ox, oy) {
       case 'fly': drawS(S('bfly_' + (Math.floor(a.ph * 8) % 2)), x - 3, y - 2, a.vx < 0 ? 1 : 0); break;
       case 'glint': drawS(S(a.life / a.max > 0.5 ? 'sparkle_1' : 'sparkle_0'), x - 1, y - 1); break;
       case 'bubble': if (a.life > 0.15) drawS(S('bubble'), x - 1, y - 1); else rect(x, y, 1, 1, 'w'); break;
+      case 'wisp': { const w = 6 + Math.floor(a.max * 7) % 5; rect(x, y, w, 1, 'w'); rect(x + 2, y - 1, w - 4, 1, 'w'); rect(x + 1, y + 1, w - 1, 1, 'C'); break; }
       case 'mote': rect(x, y, 1, 1, ['c', 'q', 'Y', 'w'][Math.floor(a.ph * 3 + a.max) % 4]); break;
     }
   }
@@ -118,5 +122,113 @@ function drawPitLife(room, theme, ox, oy) {
     const wx = x + 2 + Math.floor(ph * 9), wy = y + 6 + ((h >> 5) % 6);
     const len = ph < 0.15 || ph > 0.85 ? 1 : 3;
     rect(ox + wx, oy + wy, len, 1, key);
+  }
+}
+
+// ---------- Darkness and light (Lantern Woods) ----------
+// Low resolution on purpose: light is judged per 2x2 cell and shown as four dithered bands of
+// the outline colour (like SHADOW), never black and never a soft gradient. Every frame the
+// land calls lightReset(), lightAdd() for each lamp and hero, then drawLight(). lightAt() gives
+// game logic the same level (0 dark .. 4 lit) from play-view coordinates, with no screen maths.
+const LIGHT_CELL = 2, LIGHT_BAND = 6;
+const LIGHT = { n: 0, xs: new Float32Array(64), ys: new Float32Array(64), rs: new Float32Array(64), amb: 0, cv: null, g: null, img: null, px: null, lv: null, w: 0, h: 0 };
+// Bayer 4x4: a pixel is dark when its threshold is below the band's coverage (16 12 8 4 0)
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function lightReset(amb) { LIGHT.n = 0; LIGHT.amb = amb || 0; }
+function lightAdd(x, y, r) {
+  if (LIGHT.n >= 64) return;
+  LIGHT.xs[LIGHT.n] = x; LIGHT.ys[LIGHT.n] = y; LIGHT.rs[LIGHT.n] = r; LIGHT.n++;
+}
+const lightLevel = (d, r) => d >= r ? 0 : Math.min(4, Math.ceil((r - d) / LIGHT_BAND));
+function lightAt(x, y) {
+  let lv = LIGHT.amb;
+  for (let i = 0; i < LIGHT.n && lv < 4; i++) lv = Math.max(lv, lightLevel(Math.hypot(x - LIGHT.xs[i], y - LIGHT.ys[i]), LIGHT.rs[i]));
+  return lv;
+}
+// alpha: how deep the dusk is (the assist option lifts it with lightReset's ambient level)
+function drawLight(ox, oy, alpha) {
+  const L = LIGHT, cw = Math.ceil(SCR.w / LIGHT_CELL), ch = Math.ceil(SCR.h / LIGHT_CELL);
+  if (!L.cv || L.w !== cw * LIGHT_CELL || L.h !== ch * LIGHT_CELL) {
+    L.w = cw * LIGHT_CELL; L.h = ch * LIGHT_CELL;
+    L.cv = document.createElement('canvas'); L.cv.width = L.w; L.cv.height = L.h;
+    L.g = L.cv.getContext('2d'); L.img = L.g.createImageData(L.w, L.h);
+    L.px = new Uint32Array(L.img.data.buffer); L.lv = new Uint8Array(cw * ch);
+  }
+  const lv = L.lv, px = L.px, W = L.w;
+  lv.fill(L.amb);
+  // screen cell (cx, cy) has its centre at play-view (cx*2 + 1 - SCR.ox - ox, ...)
+  const sx = SCR.ox + ox, sy = SCR.oy + oy;
+  for (let i = 0; i < L.n; i++) {
+    const x = L.xs[i] + sx, y = L.ys[i] + sy, r = L.rs[i];
+    const c0 = Math.max(0, Math.floor((x - r) / LIGHT_CELL)), c1 = Math.min(cw - 1, Math.floor((x + r) / LIGHT_CELL));
+    const r0 = Math.max(0, Math.floor((y - r) / LIGHT_CELL)), r1 = Math.min(ch - 1, Math.floor((y + r) / LIGHT_CELL));
+    for (let cy = r0; cy <= r1; cy++) {
+      const dy = cy * LIGHT_CELL + 1 - y;
+      for (let cx = c0; cx <= c1; cx++) {
+        const k = cy * cw + cx, l = lightLevel(Math.hypot(cx * LIGHT_CELL + 1 - x, dy), r);
+        if (l > lv[k]) lv[k] = l;
+      }
+    }
+  }
+  const dark = ((Math.round(alpha * 255) << 24) | (0x47 << 16) | (0x1a << 8) | 0x2b) >>> 0; // '0' as ABGR
+  // lut[(row phase * 5 + level) * 4 + column phase]: the pixel for that spot of the pattern
+  const lut = L.lut || (L.lut = new Uint32Array(80));
+  for (let yp = 0; yp < 4; yp++) for (let l = 0; l < 5; l++) for (let xp = 0; xp < 4; xp++) lut[(yp * 5 + l) * 4 + xp] = BAYER4[yp * 4 + xp] < 16 - l * 4 ? dark : 0;
+  // the dither is anchored to screen pixels, so it stays still while the lights move
+  for (let y = 0; y < L.h; y++) {
+    const row = y * W, lrow = (y >> 1) * cw, b = (y & 3) * 20;
+    for (let x = 0; x < W; x++) px[row + x] = lut[b + lv[lrow + (x >> 1)] * 4 + (x & 3)];
+  }
+  L.g.putImageData(L.img, 0, 0);
+  ctx.drawImage(L.cv, -SCR.ox, -SCR.oy);
+}
+
+// ---------- Page turn (Story Library) ----------
+// The interior (22x10 tiles) is a page. u / v run from the turning corner across it; the fold is
+// the diagonal u + v = s. Before it the new page (the room's layer) shows, past it the old one
+// (room.turn.cv), with the lifted flap lying along the fold. Drawn in 1px rows: no rotation.
+const PAGE_X = 16, PAGE_Y = OY + 32, PAGE_W = 352, PAGE_H = 160, FLAP_W = 12;
+function pageRow(corner, v) { return corner & 2 ? PAGE_Y + PAGE_H - 1 - v : PAGE_Y + v; }
+function pageSpan(corner, u0, u1) { return corner & 1 ? PAGE_X + PAGE_W - u1 : PAGE_X + u0; } // left x of [u0, u1)
+function drawPageTurn(room, ox, oy) {
+  const T = room.turn, p = (G.time - T.at) / PAGE_T;
+  if (p >= 1) { room.turn = null; return; }
+  const e = p < 0.5 ? 2 * p * p : 1 - 2 * (1 - p) * (1 - p);
+  const s = Math.round(e * (PAGE_W + PAGE_H + FLAP_W)), c = T.corner;
+  for (let v = 0; v < PAGE_H; v++) {
+    const cut = s - v, y = pageRow(c, v);
+    if (cut < PAGE_W) { // the old page past the fold
+      const u0 = Math.max(0, cut), x = pageSpan(c, u0, PAGE_W);
+      ctx.drawImage(T.cv, x, y, PAGE_W - u0, 1, ox + x, oy + y, PAGE_W - u0, 1);
+    }
+    if (cut <= 0) continue;
+    const fw = Math.min(cut, FLAP_W), u1 = Math.min(PAGE_W, cut + fw);
+    if (u1 <= cut) continue;
+    const band = (col, a, b) => {
+      a = Math.max(a, 0); b = Math.min(b, PAGE_W);
+      if (b > a) { ctx.fillStyle = col; ctx.fillRect(ox + pageSpan(c, a, b), oy + y, b - a, 1); }
+    };
+    band(SHADOW, u1, u1 + 3); // the flap's shadow on the old page
+    band(PAL.A, cut, u1); // the back of the page
+    band(PAL.e, cut, cut + 1); // the crease
+    if (cut + fw <= PAGE_W) band(PAL['0'], u1 - 1, u1); // its edge
+  }
+}
+// The tell: a dog-ear lifts at the corner and flutters.
+function drawPageCurl(room, ox, oy) {
+  const C = room.curl, t = G.time - C.at;
+  if (t >= CURL_T) { room.curl = null; return; }
+  const k = Math.round(4 + 8 * Math.min(1, t / 0.3)) + (Math.sin(t * 24) > 0 ? 1 : 0), c = C.corner;
+  for (let v = 0; v < k + 1; v++) {
+    const y = pageRow(c, v), fill = (col, a, b) => {
+      if (b > a) { ctx.fillStyle = col; ctx.fillRect(ox + pageSpan(c, a, b), oy + y, b - a, 1); }
+    };
+    if (v === k) { fill(SHADOW, 1, k + 1); continue; } // shadow under the ear's lower edge
+    fill(SHADOW, 0, k - v); // the gap the corner left
+    fill(PAL.A, k - v, k);
+    if (v) fill(PAL.e, k - v, k - v + 1);
+    fill(PAL['0'], k - 1, k);
+    fill(SHADOW, k, k + 1);
+    if (v === k - 1) fill(PAL['0'], k - v, k);
   }
 }
