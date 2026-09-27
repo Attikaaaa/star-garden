@@ -393,7 +393,7 @@ function giveBossReward() {
 const ARENA_BREAK = 9;
 function arenaFloor(tier) {
   return withSeed(hashSeed(G.run.seed, 'arena', tier), () => {
-    const land = LANDS[tier % LANDS.length];
+    const land = LIVE_LANDS[tier % LIVE_LANDS.length];
     const room = newRoom(4, 4);
     room.type = 'arena';
     for (const d in DIRS) room.doors[d] = { type: 'challenge' }; // gates: they never open
@@ -448,7 +448,7 @@ function startWave() {
 function arenaPool() {
   // later tiers mix in foes from every land
   const tier = G.floor.depth;
-  return tier < 3 ? G.floor.land.pool : [].concat(...LANDS.map(l => l.pool));
+  return tier < 3 ? G.floor.land.pool : [].concat(...LIVE_LANDS.map(l => l.pool));
 }
 function updateArena(dt) {
   const A = G.arena;

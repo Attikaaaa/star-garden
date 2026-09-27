@@ -34,12 +34,14 @@ const LANDS = [
   { id: 'crystal', theme: 'crystal', song: 'crystal', rooms: 11, slime: 'pink', boss: 'golem', bossName: 'CRYSTAL GOLEM',
     rule: 'PRISM PILLARS', hint: 'PRISMS SPLIT EVERY SHOT', danger: 2,
     pool: [['slime', 2], ['bat', 3], ['shroom', 2], ['wisp', 3], ['crab', 1]] },
-  { id: 'cloud', theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
+  { id: 'cloud', wip: true, theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
     rule: 'PUFF FLOOR', hint: 'CLOUDS PUFF UNDER YOUR FEET', danger: 2,
     pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
 ];
 const LAND = {};
 for (const l of LANDS) LAND[l.id] = l;
+// Lands a player can reach: a 'wip' land (boss or song still missing) stays off the road and out of the Arena.
+const LIVE_LANDS = LANDS.filter(l => !l.wip);
 
 // The Star Road: three acts, each a fixed land, then a fork where the team picks the next
 // lands. A run walks one path through it (G.run.path, land ids, one per depth). Lands that
@@ -54,7 +56,7 @@ const CLASSIC_ROAD = ['meadow', 'shore', 'crystal'];
 // The road walked when nobody chooses: each act's fixed land, the first built lands of its fork, the finale.
 function roadPath() {
   const out = [];
-  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(id => LAND[id]).slice(0, a.pick), a.finale || []).filter(id => LAND[id]));
+  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(id => LAND[id] && !LAND[id].wip).slice(0, a.pick), a.finale || []).filter(id => LAND[id]));
   return out;
 }
 const runPath = () => (G.run && G.run.path) || CLASSIC_ROAD;
