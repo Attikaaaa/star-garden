@@ -45,7 +45,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`) and the campfire between acts |
 | `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock, the Cloud Steps' Puff Floor (sunstone, updraft hops); each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
 | `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat, Weather Vane |
-| `woods.js` | the Lantern Woods: lamp posts (`T_LAMP`, layout `l`, `lampHit`, `lampsBuild`), its light (`woodsLight`), foes' eyes in the dark, its rooms |
+| `woods.js` | the Lantern Woods: lamp posts (`T_LAMP`, layout `l`, `lampHit`, `lampsBuild`), its light (`woodsLight`), foes' eyes in the dark, its rooms; its foes (Wisp Fox, Stump Sentry, Lamp Moth, Owlet, Mushroom Mime, Pumpkin Hopper), freed fireflies (`ffly` pickups that light dark lamps) and its warden, the Scarecrow |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
 | `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |
@@ -224,6 +224,9 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   below: tells, `stagger`, a safe gap, a second phase. Add one with an `EDEF` entry, `AI.<type>`,
   art through `bossFrames`, the land's entry in `WARDENS`, a name in `FOE_NAMES`, a Book entry
   and `lang_hu.js` strings; `wardenCleared` pays an item per hero, coins and vault.
+- **Lantern Woods:** foes can bring their own `EDEF` hooks: `light(e)` adds light, `draw(e, ox, oy)`
+  returning true replaces the sprite (the Mime standing as a lamp), `hits(e, p)` is an area that hurts
+  a hero (judged by `clientHits` on a client too). A `zap` marker with `c: 'fire'` is burning ground.
 - **Mirrors and drift:** layout chars `7 9 3 1` are mirrors (`T_MIRROR` + 0..3, the glass
   faces up-left, up-right, down-right, down-left; flips turn them). `mirrorPass` turns shots and
   bullets that cross the glass by 90 degrees; one that meets the back pops, and a hero's shot

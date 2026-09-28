@@ -695,3 +695,118 @@
   F('bandit_0', BANDIT);
   F('bandit_1', BANDIT.replace('......n...n......', '.......n.n.......'));
 })();
+
+// ---------- Lantern Woods ----------
+(function lanternFoes() {
+  const o = { flip: true, flash: true, glow: true };
+  const F = (name, art) => def(name, autoOutline(typeof art === 'string' ? parseArt(name, art) : art), o);
+  // a symmetric sprite from its left half plus the middle column; the right half is the
+  // mirror, one step darker (light from the top left)
+  const sym = (rows, map) => rows.map(([l, c]) => l + c + [...l].reverse().map(ch => map[ch] || ch).join(''));
+
+  // Wisp Fox: a little fox with a will-o'-the-wisp for a tail. It sneaks up for your coins.
+  const FOX = [
+    '..................',
+    '..C........y...y..',
+    '.cwC.......On.On..',
+    '.cCc......yOOOOOo.',
+    '..cC......O0OOO0o.',
+    '..cB......AAA0AAo.',
+    '..Bc.yOOOOoAAAAo..',
+    '...BOOOOOOOoAAo...',
+    '....oOAAAAAOoo....',
+    '....nooAAAoon.....',
+    '....n.n...n.n.....',
+    '..................'];
+  const fox = (f, coin) => {
+    let r = FOX.slice();
+    if (f) r[10] = '.....n.n.n.n......';
+    if (f) r = stamp(r, 1, 1, ['.C.', 'cw.', 'Cc.']); // the flame flickers
+    if (coin) r = stamp(r, 14, 6, ['Yy', 'yo']); // a stolen coin in its mouth
+    return r;
+  };
+  F('wfox_0', fox(0)); F('wfox_1', fox(1));
+  F('wfox_c0', fox(0, 1)); F('wfox_c1', fox(1, 1));
+
+  // Stump Sentry: an old stump that wakes when a lamp lights near it.
+  const stump = (awake, aim) => {
+    let r = sculpt(20, 19, [
+      { r: [1, 14, 18, 4, 1.5], ramp: 'unNN', hi: false },
+      { r: [4, 4, 12, 13, 2], ramp: 'unNa' },
+      { e: [10, 5, 6, 2.6], ramp: 'eaAA' },
+    ]);
+    r = stamp(r, 7, 4, ['.eee.', 'e.a.e', '.eee.']); // the rings
+    r = stamp(r, 10, 0, ['.hH', 'Gh.', 'G..']); // a sprout
+    r = stamp(r, 5, 8, ['u.', 'u.', '.u']); r = stamp(r, 14, 12, ['u', 'u']); // bark cracks
+    r = stamp(r, 7, 9, awake ? 'YY..YY\nY0..Y0' : '......\nuu..uu');
+    r = stamp(r, 9, 12, aim ? '00\n00' : awake ? 'uu' : '.u');
+    return rim(r, { N: 'n', a: 'N' });
+  };
+  F('stump_0', stump(0)); F('stump_1', stump(1)); F('stump_2', stump(1, 1));
+
+  // Lamp Moth: drawn to the lamps, it douses them with its wings.
+  const MOTH = { L: '4', 4: '3', 3: '2', A: 'a', l: 'm' };
+  F('lmoth_0', sym([
+    ['........', '.'], ['.LL4...4', '.'], ['.L4O44.l', '.'], ['.4OyO43A', 'A'], ['.44O432a', 'A'],
+    ['..4432.a', 'A'], ['...L43.a', 'a'], ['..L43..a', 'a'], ['..443...', 'a'], ['...3....', '.'],
+    ['........', '.'], ['........', '.']], MOTH));
+  F('lmoth_1', sym([
+    ['........', '.'], ['.......4', '.'], ['......l.', '.'], ['.......A', 'A'], ['.LL44..a', 'A'],
+    ['.4LO443a', 'A'], ['.4OyO43a', 'a'], ['.44O432a', 'a'], ['..L443..', 'a'], ['..443...', '.'],
+    ['...3....', '.'], ['........', '.']], MOTH));
+
+  // Hollow Owlet: sleeps on a lamp post and swoops when the lamp is lit.
+  const OWL = { a: 'N', N: 'n', n: 'u', A: 'a' };
+  const owl = (eyes, wings) => sym([
+    ['.........', '.'], ['...N.....', '.'], ['...NN....', '.'], ['...nNaNNN', 'N'], ['...nAAAAe', 'n'],
+    ['...nA' + eyes[0] + 'Ae', 'n'], ['...nA' + eyes[1] + 'Ae', 'O'], ['...nAAAAe', 'o'],
+    [wings[0] + '.unNaNN', 'N'], [wings[1] + '.unaANN', 'N'], [wings[2] + '.unNANN', 'N'], [wings[3] + '..unNNN', 'N'],
+    ['.....uO.O', '.'], ['.........', '.']], OWL);
+  const FOLD = ['..', '..', '..', '..'], SPREAD = ['aN', 'Nn', 'nu', 'u.'];
+  F('owlet_0', owl(['YY', 'Y0'], FOLD));
+  F('owlet_1', owl(['AA', 'uu'], FOLD)); // asleep
+  F('owlet_2', owl(['YY', 'Y0'], SPREAD)); // the swoop
+
+  // Mushroom Mime: stands among the lamps pretending to be one. Found out, it puffs spores.
+  const CAP = ['.....qqqq.....', '...qqwqqPP....', '..qqwwqPPPP...', '..qPPPPPPwPP..', '.qPPwPPPPPPPp.', '.PPPPPPPPPPPp.', '.pPPPPPPPwPpp.', '..pppppppppp..'];
+  const mime = (puff) => ['..............', '..............'].slice(puff).concat(CAP, [
+    '...wwwwwwLl...',
+    puff ? '...wwuwwuLl...' : '...ww0ww0Ll...',
+    puff ? '...wwq00qLl...' : '...wwqrrqLl...',
+    puff ? '...www00wLl...' : '...wwwwwwLl...',
+  ], puff ? ['...wwwwwwLl...'] : [], ['...xLxLxLxl...', '...LxLxLxLl...', '....llllll....', '..............']);
+  F('mime_0', mime(0)); F('mime_1', mime(1));
+
+  // Pumpkin Hopper: a carved pumpkin with a candle inside. Where it lands, the ground burns.
+  const pumpkin = (hop) => {
+    let r = sculpt(18, 17, [
+      { r: [8, 0, 3, 5, 1], ramp: 'gGGh', hi: false },
+      { e: [9, hop ? 9.5 : 10.5, hop ? 7.4 : 8, hop ? 6.8 : 6], ramp: 'noOy' },
+    ]);
+    const y0 = hop ? 3 : 5;
+    r = stamp(r, 11, 1, ['hH', '.h']); // a leaf
+    for (const x of [5, 12]) for (let y = y0 + 2; y < y0 + 10; y++) if (r[y][x] !== '0') r = stamp(r, x, y, 'o');
+    r = stamp(r, 4, y0 + 3, ['.y...y.', 'yYy.yYy']);
+    r = stamp(r, 4, y0 + 7, ['yYyYyYy'.slice(0, 7), 'n.y.y.n'.replace(/n/g, '.')]);
+    return r;
+  };
+  F('phop_0', pumpkin(0)); F('phop_1', pumpkin(1));
+
+  // the flames a Pumpkin Hopper leaves (and the Scarecrow's sweep sets)
+  const FL = ['.............', '......y......', '.....yy......', '..y..yYy.....', '..yy.yYy...y.', '.yYy.yYYy..y.', '.yYyyYwYy.yO.', '.oyYyYwwYyYO.', '.oOyYYwYYyOo.', '..oOOyYyOOo..', '...ooOOOoo...', '.............'];
+  const FL1 = ['.............', '.............', '.......y.....', '...y..yy.....', '..yy..yYy..y.', '..yYy.yYy.yy.', '.yYyyyYYy.yO.'].concat(FL.slice(7));
+  def('flame_0', autoOutline(FL));
+  def('flame_1', autoOutline(FL1));
+
+  // bullets: acorns (Stump Sentry), spores (Mushroom Mime), embers (the Scarecrow)
+  const pad = (rows) => autoOutline(['.'.repeat(rows[0].length + 2)].concat(rows.map(r => '.' + r + '.'), ['.'.repeat(rows[0].length + 2)]));
+  const B = {
+    acorn: [['.uu.', 'uNNn', 'oOOn', '.On.'], ['..u...', '.uNNu.', 'uNNNNn', '.OyOn.', '.OOon.', '..on..']],
+    spore: [['.q.q', 'qPwP', '.PPp', 'p.p.'], ['..q.q.', '.qPqP.', 'qPwwPp', '.PwPPp', '.pPpp.', 'p..p..']],
+    ember: [['.Ry.', 'RyYo', 'royo', '.or.'], ['..Ry..', '.RyYo.', 'RyYYyo', 'ryYyoo', '.royo.', '..rr..']],
+  };
+  for (const k in B) {
+    def('eb_' + k, pad(B[k][0])); def('ebb_' + k, pad(B[k][1]));
+    alias('ebcb_' + k, 'eb_' + k); alias('ebbcb_' + k, 'ebb_' + k);
+  }
+})();

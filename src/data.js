@@ -39,7 +39,7 @@ const LANDS = [
     pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
   { id: 'lantern', wip: true, theme: 'lantern', song: 'lantern', rooms: 11, slime: 'moss', boss: 'golem', bossName: 'CRYSTAL GOLEM', // the Grand Hoot takes over in its own chunk
     rule: 'LANTERN LIGHT', hint: 'SHOOT LAMPS TO LIGHT THEM', danger: 2,
-    pool: [['slime', 2], ['bat', 2], ['wisp', 3], ['shroom', 2]] },
+    pool: [['wfox', 1], ['stump', 2], ['lmoth', 2], ['owlet', 2], ['mime', 2], ['wisp', 2]] },
 ];
 const LAND = {};
 for (const l of LANDS) LAND[l.id] = l;

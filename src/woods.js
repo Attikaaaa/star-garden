@@ -111,17 +111,20 @@ function woodsLight(room) {
   for (const d in room.doors) if (!hiddenDoor(room, d)) { const [x, y] = ENTRY[d]; lightAdd(x, y, room.cleared ? 28 : 16); }
   for (const e of G.enemies) {
     if (e.dead) continue;
-    if (e.boss || EDEF[e.type].warden) lightAdd(e.x, e.y - 12, 28);
+    if (EDEF[e.type].light) EDEF[e.type].light(e);
+    else if (e.boss || EDEF[e.type].warden) lightAdd(e.x, e.y - 12, 28);
     else if (TELL_STATES.has(e.state) || glintAt(e)) lightAdd(e.x, e.y - 6, 20);
   }
-  for (const k of room.pickups) lightAdd(k.x, k.y - 3, 10);
+  for (const k of room.pickups) if (k.type === 'ffly') lightAdd(k.x, k.y - 8 - (k.z || 0), 16); else lightAdd(k.x, k.y - 3, 10);
+  for (const k of G.markers) if (k.kind === 'zap' && k.c === 'fire') lightAdd(k.x, k.y, 16);
 }
 // Two dots where a foe's face is, for foes the light does not reach.
 function foeEyes(e, ox, oy) {
   const s = enemySprite(e), z = Math.round(e.z || 0);
   const x = Math.round(ox + e.x), y = Math.round(oy + e.y - z - s.h * 0.55), gap = Math.max(2, Math.round(s.w / 7));
   const blink = Math.floor(G.time * 0.7 + e.x * 0.13) % 9 === 0 && (G.time * 5 + e.y) % 1 < 0.5;
-  if (blink) return;
+  if (blink || e.state === 'lamp') return; // a Mushroom Mime keeps its secret
+  if (e.state === 'sleep') { rect(x - gap - 1, y, 2, 1, 'o'); rect(x + gap - 1, y, 2, 1, 'o'); return; } // shut eyes
   rect(x - gap - 1, y, 2, 1, 'Y'); rect(x + gap - 1, y, 2, 1, 'Y');
 }
 
@@ -130,6 +133,15 @@ LAND_MECH.lantern = {
   // host / solo: lamps gutter out; a cleared room lights them all for good
   update(dt, room) {
     const t = room.tiles;
+    fireflies(dt, room);
+    // now and then a Pumpkin Hopper wanders into a fight
+    if (room.phop === undefined) room.phop = room.type === 'normal' && !room.cleared && !G.first && grand() < 0.2 ? grnd(4, 8) : 0;
+    if (room.phop > 0 && G.enemies.length && (room.phop -= dt) <= 0) {
+      room.phop = 0;
+      const d = ['l', 'r', 'u', 'd'].find(k => room.doors[k]) || 'l', [x, y] = ENTRY[d];
+      spawnEnemy('phop', x, y, { elite: true });
+      toast('A PUMPKIN HOPPER! MIND THE FLAMES!');
+    }
     for (let i = 0; i < t.length; i++) {
       if (t[i] === T_LAMP && room.cleared) {
         setTile(room, i % COLS, (i / COLS) | 0, T_LAMPON);
@@ -253,3 +265,430 @@ LAND_LAYOUTS.lantern = {
     ......................`,
 };
 for (const k in LAND_LAYOUTS.lantern) LAND_LAYOUTS.lantern[k] = LAND_LAYOUTS.lantern[k].split('\n').map(r => r.trim());
+
+// ---------- Foes ----------
+// the nearest lamp tile of a kind (T_LAMPON, T_LAMP) to x, y: its index, or -1
+function nearestLamp(room, x, y, tile, skip) {
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < room.tiles.length; i++) {
+    if (room.tiles[i] !== tile || (skip && skip(i))) continue;
+    const d = Math.hypot((i % COLS) * 16 + 8 - x, OY + ((i / COLS) | 0) * 16 + 8 - y);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+const lampXY = (i) => [(i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16];
+// a Stump Sentry sees a hero standing in a lamp's light (or anyone, for a while after a shot hurt it)
+function stumpSees(e, room) {
+  const angry = G.time - (e.hurtAt || -99) < 3;
+  let best = null, bd = 1e9;
+  for (const p of G.players) {
+    if (!alive(p)) continue;
+    const d = Math.hypot(p.x - e.x, p.y - e.y);
+    if (d >= bd || d > 220) continue;
+    const l = angry ? 0 : nearestLamp(room, p.x, p.y, T_LAMPON);
+    if (!angry && (l < 0 || Math.hypot(p.x - lampXY(l)[0], p.y - lampXY(l)[1] - 8) > LAMP_R * 0.8)) continue;
+    bd = d; best = p;
+  }
+  return best;
+}
+// A foe of the woods sets a firefly free: it flies to the nearest dark lamp and lights it.
+// It rides with the pickups (so clients draw it from snapshots) but is never picked up.
+function releaseFfly(x, y) {
+  if (NET.role === 'client' || !G.room) return;
+  G.room.pickups.push({ type: 'ffly', x, y, z: 6, vz: 0, vx: 0, vy: 0, t: 0, ok: true });
+}
+function drawFfly(k, ox, oy) {
+  const x = Math.round(ox + k.x + Math.sin(k.t * 5) * 2), y = Math.round(oy + k.y - 8 - (k.z || 0) + Math.sin(k.t * 7) * 1.5);
+  shadow(ox + k.x, oy + k.y, 4);
+  const on = Math.floor(k.t * 6) % 3;
+  rect(x - 1, y, 3, 1, on ? 'y' : 'O'); rect(x, y - 1, 1, 3, on ? 'y' : 'O'); rect(x, y, 1, 1, on ? 'w' : 'Y');
+}
+// a patch of burning ground (a 'zap' marker with c: 'fire'): it blinks out over the last half second
+function drawFlame(k, ox, oy) {
+  if (k.t < 0.5 && Math.floor(k.t * 12) % 2) return;
+  const s = S('flame_' + (Math.floor(G.time * 8 + k.x) % 2));
+  drawS(s, Math.round(ox + k.x - (s.w >> 1)), Math.round(oy + k.y + 6 - s.h));
+}
+const burnAt = (x, y, t) => { const [cx, cy] = cellMid(x, y); G.markers.push({ kind: 'zap', c: 'fire', x: cx, y: cy, t, max: t, src: 'phop' }); };
+
+Object.assign(EDEF, {
+  // calm: it only wants your coins; caught, it drops them (and the wisp of its tail flies free)
+  wfox: { hp: 6, r: 6, h: 11, hw: 5, hh: 3, sw: 14, colors: ['O', 'o', 'C'],
+    sprite: (e) => S((e.loot ? 'wfox_c' : 'wfox_') + (Math.floor(e.anim * (e.state === 'flee' ? 10 : 6)) % 2)),
+    init: (e) => { e.calm = true; e.loot = 0; },
+    light: (e) => lightAdd(e.x - (e.flip ? -7 : 7), e.y - 8, e.loot ? 26 : 12),
+    die: (e) => { for (let i = 0; i < e.loot; i++) spawnPickup('coin', e.x, e.y - 6); if (e.loot) toast('YOUR COINS ARE BACK!'); releaseFfly(e.x, e.y - 6); } },
+  // asleep (and harmless) in the dark; a hero in a lamp's light wakes it
+  stump: { hp: 12, r: 7, h: 13, hw: 6, hh: 4, sw: 16, still: true, colors: ['N', 'n', 'h'],
+    init: (e) => { e.state = 'sleep'; e.calm = true; },
+    sprite: (e) => S('stump_' + (e.state === 'sleep' ? 0 : e.state === 'aim' ? 2 : 1)),
+    glint: (e) => (e.state === 'aim' && e.t < 0.3 ? [0, -7] : null) },
+  lmoth: { hp: 5, r: 6, h: 12, hw: 5, hh: 3, sw: 12, fly: true, colors: ['4', '3', 'y'],
+    sprite: (e) => S('lmoth_' + (Math.floor(e.anim * (e.state === 'tele' ? 16 : 8)) % 2)),
+    glint: (e) => (e.state === 'aim' && e.t < 0.3 ? [0, -6] : null),
+    die: (e) => releaseFfly(e.x, e.y - 6) },
+  owlet: { hp: 7, r: 6, h: 12, hw: 5, hh: 3, sw: 10, fly: true, colors: ['N', 'n', 'Y'],
+    sprite: (e) => S('owlet_' + (e.state === 'sleep' ? 1 : e.state === 'dive' || e.state === 'back' ? 2 : 0)),
+    glint: (e) => (e.state === 'tele' && e.t < 0.3 ? [0, -9] : null) },
+  // stands as an unlit lamp post until a shot or a close hero finds it out
+  mime: { hp: 8, r: 6, h: 14, hw: 5, hh: 4, sw: 14, still: true, colors: ['P', 'q', 'w'],
+    init: (e) => { e.x = Math.floor(e.x / 16) * 16 + 8; e.y = OY + Math.floor((e.y - OY) / 16) * 16 + 12; e.state = 'lamp'; e.calm = true; },
+    sprite: (e) => S(e.state === 'pop' || e.state === 'aim' ? 'mime_1' : 'mime_0'),
+    glint: (e) => ((e.state === 'pop' || e.state === 'aim') && e.t < 0.3 ? [0, -12] : null),
+    draw: (e, ox, oy) => {
+      if (e.state !== 'lamp') return false;
+      // the last one left gives itself away with a little wobble
+      const sp = S('lamp_0'), last = G.enemies.every(q => q === e || q.dead), w = last && Math.floor(G.time * 6) % 4 === 0 ? 1 : 0;
+      drawS(sp, ox + e.x - 8 + w, oy + e.y - 12 + 16 - sp.h, e.flash > 0 ? 2 : 0);
+      return true;
+    } },
+  // an elite that wanders in: each landing sets the ground (and any dark lamp near it) alight
+  phop: { hp: 16, r: 7, h: 14, hw: 6, hh: 4, sw: 16, colors: ['O', 'o', 'y'],
+    sprite: (e) => S(e.z > 1 ? 'phop_1' : 'phop_0'),
+    light: (e) => lightAdd(e.x, e.y - 8 - (e.z || 0), 36) },
+});
+Object.assign(FOE_NAMES, { wfox: 'WISP FOX', stump: 'STUMP SENTRY', lmoth: 'LAMP MOTH', owlet: 'OWLET', mime: 'MUSHROOM MIME', phop: 'PUMPKIN HOPPER' });
+
+// wander about a hero at a distance (the moth with no lamp to put out)
+function hoverNear(e, dt, room, p, sp) {
+  if ((e.wT = (e.wT || 0) - dt) <= 0) {
+    e.wT = grnd(0.8, 1.4);
+    const a = Math.atan2(e.y - p.y, e.x - p.x) + grnd(-0.9, 0.9), d = grnd(55, 85);
+    e.wx = Math.max(24, Math.min(VW - 24, p.x + Math.cos(a) * d));
+    e.wy = Math.max(OY + 40, Math.min(OY + 184, p.y + Math.sin(a) * d * 0.7));
+  }
+  const dx = e.wx - e.x, dy = e.wy - e.y, d = Math.hypot(dx, dy) || 1, s = d < 6 ? 0 : sp;
+  e.vx += (dx / d * s - e.vx) * 3 * dt; e.vy += (dy / d * s - e.vy) * 3 * dt;
+}
+Object.assign(AI, {
+  // Sneaks up (harmless) and snatches up to five coins, then runs; catch it before it slips away.
+  wfox(e, dt, room, p) {
+    e.t -= dt;
+    if (e.state === 'idle') { e.state = 'sneak'; e.t = 0; }
+    if (e.state === 'sneak') {
+      const d = towardPlayer(e);
+      moveBox(room, e, d.x * 52 * dt, d.y * 52 * dt, 'enemy');
+      e.flip = d.x < 0;
+      for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.x, q.y - e.y) < 11) {
+        e.loot = Math.min(5, G.coins); G.coins -= e.loot;
+        if (e.loot) { toast('THE WISP FOX TOOK ' + e.loot + ' COINS! CATCH IT!'); Audio_.sfx('coin'); burst(q.x, q.y - 10, 8, ['y', 'Y', 'w'], 60, 0.4); }
+        e.state = 'flee'; e.t = e.loot ? grnd(5, 6) : 1.5; Audio_.sfx('swish');
+        break;
+      }
+    } else if (e.state === 'flee') {
+      // away from the hero, weaving
+      const a = Math.atan2(e.y - p.y, e.x - p.x) + Math.sin(e.anim * 5) * 0.6;
+      if (moveBox(room, e, Math.cos(a) * 64 * dt, Math.sin(a) * 64 * dt, 'enemy')) moveBox(room, e, -Math.sin(a) * 64 * dt, Math.cos(a) * 64 * dt, 'enemy');
+      e.flip = Math.cos(a) < 0;
+      if (e.t <= 0) {
+        if (!e.loot) { e.state = 'sneak'; return; }
+        e.dead = true; poof(e.x, e.y - 6); Audio_.sfx('tele'); toast('THE WISP FOX GOT AWAY!');
+      }
+    }
+  },
+  // Sleeps until a hero stands in lamplight near it, then lobs three acorns at a time.
+  stump(e, dt, room) {
+    e.t -= dt;
+    e.calm = e.state === 'sleep';
+    const q = e.state === 'sleep' || e.state === 'rest' ? (e.k = (e.k || 0) - dt) <= 0 && (e.k = 0.2, stumpSees(e, room)) : null;
+    if (e.state === 'sleep') { if (q) { e.state = 'wake'; e.t = 0.3; e.tg = q; Audio_.sfx('clack'); dust(e.x, e.y, 3, 10); } }
+    else if (e.state === 'wake') { if (e.t <= 0) { e.state = 'aim'; e.t = 0.5; } }
+    else if (e.state === 'aim') {
+      const tg = alive(e.tg) ? e.tg : EP;
+      e.flip = tg.x < e.x;
+      if (e.t <= 0) {
+        E_SRC = 'stump';
+        fan(e.x, e.y - 7, Math.atan2(tg.y - 7 - (e.y - 7), tg.x - e.x), 3, 0.3, 78, 'acorn');
+        Audio_.sfx('eshoot');
+        e.state = 'rest'; e.t = 1.2;
+      }
+    } else if (e.state === 'rest' && e.t <= 0) {
+      const s = stumpSees(e, room);
+      if (s) { e.state = 'aim'; e.t = 0.5; e.tg = s; } else { e.state = 'sleep'; poof(e.x, e.y - 10); }
+    } else if (e.state === 'idle') e.state = 'sleep';
+  },
+  // Flies to the nearest lit lamp and beats its wings over it until it goes out; with every
+  // lamp dark it flutters round a hero, flinging wing dust.
+  lmoth(e, dt, room, p) {
+    e.t -= dt;
+    e.z = 10 + Math.sin(e.anim * 3) * 2;
+    const L = e.state === 'aim' || e.state === 'tele' ? -1 : nearestLamp(room, e.x, e.y, T_LAMPON);
+    if (e.state === 'tele') {
+      e.vx *= 0.8; e.vy *= 0.8;
+      if (e.li >= 0 && room.tiles[e.li] !== T_LAMPON) { e.state = 'fly'; e.t = 1; } // someone else put it out
+      else if (e.t <= 0) {
+        const [x, y] = lampXY(e.li);
+        setTile(room, e.li % COLS, (e.li / COLS) | 0, T_LAMP);
+        poof(x, y - 1); Audio_.sfx('snuff'); burst(x, y - 2, 6, ['4', '3', 'w'], 40, 0.4);
+        e.state = 'fly'; e.t = 2.5; e.cool = 2.5;
+      }
+    } else if (e.state === 'aim') {
+      e.vx *= 0.85; e.vy *= 0.85; e.flip = p.x < e.x;
+      if (e.t <= 0) { E_SRC = 'lmoth'; fan(e.x, e.y - 6 - e.z, aimAt(e.x, e.y - 6 - e.z), 2, 0.25, 72, 'dust'); Audio_.sfx('eshoot'); e.state = 'fly'; e.t = grnd(2, 2.6); }
+    } else {
+      if (e.state === 'idle') { e.state = 'fly'; e.t = grnd(1.2, 2); }
+      e.cool = (e.cool || 0) - dt;
+      if (L >= 0 && e.cool <= 0) {
+        const [x, y] = lampXY(L), dx = x - e.x, dy = y + 14 - e.y, d = Math.hypot(dx, dy) || 1;
+        e.vx += (dx / d * 50 - e.vx) * 3 * dt; e.vy += (dy / d * 50 - e.vy) * 3 * dt;
+        if (d < 4) { e.state = 'tele'; e.t = 0.8; e.li = L; Audio_.sfx('charge'); }
+      } else {
+        hoverNear(e, dt, room, p, 40);
+        if (e.t <= 0) { e.state = 'aim'; e.t = 0.5; }
+      }
+      if (Math.abs(e.vx) > 3) e.flip = e.vx < 0;
+    }
+    moveBox(room, e, e.vx * dt, e.vy * dt, 'fly');
+  },
+  // Takes a lamp post for its perch. While its lamp is dark it sleeps (a shot wakes it for
+  // good); lit, it watches, then swoops down a cyan lane and flaps back up.
+  owlet(e, dt, room, p) {
+    e.t -= dt;
+    if (e.hurtAt) e.awake = true;
+    if (e.pl === undefined) {
+      const mine = new Set(G.enemies.filter(q => q !== e && q.type === 'owlet' && q.pl >= 0).map(q => q.pl));
+      e.pl = nearestLamp(room, e.x, e.y, T_LAMP, i => mine.has(i));
+      if (e.pl < 0) e.pl = nearestLamp(room, e.x, e.y, T_LAMPON, i => mine.has(i));
+      if (e.pl >= 0) { const [x, y] = lampXY(e.pl); e.px = x; e.py = y + 12; e.pz = 18; } else { e.px = e.x; e.py = e.y; e.pz = 8; e.awake = true; }
+      e.state = 'go';
+    }
+    const lit = e.awake || room.tiles[e.pl] === T_LAMPON;
+    e.calm = e.state === 'sleep';
+    if (e.state === 'go' || e.state === 'back') {
+      const dx = e.px - e.x, dy = e.py - e.y, d = Math.hypot(dx, dy), sp = e.state === 'go' ? 60 : 90;
+      if (d > 1) { const m = Math.min(d, sp * dt); e.x += dx / d * m; e.y += dy / d * m; e.flip = dx < 0; }
+      e.z += (e.pz - e.z) * Math.min(1, 4 * dt);
+      if (d <= 1 && Math.abs(e.z - e.pz) < 1) { e.state = 'perch'; e.t = grnd(1.2, 1.8); }
+    } else if (e.state === 'sleep') { if (lit) { e.state = 'perch'; e.t = 0.8; Audio_.sfx('crow'); } }
+    else if (e.state === 'perch') {
+      e.flip = p.x < e.x;
+      if (!lit) { e.state = 'sleep'; return; }
+      if (e.t <= 0 && Math.hypot(p.x - e.x, p.y - e.y) < 170) { e.state = 'tele'; e.t = 0.55; lane(e, p, 120); Audio_.sfx('tele'); }
+    } else if (e.state === 'tele') { if (e.t <= 0) { e.state = 'dive'; e.n = 0; Audio_.sfx('swish'); } }
+    else if (e.state === 'dive') {
+      const st = 160 * dt;
+      e.z += (4 - e.z) * Math.min(1, 6 * dt);
+      e.n += st;
+      if (moveBox(room, e, Math.cos(e.la) * st, Math.sin(e.la) * st, 'fly') || e.n > 130) { e.state = 'back'; e.t = 0.8; }
+    } else if (e.state === 'idle') e.state = 'go';
+  },
+  // Stands among the lamps as one. Found out (a shot, or a hero walking up), it pops up and
+  // puffs a ring of spores, then keeps puffing three at a time.
+  mime(e, dt, room, p) {
+    e.t -= dt;
+    e.calm = e.state === 'lamp';
+    E_SRC = 'mime';
+    if (e.state === 'lamp') {
+      if (e.hurtAt || G.players.some(q => alive(q) && Math.hypot(q.x - e.x, q.y - e.y) < 18)) { e.state = 'pop'; e.t = 0.5; Audio_.sfx('pop'); dust(e.x, e.y, 4, 10); }
+    } else if (e.state === 'pop') { if (e.t <= 0) { ring(e.x, e.y - 10, 6, 60, 'spore', grand()); Audio_.sfx('eshoot'); e.state = 'wait'; e.t = 1.4; } }
+    else if (e.state === 'wait') { e.flip = p.x < e.x; if (e.t <= 0) { e.state = 'aim'; e.t = 0.5; } }
+    else if (e.state === 'aim') { if (e.t <= 0) { fan(e.x, e.y - 10, aimAt(e.x, e.y - 10), 3, 0.3, 70, 'spore'); Audio_.sfx('eshoot'); e.state = 'wait'; e.t = 1.4; } }
+    else if (e.state === 'idle') e.state = 'lamp';
+  },
+  // Three hops toward a hero (a pink ring shows each landing); the ground it lands on burns
+  // for a moment, and a dark lamp beside it catches light.
+  phop(e, dt, room) {
+    e.t -= dt;
+    const hop = () => {
+      const d = towardPlayer(e); e.vx = d.x * 60; e.vy = d.y * 60; e.flip = e.vx < 0; e.t = 0.55;
+      const [x, y] = cellMid(e.x + e.vx * 0.55, e.y + e.vy * 0.55);
+      G.markers.push({ kind: 'zone', x, y: y + 2, t: 0.55, max: 0.55 });
+    };
+    if (e.state === 'idle') { if (e.t <= 0) { e.state = 'hop'; e.n = 3; hop(); } }
+    else if (e.state === 'hop') {
+      e.z = Math.sin((1 - Math.max(0, e.t) / 0.55) * Math.PI) * 14;
+      moveBox(room, e, e.vx * dt, e.vy * dt, 'enemy');
+      if (e.t <= 0) {
+        e.z = 0; dust(e.x, e.y, 3, 10); Audio_.sfx('land');
+        if (!solidPx(room, e.x, e.y - 1, 'enemy')) burnAt(e.x, e.y, 2);
+        const c = Math.floor(e.x / 16), r = Math.floor((e.y - 1 - OY) / 16);
+        for (let y = r - 1; y <= r + 1; y++) for (let x = c - 1; x <= c + 1; x++) if (tileAt(room, x, y) === T_LAMP && Math.hypot(x * 16 + 8 - e.x, OY + y * 16 + 8 - e.y) < 24) lampHit(room, x, y);
+        if (--e.n > 0) hop(); else { e.state = 'idle'; e.t = grnd(1, 1.4); }
+      }
+    }
+  },
+});
+BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
+  { t: 'wfox', spr: 'wfox_0', lore: ['A FOX WITH A WISP FOR A TAIL.', 'IT STEALS COINS, NOT HEARTS.', 'CATCH IT AND THE WISP FLIES FREE.'] },
+  { t: 'stump', spr: 'stump_1', lore: ['AN OLD STUMP THAT HATES THE LIGHT.', 'STAND IN A LAMP GLOW AND IT WAKES.', 'IN THE DARK IT ONLY SNORES.'] },
+  { t: 'lmoth', spr: 'lmoth_0', lore: ['IT CANNOT LEAVE A LAMP ALONE.', 'IT BEATS ITS WINGS TILL THE FLAME DIES.', 'CATCH IT OVER THE GLASS.'] },
+  { t: 'owlet', spr: 'owlet_0', lore: ['IT SLEEPS ON A LAMP POST.', 'LIGHT ITS LAMP AND IT WAKES UP GRUMPY.', 'IT SWOOPS DOWN THE CYAN LANE.'] },
+  { t: 'mime', spr: 'mime_0', lore: ['A MUSHROOM THAT PLAYS AT BEING A LAMP.', 'A LAMP THAT NEVER LIGHTS IS NO LAMP.', 'FOUND OUT, IT PUFFS A RING OF SPORES.'] },
+  { t: 'phop', spr: 'phop_0', lore: ['A PUMPKIN WITH A CANDLE INSIDE.', 'WHERE IT LANDS, THE GROUND BURNS.', 'IT LIGHTS EVERY LAMP IT PASSES.'] },
+);
+
+// the host moves the freed fireflies: to the nearest dark lamp, which they light; with none
+// left they drift up into the canopy
+function fireflies(dt, room) {
+  const list = room.pickups;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const k = list[i];
+    if (k.type !== 'ffly') continue;
+    const L = nearestLamp(room, k.x, k.y, T_LAMP);
+    if (L < 0) { k.z += 12 * dt; if (k.z > 24) { list[i] = list[list.length - 1]; list.pop(); } continue; }
+    const [x, y] = lampXY(L), dx = x - k.x, dy = y + 12 - k.y, d = Math.hypot(dx, dy);
+    k.z += (10 - k.z) * Math.min(1, 2 * dt);
+    if (d < 4) { lampHit(room, L % COLS, (L / COLS) | 0); list[i] = list[list.length - 1]; list.pop(); continue; }
+    const m = Math.min(d, 40 * dt); k.x += dx / d * m; k.y += dy / d * m;
+  }
+}
+
+// ---------- The Scarecrow (warden of the Lantern Woods) ----------
+// A straw scarecrow on a pole with a lantern in its hand. It hops a little closer, then sweeps
+// its lantern's beam over the field (the dotted rays on the ground show it): a hero caught in
+// the beam is spotted (pink blink, 0.45 s) and gets three embers. Every third sweep it lifts
+// the lantern high (glint, 0.7 s) and glares: the beam turns steadily and burns whoever stands
+// in it, but a lamp post or rock between you and it is shade, and so is the ring right at its
+// foot. Its lantern is its weak spot: three shots into it and it reels. Phase 2: two beams,
+// back to back, five embers.
+(function scareArt() {
+  const o = { flash: true };
+  const MOUTH = { calm: 'u.u.u\n.u.u.', squint: '.000.\n0yYy0\n.000.', mad: '0u0u0\n.u.u.', daze: '.u.u.\nu.u..', dead: '00000' };
+  const scare = (f) => {
+    const dy = f.d ? 3 : f.st ? 2 : f.b ? 1 : f.m ? -1 : 0, up = f.tl || f.a;
+    let r = sculpt(32, 32, [
+      { r: [15, 24, 3, 8, 0.5], ramp: 'unNa', hi: false },
+      { r: [3, 17 + dy, 26, 4, 1.5], ramp: '1223' },
+      { r: [9, 16 + dy, 14, 9, 3], ramp: '1223' },
+      ...(up ? [{ r: [24, 11 + dy, 4, 8, 1], ramp: '1223' }] : []),
+      { e: [16, 12 + dy, 7, 5.5], ramp: 'neaA' },
+      { r: [6, 5 + dy + (f.d ? 1 : 0), 20, 3, 1], ramp: 'unNa' },
+      { r: [11 + (f.d ? 2 : 0), 1 + dy, 10, 5, 1.5], ramp: 'unNa' },
+    ]);
+    // the hat's band, straw at the hands, the hem and the collar, patches on the coat
+    r = stamp(r, 11 + (f.d ? 2 : 0), 4 + dy, f.p ? 'rrrrrrrrrr' : 'oooooooooo');
+    r = stamp(r, 2, 17 + dy, 'Y\ny\nO');
+    if (!up) r = stamp(r, 29, 17 + dy, 'Y\ny\nO');
+    r = stamp(r, 10, 25 + dy, 'y.Y.y.O.y.Y.y');
+    r = stamp(r, 11, 18 + dy, 'yYO.yOYy.Oy');
+    r = stamp(r, 11, 19 + dy, f.p ? 'rR\nrr' : 'qP\nPP');
+    r = stamp(r, 19, 21 + dy, f.p ? 'Rr\nrr' : 'Pq\nPP');
+    // the lantern: hanging at its side, or held high on the raised arm
+    const glass = f.st || f.d ? 'VvvV\nvvVV' : 'YwyO\nyYOO';
+    const lan = 'nnnn\n' + glass + '\nnnnn';
+    r = stamp(r, 26, up ? 7 + dy : 21 + dy, lan);
+    if (!up) r = stamp(r, 27, 20 + dy, 'nn');
+    r = autoOutline(r);
+    r = bossEyes(r, 11, 9 + dy, 6, f.face);
+    r = stamp(r, 14, 14 + dy, MOUTH[f.face]);
+    return rim(r, { 2: '3', 3: '4', a: 'A', N: 'a' });
+  };
+  bossFrames('scare', scare, o);
+})();
+const SCARE_SAFE = 22, SCARE_ARC = 0.35, SCARE_LEN = 150;
+const scareLamp = (e) => [e.x + (e.flip ? -12 : 12), e.y - (e.state === 'raise' || e.state === 'glare' ? 21 : 8)];
+const scareBeams = (e) => (e.p2 ? [e.w, e.w + Math.PI] : [e.w]);
+// is this hero in a beam: inside the arc, past the shade at its foot, in reach, and seen
+function scareCone(e, p) {
+  const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy);
+  if (Math.hypot(dx, dy / 0.6) < SCARE_SAFE || d > SCARE_LEN) return false;
+  for (const w of scareBeams(e)) {
+    const a = Math.atan2(Math.sin(Math.atan2(dy, dx) - w), Math.cos(Math.atan2(dy, dx) - w));
+    if (Math.abs(a) < SCARE_ARC && clearLine(G.room, e.x, e.y - 6, p.x, p.y - 6)) return true;
+  }
+  return false;
+}
+Object.assign(EDEF, {
+  scare: { hp: 300, r: 8, h: 26, hw: 8, hh: 5, sw: 20, warden: true, intro: 'IT WATCHES THE FIELD ALL NIGHT',
+    colors: ['2', '3', 'y'],
+    init: (e) => { e.state = 'walk'; e.t = 1.5; e.n = 0; e.w = 0; e.k = 0; e.lh = 0; },
+    hits: (e, p) => e.state === 'glare' && !(e.stag > 0) && scareCone(e, p),
+    sprite: (e) => {
+      if (e.stag > 0) return S('scare_stag');
+      const f = { spot: 'tell', raise: 'tell', glare: 'atk' }[e.state];
+      return bossFrame(e, f || (e.state === 'walk' && e.z > 1 ? 'move' : bob(e, 2, '0', '1')));
+    },
+    glint: (e) => (e.state === 'spot' || e.state === 'raise' ? [(e.flip ? -12 : 12), e.state === 'raise' ? -24 : -11] : null),
+    light: (e) => {
+      if (e.stag > 0) { lightAdd(e.x, e.y - 12, 20); return; }
+      lightAdd(e.x, e.y - 12, 28);
+      if (e.state !== 'sweep' && e.state !== 'spot' && e.state !== 'glare') return;
+      for (const w of scareBeams(e)) for (const d of [40, 70, 100, 130]) lightAdd(e.x + Math.cos(w) * d, e.y - 6 + Math.sin(w) * d * 0.9, 10 + d * 0.25);
+    },
+    under: (e, ox, oy) => {
+      if (e.stag > 0) return;
+      // the shade at its foot while it glares
+      if (e.state === 'raise' || e.state === 'glare') {
+        const R = SCARE_SAFE - 2, r = ringSprite(R, Math.floor(e.anim * 8) % 2 ? 'd' : 'm'), x = Math.round(ox + e.x - R), y = Math.round(oy + e.y - Math.round(R * 0.6));
+        ctx.drawImage(ellipseSprite(r.width, r.height, SHADOW), x, y);
+        ctx.drawImage(r, x, y);
+      }
+      if (e.state !== 'sweep' && e.state !== 'spot' && e.state !== 'glare') return;
+      // the beam's edges and middle as dotted rays on the ground, stopped by what blocks them
+      const glare = e.state === 'glare', col = glare ? 'Y' : e.state === 'spot' ? (Math.floor(e.anim * 12) % 2 ? 'P' : 'q') : 'y';
+      const step = glare ? 5 : 9, sh = Math.floor(e.anim * 20) % step;
+      for (const w of scareBeams(e)) for (const a of [w - SCARE_ARC, w, w + SCARE_ARC]) {
+        const c = Math.cos(a), s = Math.sin(a);
+        for (let d = SCARE_SAFE + sh; d < SCARE_LEN; d += step) {
+          const x = e.x + c * d, y = e.y + s * d * 0.9;
+          if (solidPx(G.room, x, y, 'shot')) break;
+          rect(Math.round(ox + x) - 1, Math.round(oy + y) - 1, 3, 3, '0');
+          rect(Math.round(ox + x), Math.round(oy + y), 1, 1, glare && a === w ? 'w' : col);
+        }
+      }
+    } },
+});
+FOE_NAMES.scare = 'SCARECROW';
+WARDENS.lantern = 'scare';
+AI.scare = function (e, dt, room, p) {
+  e.t -= dt;
+  if (e.hp < e.maxHp * 0.5) bossPhase(e, 2);
+  E_SRC = 'scare';
+  e.calm = e.state === 'glare';
+  // its lantern catches shots; the third (fourth in phase 2) knocks it reeling
+  const [lx, ly] = scareLamp(e);
+  for (const s of SHOTS) if (s.life > 0 && Math.hypot(s.x - lx, s.y - ly) < 7) {
+    s.life = 0; burst(lx, ly, 6, ['Y', 'y', 'O'], 60, 0.4); Audio_.sfx('clack');
+    if (++e.lh >= (e.p2 ? 4 : 3)) { e.lh = 0; stagger(e, 2.5); e.state = 'walk'; e.t = 1.5; e.z = 0; toast('ITS LANTERN RATTLES!'); return; }
+  }
+  if (e.state === 'walk') {
+    // hops on its pole toward a spot a little way from a hero
+    const u = (e.anim * 3) % 1;
+    e.z = Math.abs(Math.sin(u * Math.PI)) * 4;
+    const a = Math.atan2(e.y - p.y, e.x - p.x), tx = p.x + Math.cos(a) * 100, ty = p.y + Math.sin(a) * 60;
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy);
+    if (d > 4) moveBox(room, e, dx / d * 30 * dt, dy / d * 30 * dt, 'enemy');
+    e.flip = p.x < e.x;
+    if (u < (e.pu || 0)) dust(e.x, e.y, 2, 6);
+    e.pu = u;
+    if (e.t <= 0) {
+      e.z = 0;
+      if (++e.n % 3 === 0) { e.state = 'raise'; e.t = 0.7; Audio_.sfx('charge'); }
+      else { e.state = 'sweep'; e.t = 3.5; e.base = Math.atan2(p.y - e.y, p.x - e.x); e.ph = 0; e.cool = 0.5; Audio_.sfx('lamp'); }
+    }
+  } else if (e.state === 'sweep') {
+    e.ph += dt * (e.p2 ? 2.2 : 1.6);
+    e.w = e.base + Math.sin(e.ph) * 1.05;
+    e.flip = Math.cos(e.w) < 0;
+    // after a volley the beam sweeps on for a moment before it can catch anyone again
+    const h = (e.cool -= dt) <= 0 && G.players.find(q => alive(q) && scareCone(e, q));
+    if (h) { e.state = 'spot'; e.k = 0.45; e.tg = h; Audio_.sfx('tele'); }
+    else if (e.t <= 0) { e.state = 'walk'; e.t = 1.5; }
+  } else if (e.state === 'spot') {
+    // it holds the beam on the hero it found for a moment, then throws embers
+    if ((e.k -= dt) <= 0) {
+      const tg = alive(e.tg) ? e.tg : p, [x, y] = scareLamp(e);
+      fan(x, y, Math.atan2(tg.y - 7 - y, tg.x - x), e.p2 ? 5 : 3, 0.22, 85, 'ember');
+      Audio_.sfx('eshoot'); e.cool = e.p2 ? 0.9 : 1.2;
+      e.state = e.t > 0.6 ? 'sweep' : 'walk'; if (e.state === 'walk') e.t = 1.5;
+    }
+  } else if (e.state === 'raise') {
+    e.w = Math.atan2(p.y - e.y, p.x - e.x) - 0.9; e.flip = Math.cos(e.w) < 0;
+    if (e.t <= 0) { e.state = 'glare'; e.t = 2.5; hapticAll('roar'); Audio_.sfx('roar'); }
+  } else if (e.state === 'glare') {
+    e.w += 2.5 * dt; e.flip = Math.cos(e.w) < 0;
+    for (const h of G.players) if (alive(h) && scareCone(e, h)) hurtPlayer(h, 1, 'scare');
+    if (e.t <= 0) { stagger(e, 1.5); e.state = 'walk'; e.t = 1.5; e.calm = false; }
+  }
+};
+BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
+  { t: 'scare', spr: 'scare_0', lore: ['THE WARDEN OF THE LANTERN WOODS.', 'WHEN IT GLARES, HIDE BEHIND A POST.', 'SHOOT ITS LANTERN TO DAZE IT.'] });
+Object.assign(LAY_RULE, {
+  alley: { pool: [['stump', 3], ['lmoth', 2], ['wfox', 1]] },
+  hollow: { pool: [['owlet', 3], ['lmoth', 2], ['wisp', 1]] },
+  ring: { pool: [['mime', 4], ['stump', 1], ['wisp', 1]] },
+  glade: { pool: [['wfox', 2], ['mime', 2], ['owlet', 2]] },
+  creek: { pool: [['lmoth', 3], ['wisp', 2], ['stump', 1]] },
+  field: { pool: [['stump', 2], ['owlet', 2], ['mime', 2], ['lmoth', 1]] },
+});

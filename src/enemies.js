@@ -686,6 +686,7 @@ function drawMarkers(ox, oy) {
 // A struck tile: the bolt itself for a moment, then sparks crawling round the tile's edge,
 // blinking out over the last half second.
 function drawZap(k, ox, oy) {
+  if (k.c === 'fire') { drawFlame(k, ox, oy); return; }
   const x = Math.round(ox + k.x), y = Math.round(oy + k.y), age = k.max - k.t;
   if (age < 0.14) {
     // a storm of quiet bolts: only one in seven comes down from the sky, every tile flashes
@@ -740,6 +741,7 @@ function drawEnemy(e, ox, oy) {
     }
     return;
   }
+  if (EDEF[e.type].draw && EDEF[e.type].draw(e, ox, oy)) return; // a foe that looks like something else
   if (e.ghost && e.type !== 'mayor' && e.type !== 'geode' && e.type !== 'whale' && Math.floor(e.anim * 20) % 2) return;
   if (e.state === 'fade' && Math.floor(e.anim * 20) % 2) return;
   const s = enemySprite(e);

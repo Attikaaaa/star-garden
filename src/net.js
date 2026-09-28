@@ -1010,6 +1010,7 @@ function clientHits(me) {
     }
   }
   if (!hit) for (const e of G.enemies) {
+    if (!e.dead && EDEF[e.type].hits && EDEF[e.type].hits(e, me)) { hit = true; break; } // a foe's own area (the Scarecrow's glare)
     if (e.dead || e.passive || e.ghost || e.calm || e.stag > 0 || (e.z || 0) >= 8 || e.spawnT > 0) continue;
     if (Math.hypot(me.x - e.x, (me.y - 5) - (e.y - e.h / 2)) < e.r + 4) { hit = true; break; }
   }
