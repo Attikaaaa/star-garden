@@ -94,4 +94,13 @@ THEMES.cloud = {
   'a': 'e', 'b': 'a', 'c': 'A', 'i': 'y', 'j': 'Y',
   'e': 'C', 'f': 'c', 'g': 'C', 'h': 'w',
 };
-const THEME_ORDER = ['meadow', 'beach', 'crystal', 'cloud', 'well'];
+// Lantern Woods: a dusk forest of teal moss under plum trees, lit by lanterns (the darkness
+// itself is LAND_MECH.lantern's light mask, see fx.js). Its pits are a slow night creek.
+THEMES.lantern = {
+  name: 'LANTERN WOODS',
+  '1': 't', '2': 'g', '3': 'G', '4': 'O', '5': 'q', '6': 'Y',
+  '7': 'g', '8': 't', '9': 'T',
+  'a': 'v', 'b': 'V', 'c': 'P', 'i': 'O', 'j': 'y',
+  'e': '0', 'f': 'b', 'g': 'B', 'h': 'O',
+};
+const THEME_ORDER = ['meadow', 'beach', 'crystal', 'cloud', 'well', 'lantern'];

@@ -48,7 +48,7 @@ const Save = (() => {
   } catch (e) { /* no history */ }
   const s = {
     v: SAVE_V,
-    settings: { music: 7, sfx: 8, shake: true, vibe: 2, diff: 1, muted: false, assist: false, cb: false, lefty: false, share: null },
+    settings: { music: 7, sfx: 8, shake: true, vibe: 2, diff: 1, muted: false, assist: false, cb: false, lefty: false, bright: false, share: null },
     stats: { runs: 0, wins: 0, kills: 0, bestDepth: 0, bestTime: 0, bestWave: 0, bestWaveKills: 0 },
     found: [], vault: 0, up: {}, wands: ['wand'], wand: 'wand', name: 'PIP', skin: 0,
     id: '', born: 0, lastDay: '', days: 0,

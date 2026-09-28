@@ -259,6 +259,11 @@ defT('pit', `
   def('brk_cloud', stamp(sculpt(16, 16, [
     { e: [5, 10, 4.5, 4.5], ramp: 'pPqw' }, { e: [11, 10, 4.5, 4.5], ramp: 'pPqw' }, { e: [8, 7, 5.5, 5], ramp: 'pPqw' },
   ]), 5, 5, 'Y...\n....\n...w'));
+  // Lantern Woods: a plum boulder with a tuft of glowing moss, and a pumpkin
+  def('rock_lantern', stamp(rock('1vV3'), 5, 3, '.T.\nTOT'));
+  def('brk_lantern', stamp(sculpt(16, 16, [
+    { e: [5, 10, 4, 5], ramp: 'noOy' }, { e: [11, 10, 4, 5], ramp: 'noOy' }, { e: [8, 10, 4.5, 5.5], ramp: 'noOy' },
+  ]), 7, 3, '.g\ngG'));
 })();
 
 // ---------- Pickups, shots, props ----------

@@ -65,11 +65,15 @@ function spawnAmbient(theme, anywhere) {
   } else if (theme === 'cloud') {
     // little clouds drifting by, over the margins and the room alike
     amb('wisp', anywhere ? rnd(xl, xr) : xl - 16, rnd(-SCR.oy, SCR.h - SCR.oy), rnd(5, 11), 0, rnd(80, 100));
+  } else if (theme === 'lantern') {
+    // fireflies, and now and then a leaf coming down
+    if (Math.random() < 0.8) { if (AMB.filter(a => a.life > 0 && a.kind === 'ffly').length < 14) amb('ffly', rnd(16, VW - 16), rnd(44, 200), rnd(-6, 6), rnd(-6, 6), rnd(8, 14)); }
+    else amb('leaf', rnd(xl - 40, xr), y0, rnd(6, 12), rnd(10, 14), 30);
   } else {
     amb('mote', rnd(16, VW - 16), anywhere ? rnd(40, 200) : rnd(120, 205), rnd(-3, 3), rnd(-9, -4), rnd(3, 6));
   }
 }
-const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, cloud: 0.25, well: 4 };
+const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, cloud: 0.25, well: 4, lantern: 1.5 };
 let ambAcc = 0;
 function resetAmbient(theme) {
   for (const a of AMB) a.life = 0;
@@ -84,11 +88,24 @@ function updateAmbient(dt, theme) {
     if (a.kind === 'fly') {
       a.vx = a.dir * 16 + Math.sin(a.ph * 1.3) * 10;
       a.vy = Math.sin(a.ph * 2.1) * 14;
-    }
-    a.x += (a.kind === 'petal' ? a.vx + Math.sin(a.ph * 2) * 8 : a.vx) * dt;
+    } else if (a.kind === 'ffly') fireflyDrift(a, dt);
+    a.x += (a.kind === 'petal' || a.kind === 'leaf' ? a.vx + Math.sin(a.ph * 2) * 8 : a.vx) * dt;
     a.y += a.vy * dt;
     if (a.x > SCR.w - SCR.ox + 70 || a.y > SCR.h - SCR.oy + 6 || a.x < -SCR.ox - 80 || a.y < -SCR.oy - 10) a.life = 0;
   }
+}
+// A firefly wanders toward the nearest dark lamp, and hovers round it.
+function fireflyDrift(a, dt) {
+  const room = G.room;
+  let tx = null, ty = 0, best = 1e9;
+  if (room && room.tiles) for (let i = 0; i < room.tiles.length; i++) {
+    if (room.tiles[i] !== T_LAMP) continue;
+    const x = (i % COLS) * 16 + 8, y = OY + ((i / COLS) | 0) * 16 - 2, d = Math.hypot(x - a.x, y - a.y);
+    if (d < best) { best = d; tx = x; ty = y; }
+  }
+  let ax = Math.sin(a.ph * 1.7 + a.max) * 20, ay = Math.cos(a.ph * 1.3 + a.max * 2) * 20;
+  if (tx !== null) { const d = Math.max(1, best); ax += (tx - a.x) / d * (d < 14 ? -10 : 18); ay += (ty - a.y) / d * (d < 14 ? -10 : 18); }
+  a.vx = Math.max(-16, Math.min(16, a.vx + ax * dt)); a.vy = Math.max(-16, Math.min(16, a.vy + ay * dt));
 }
 function drawAmbient(ox, oy) {
   for (const a of AMB) {
@@ -100,6 +117,8 @@ function drawAmbient(ox, oy) {
         if (Math.floor(a.ph * 4) % 2) rect(x, y, 2, 1, c); else rect(x, y, 1, 2, c);
         break;
       }
+      case 'leaf': { const c = ['o', 'O', 'V', 'n'][Math.floor(a.max * 7) % 4]; if (Math.floor(a.ph * 3) % 2) rect(x, y, 2, 1, c); else { rect(x, y, 1, 1, c); rect(x + 1, y + 1, 1, 1, c); } break; }
+      case 'ffly': if ((a.ph * 0.9 + a.max) % 2.2 < 1.6) { rect(x, y, 1, 1, 'Y'); if ((a.ph * 0.9 + a.max) % 2.2 < 1.1) { rect(x - 1, y, 1, 1, 'y'); rect(x + 1, y, 1, 1, 'y'); rect(x, y - 1, 1, 1, 'y'); rect(x, y + 1, 1, 1, 'y'); } } break;
       case 'fly': drawS(S('bfly_' + (Math.floor(a.ph * 8) % 2)), x - 3, y - 2, a.vx < 0 ? 1 : 0); break;
       case 'glint': drawS(S(a.life / a.max > 0.5 ? 'sparkle_1' : 'sparkle_0'), x - 1, y - 1); break;
       case 'bubble': if (a.life > 0.15) drawS(S('bubble'), x - 1, y - 1); else rect(x, y, 1, 1, 'w'); break;

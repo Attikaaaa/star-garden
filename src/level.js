@@ -5,6 +5,8 @@ const T_FLOOR = 0, T_WALL = 1, T_ROCK = 2, T_BRK = 3, T_PIT = 4, T_DOOR = 5, T_P
 // T_MIRROR .. T_MIRROR + 3: a mirror whose glass faces up-left, up-right, down-right, down-left
 // (layout '7' '9' '3' '1', like a keypad); T_ICE: slippery floor (Snowglobe ice, frozen pools)
 const T_MIRROR = 10, T_ICE = 14;
+// T_LAMP / T_LAMPON: a Lantern Woods lamp post, dark or lit (layout 'l'; shots light it)
+const T_LAMP = 15, T_LAMPON = 16;
 const MIR_CH = '7931';
 const DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
@@ -106,6 +108,8 @@ function buildRoom(room, land) {
     stampLayout(t, layout, room.flip[0], room.flip[1], room.slots);
   }
   room.tiles = t;
+  const m = land && LAND_MECH[land.id];
+  if (m && m.build) m.build(room); // deterministic (room.seed), so every screen builds the same room
   room.pits = [];
   for (let i = 0; i < t.length; i++) if (t[i] === T_PIT) room.pits.push([(i % COLS) * 16, OY + ((i / COLS) | 0) * 16, hash(i, 3, room.seed)]);
   room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'warden' && room.type !== 'arena';
@@ -116,7 +120,7 @@ function stampLayout(t, layout, flipX, flipY, slots) {
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
     const ch = layout[flipY ? 9 - y : y][flipX ? 21 - x : x];
     const i = (y + 2) * COLS + x + 1;
-    t[i] = ch === '#' ? T_ROCK : ch === 'b' ? T_BRK : ch === '~' ? T_PIT : ch === 'p' ? T_PRISM : ch === 's' ? T_BELL : ch === 'g' ? T_GATE : ch === 'i' ? T_ICE : T_FLOOR;
+    t[i] = ch === '#' ? T_ROCK : ch === 'b' ? T_BRK : ch === '~' ? T_PIT : ch === 'p' ? T_PRISM : ch === 's' ? T_BELL : ch === 'g' ? T_GATE : ch === 'i' ? T_ICE : ch === 'l' ? T_LAMP : T_FLOOR;
     const m = MIR_CH.indexOf(ch); // a flip turns the glass the same way
     if (m >= 0) t[i] = T_MIRROR + ((flipX ? m ^ 1 : m) ^ (flipY ? 3 : 0));
     if (ch === 'e' && slots) slots.push([x * 16 + 24, y * 16 + OY + 32 + 12]);
@@ -287,7 +291,7 @@ function solidPx(room, x, y, mode) {
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return true;
   switch (room.tiles[r * COLS + c]) {
     case T_FLOOR: case T_PUFF: case T_ICE: return false;
-    case T_ROCK: case T_BRK: case T_PRISM: case T_BELL: return mode !== 'fly';
+    case T_ROCK: case T_BRK: case T_PRISM: case T_BELL: case T_LAMP: case T_LAMPON: return mode !== 'fly';
     case T_MIRROR: case T_MIRROR + 1: case T_MIRROR + 2: case T_MIRROR + 3: return mode !== 'fly' && mode !== 'shot'; // shots: mirrorPass
     case T_PIT: return (mode === 'player' || mode === 'enemy') && !room.flood; // high tide on the Shore: shallows
     case T_DOOR: return mode === 'player' ? !doorPass(room, x, y) : true;
@@ -467,7 +471,7 @@ function renderRoomStatic(room, theme) {
   // obstacles with contact shadows
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const t = room.tiles[r * COLS + c];
-    if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE) && (t < T_MIRROR || t > T_MIRROR + 3)) continue;
+    if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE) && (t < T_MIRROR || t > T_MIRROR + 3) && t !== T_LAMP && t !== T_LAMPON) continue;
     const x = c * 16, y = OY + r * 16;
     g.drawImage(ellipseSprite(14, 5, SHADOW), x + 1, y + 12);
     const sp = S(t >= T_PRISM ? tileArt(room, c, r, t) : (t === T_ROCK ? 'rock_' : 'brk_') + theme);

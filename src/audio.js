@@ -107,6 +107,9 @@ const Audio_ = (() => {
     // Crystal Clock bells (C E G A, a bell's sine with a faint octave), and the gate opening
     bell0() { bell(1047); }, bell1() { bell(1319); }, bell2() { bell(1568); }, bell3() { bell(1760); },
     cgate() { noise(0.3, 0.12, 900, 'lowpass'); [1047, 1319, 1568, 1760, 2093].forEach((f, i) => bell(f, 0.08 + i * 0.07)); },
+    // Lantern Woods: a wick catching (a soft whoosh and a warm chime), a lamp guttering out
+    lamp() { noise(0.18, 0.1, 1200, 'bandpass', 0, 3000); osc('sine', 880, 880, 0.35, 0.1, 0.05); osc('sine', 1320, 1320, 0.3, 0.05, 0.08); },
+    snuff() { noise(0.2, 0.08, 600, 'lowpass', 0, 200); osc('sine', 660, 440, 0.15, 0.05); },
     star() { [1047, 1319, 1568, 2093].forEach((f, i) => osc('p25', f, f * 1.005, 0.12, 0.09, i * 0.05)); },
     // the Star Casino
     chip() { osc('triangle', 2400, 1800, 0.03, 0.09); osc('triangle', 3100, 2500, 0.03, 0.06, 0.035); },
@@ -175,6 +178,15 @@ const Audio_ = (() => {
         'F5 A5 C6 E6 F6 - E6 - D6 B5 G5 B5 D6 - G6 - E6 - B5 - G5 - B5 - C6 - A5 - E5 - A5 C6 ' +
         'D6 - F6 - A6 - F6 D6 B5 - G5 - D6 - B5 - C6 - A5 - F5 - A5 C6 F6 - - - . . . .',
     },
+    // the Lantern Woods: a celesta over an A minor pentatonic line, an owl on the beat, crickets
+    lantern: {
+      bpm: 84, wave: 'sine', celesta: true, drum: 'o . c . . c c .',
+      chords: 'Am C G Am F C G Em Am C G Am F G Am Am',
+      lead: 'E5 - A5 - C6 - . . D6 - C6 A5 G5 - - - A5 - C6 - E6 - D6 C6 A5 - - - . . . . ' +
+        'G5 - A5 - C6 - D6 - E6 - G6 - E6 D6 C6 - D6 - C6 A5 G5 - E5 - A5 - - - . . . . ' +
+        'C6 - . E6 D6 - C6 - A5 - G5 - E5 - . . D5 - E5 G5 A5 - C6 - D6 - - - . . . . ' +
+        'E6 - D6 C6 A5 - C6 - D6 - E6 - G6 - E6 - D6 - C6 - A5 - G5 - A5 - - - . . . .',
+    },
     // the Star Well: slow and starry
     well: {
       bpm: 104, wave: 'p12', drum: 'k . . h s . h .',
@@ -233,6 +245,7 @@ const Audio_ = (() => {
         while (song.leadT[(i + len) % song.len] === '-' && len < 8) len++;
         const f = freq(n);
         osc(song.wave, f, f, dt * len * 0.95, 0.22, at, musBus);
+        if (song.celesta) osc('triangle', f * 2, f * 2, dt * len * 0.6, 0.06, at, musBus); // the celesta's octave shimmer
         if (song.bells && i % 8 === 0) { osc('sine', f * 2, f * 2, 0.8, 0.09, at, musBus); osc('triangle', f * 4, f * 4, 0.2, 0.025, at, musBus); }
       }
       const b = song.bassT[i % song.bassT.length];
@@ -241,6 +254,8 @@ const Audio_ = (() => {
       if (d === 'k') { osc('triangle', 150, 45, 0.12, 0.55, at, musBus); }
       else if (d === 's') noise(0.1, 0.22, 2000, 'bandpass', at, 0, musBus);
       else if (d === 'h') noise(0.03, 0.1, 7000, 'highpass', at, 0, musBus);
+      else if (d === 'o') { osc('sine', 392, 349, 0.28, 0.16, at, musBus); if (i % 32 === 0) osc('sine', 392, 330, 0.4, 0.12, at + 0.34, musBus); } // hoo, hoo-oo
+      else if (d === 'c') for (let j = 0; j < 3; j++) osc('sine', 4200, 4150, 0.018, 0.025, at + j * 0.04, musBus); // a cricket
       step++;
       nextT += dt;
     }

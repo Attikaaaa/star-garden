@@ -818,6 +818,7 @@ LAND_MECH.crystal = {
 };
 // the sprite of a crystal tile (level.js renderRoomStatic)
 function tileArt(room, c, r, t) {
+  if (t === T_LAMP || t === T_LAMPON) return 'lamp_' + (t === T_LAMPON ? 1 : 0);
   return t >= T_MIRROR ? 'mirror_' + (t - T_MIRROR) : t === T_PRISM ? 'prism' : t === T_BELL ? 'bell_' + Math.max(0, bellAt(room, c, r)) : 'cgate';
 }
 

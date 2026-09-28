@@ -539,6 +539,7 @@ function updateShots(dt) {
       const c = Math.floor(s.x / 16), r = Math.floor((s.y + 4 - OY) / 16);
       if (tileAt(room, c, r) === T_BRK) breakTile(room, c, r);
       else if (tileAt(room, c, r) === T_BELL) bellHit(room, c, r);
+      else if (tileAt(room, c, r) === T_LAMP || tileAt(room, c, r) === T_LAMPON) lampHit(room, c, r);
       else if (room.hidden) shotWall(room, c, r);
       if (s.kind === 'boomer') { s.life = 0; s.x = px; s.y = py; }
       else if (s.bounce > 0) {
@@ -705,7 +706,7 @@ function breakTile(room, c, r) {
   flowKey = -1;
   const x = c * 16 + 8, y = OY + r * 16 + 10;
   poof(x, y - 2);
-  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
+  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : G.floor.theme === 'lantern' ? ['o', 'O', 'y'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
   noteTeam('brk');
   if (!(room.fort && room.fort.includes(r * COLS + c)) && grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6); // a warden's sand walls pay nothing

@@ -18,7 +18,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
   data → level → entities → enemies → fx → ui → meta → the progress and content files →
-  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → main → qr → net). `net.js` loads last because it wraps a few
+  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
@@ -45,6 +45,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`) and the campfire between acts |
 | `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock, the Cloud Steps' Puff Floor (sunstone, updraft hops); each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
 | `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat, Weather Vane |
+| `woods.js` | the Lantern Woods: lamp posts (`T_LAMP`, layout `l`, `lampHit`, `lampsBuild`), its light (`woodsLight`), foes' eyes in the dark, its rooms |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
 | `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |

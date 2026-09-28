@@ -420,6 +420,7 @@ function settingsRows() {
   if (!IS_IOS) rows.push(['vibe', IS_TOUCH ? 'VIBRATION' : 'RUMBLE', VIBE[s.vibe]]);
   if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
   rows.push(['assist', 'ASSIST MODE', s.assist ? 'ON' : 'OFF'], ['cb', 'BULLET SHAPES', s.cb ? 'ON' : 'OFF']);
+  if (Save.flags.woods) rows.push(['bright', 'BRIGHT WOODS', s.bright ? 'ON' : 'OFF']);
   if (IS_TOUCH) rows.push(['lefty', 'LEFT-HANDED', s.lefty ? 'ON' : 'OFF']);
   else rows.push(['keys', 'KEYS', '>']);
   if (Save.stats.runs > 0) rows.push(['casino', 'CASINO', s.noCasino ? 'HIDDEN' : 'SHOWN']);
@@ -428,7 +429,7 @@ function settingsRows() {
   return rows;
 }
 const setGap = (rows) => (rows.length > 10 ? 10 : rows.length > 9 ? 11 : rows.length > 7 ? 13 : 16);
-const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN' };
+const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN', bright: 'LIGHTS UP THE LANTERN WOODS' };
 function updateSettings() {
   const s = Save.settings, rows = settingsRows(), gap = setGap(rows);
   menuNav(rows.length);
@@ -445,7 +446,7 @@ function updateSettings() {
   } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
   else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
-  else if ((id === 'assist' || id === 'cb' || id === 'lefty') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
+  else if ((id === 'assist' || id === 'cb' || id === 'lefty' || id === 'bright') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
   else if (id === 'casino' && (dir || ok)) { s.noCasino = !s.noCasino; Audio_.sfx('select'); Save.write(); }
   else if (id === 'keys' && ok) { Audio_.sfx('confirm'); setState('keys'); }
   else if (id === 'share' && (dir || ok)) { setShare(!s.share); Audio_.sfx('select'); }

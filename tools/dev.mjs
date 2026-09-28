@@ -91,7 +91,7 @@ function checkLayout(L) {
   if (L.length !== 10) return ['has ' + L.length + ' rows, expected 10'];
   L.forEach((r, y) => {
     if (r.length !== 22) bad.push('row ' + y + ' has ' + r.length + ' chars');
-    const u = r.replace(/[.#b~epsgoui7931]/g, '');
+    const u = r.replace(/[.#b~epsgouil7931]/g, '');
     if (u) bad.push('row ' + y + ' has unknown "' + u + '"');
   });
   if (bad.length) return bad;

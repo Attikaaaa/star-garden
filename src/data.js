@@ -37,11 +37,15 @@ const LANDS = [
   { id: 'cloud', theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
     rule: 'PUFF FLOOR', hint: 'CLOUDS PUFF UNDER YOUR FEET', danger: 2,
     pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
+  { id: 'lantern', wip: true, theme: 'lantern', song: 'lantern', rooms: 11, slime: 'moss', boss: 'golem', bossName: 'CRYSTAL GOLEM', // the Grand Hoot takes over in its own chunk
+    rule: 'LANTERN LIGHT', hint: 'SHOOT LAMPS TO LIGHT THEM', danger: 2,
+    pool: [['slime', 2], ['bat', 2], ['wisp', 3], ['shroom', 2]] },
 ];
 const LAND = {};
 for (const l of LANDS) LAND[l.id] = l;
 // Lands a player can reach: a 'wip' land (boss or song still missing) stays off the road and out of the Arena.
 const LIVE_LANDS = LANDS.filter(l => !l.wip);
+const landLive = (id) => !!LAND[id] && !LAND[id].wip;
 
 // The Star Road: three acts, each a fixed land, then a fork where the team picks the next
 // lands. A run walks one path through it (G.run.path, land ids, one per depth). Lands that
@@ -56,7 +60,7 @@ const CLASSIC_ROAD = ['meadow', 'shore', 'crystal'];
 // The road walked when nobody chooses: each act's fixed land, the first built lands of its fork, the finale.
 function roadPath() {
   const out = [];
-  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(id => LAND[id] && !LAND[id].wip).slice(0, a.pick), a.finale || []).filter(id => LAND[id]));
+  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(landLive).slice(0, a.pick), a.finale || []).filter(landLive));
   return out;
 }
 const runPath = () => (G.run && G.run.path) || CLASSIC_ROAD;

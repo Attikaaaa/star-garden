@@ -7,9 +7,9 @@
 function roadSlots() {
   const out = [];
   ROAD.forEach((a, i) => {
-    if (LAND[a.fixed]) out.push({ act: i, fork: false });
-    for (const id of a.fork.filter(id => LAND[id] && !LAND[id].wip).slice(0, a.pick)) out.push({ act: i, fork: true });
-    if (a.finale && LAND[a.finale]) out.push({ act: i, fork: false });
+    if (landLive(a.fixed)) out.push({ act: i, fork: false });
+    for (const id of a.fork.filter(landLive).slice(0, a.pick)) out.push({ act: i, fork: true });
+    if (a.finale && landLive(a.finale)) out.push({ act: i, fork: false });
   });
   return out;
 }
@@ -21,7 +21,7 @@ function forkChoices() {
   const path = runPath(), d = G.floor.depth + 1, slots = roadSlots();
   if (d >= path.length || slots.length !== path.length || !slots[d].fork) return null;
   const a = ROAD[slots[d].act];
-  const left = a.fork.filter(id => LAND[id] && !LAND[id].wip && !path.slice(0, d).includes(id));
+  const left = a.fork.filter(id => landLive(id) && !path.slice(0, d).includes(id));
   if (left.length < 2) return null;
   // fork slots of this act still ahead: when they cover every land left, the rest comes next
   const ahead = slots.filter((s, j) => j >= d && s.fork && s.act === slots[d].act).length;
@@ -156,7 +156,7 @@ function landDepth(id) {
   return roadSlots().findIndex(s => s.act === a && s.fork);
 }
 // Lands a quick run can pick: every built land of the road whose place was reached.
-const quickIds = () => [].concat(...ROAD.map(a => [a.fixed].concat(a.fork, a.finale || []))).filter(id => LAND[id] && !LAND[id].wip && landDepth(id) >= 0 && landDepth(id) < reachedDepth());
+const quickIds = () => [].concat(...ROAD.map(a => [a.fixed].concat(a.fork, a.finale || []))).filter(id => landLive(id) && landDepth(id) >= 0 && landDepth(id) < reachedDepth());
 const actSpan = (i) => { const s = roadSlots(), d = s.map((q, j) => (q.act === i ? j : -1)).filter(j => j >= 0); return [d[0], d[d.length - 1]]; };
 // The choices, in order: the full road, each reached act (once there are two), a surprise land, each land.
 function runLens() {
