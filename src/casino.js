@@ -36,7 +36,7 @@ function cshuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = crand(
 // live.json can override any of these under tuning.casino.
 const CASINO_TUNING = {
   gift: 100, cashMax: 60, inRate: 10, inMax: 50, outRate: 25, outMax: 40,
-  comp: 25, compH: 4, jackSeed: 500, jackFeed: 0.01, breakMin: 20, breakDown: 300, luck: 1.05,
+  comp: 25, compH: 4, jackSeed: 500, jackFeed: 0.01, breakMin: 20, breakDown: 300, luck: 1.08,
 };
 function ctune(k) { const t = typeof liveTuning === 'function' ? liveTuning('casino', null) : null; return t && typeof t[k] === 'number' ? t[k] : CASINO_TUNING[k]; }
 // The house edge of each game: comp points are the expected loss times ten.
@@ -70,7 +70,7 @@ function casinoBet(g, n) {
   c.chips -= n; c.wag += n; c.pts += n * (EDGE[g] || 0.05) * 10;
   const s = c.st[g] || (c.st[g] = { n: 0, bet: 0, won: 0, best: 0 });
   s.n++; s.bet += n;
-  CAS.sess.net -= n;
+  CAS.sess.net -= n; CAS.sess.wag = (CAS.sess.wag || 0) + n;
   c.jack += n * ctune('jackFeed'); // every bet in the casino feeds the Star Jackpot
   const t1 = casTier();
   if (t1 > t0) casTierUp(t1);
@@ -81,9 +81,10 @@ function casinoPay(g, n) {
   // Quiet luck: every payout is nudged so each game returns `luck` of what is bet in the long
   // run (a little over 100%), rounded at random so small wins stay small. A player behind over
   // their whole history is paid a little more still, in step with how far behind, so nobody
-  // stays down for long.
-  const behind = c.wag > 0 ? Math.max(0, c.wag - c.won) / c.wag : 0;
-  n *= (ctune('luck') + Math.min(0.25, behind * 2)) / (1 - (EDGE[g] || 0.05));
+  // stays down for long; this visit counts too, so a bad evening turns around within it.
+  const sw = CAS.sess.wag || 0;
+  const behind = Math.max(c.wag > 0 ? Math.max(0, c.wag - c.won) / c.wag : 0, sw > 0 ? Math.max(0, -CAS.sess.net) / sw : 0);
+  n *= (ctune('luck') + Math.min(0.6, behind * 3)) / (1 - (EDGE[g] || 0.05));
   n = Math.floor(n) + (crandf() < n % 1 ? 1 : 0);
   if (!(n > 0)) return 0;
   c.chips += n; c.won += n;
