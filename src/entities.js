@@ -469,6 +469,11 @@ function prismFlash(idx, s) {
   if (s.ps) NET.sfxPid = -1;
 }
 const PRISM_RAINBOW = ['P', 'O', 'y', 'h', 'c', '3'];
+// Out of reach of shots: a foe in mid-jump. Flyers hover higher on purpose, so they only
+// count as out of reach well above their hover height (they duck out with e.ghost instead).
+const outOfReach = (e) => (e.z || 0) > (EDEF[e.type].fly ? 24 : 12);
+// Where a shot meets a foe: a flyer is aimed at between its shadow and its body.
+const shotY = (e) => e.y - e.h / 2 - (EDEF[e.type].fly ? (e.z || 0) / 2 : 0);
 function updateShots(dt) {
   const room = G.room;
   for (let i = SHOTS.length - 1; i >= 0; i--) {
@@ -505,9 +510,9 @@ function updateShots(dt) {
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: s.kind === 'comet' && Math.random() < 0.4 ? 2 : 1, drag: 1 });
     // enemies first, so nothing hugging a wall is immune
     for (const e of G.enemies) {
-      if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
+      if (e.dead || e.spawnT > 0 || e.ghost || outOfReach(e)) continue;
       if (s.hitList && s.hitList.includes(e)) continue;
-      if (Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y) < e.r + s.r) {
+      if (Math.hypot(e.x - s.x, shotY(e) - s.y) < e.r + s.r) {
         // shells and hiding crabs: the shot glances off
         const bl = EDEF[e.type].block;
         if (bl && bl(e, s)) { s.life = 0; burst(s.x, s.y, 4, ['w', 'l'], 60, 0.2); Audio_.sfx('pop'); break; }
@@ -580,7 +585,7 @@ const BOOM_FR = ['shotboom_d', 'shotboom_s', 'shotboom_u', 'shotboom_s'];
 function cometBlast(s) {
   const R = s.own && s.own.bigBlast ? 36 : 26; // BIG BANG
   for (const e of G.enemies) {
-    if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12) continue;
+    if (e.dead || e.spawnT > 0 || e.ghost || outOfReach(e)) continue;
     if (Math.hypot(e.x - s.x, (e.y - e.h / 2 - s.y) * 1.2) < R + e.r) hurtEnemy(e, s.dmg * 0.7, s.x, s.y, true, s.own);
   }
   poof(s.x, s.y);
@@ -682,7 +687,7 @@ function updateTurrets(dt) {
     if (tr.cool > 0) continue;
     let best = null, bd = 150;
     for (const e of G.enemies) {
-      if (e.dead || e.spawnT > 0 || e.ghost || e.passive || (e.z || 0) > 12) continue;
+      if (e.dead || e.spawnT > 0 || e.ghost || e.passive || outOfReach(e)) continue;
       const d = Math.hypot(e.x - tr.x, e.y - tr.y);
       if (d < bd) { bd = d; best = e; }
     }

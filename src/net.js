@@ -966,9 +966,9 @@ function predShot(s, px, py, dt) {
     }
   }
   for (const e of G.enemies) {
-    if (e.dead || e.spawnT > 0 || e.ghost || (e.z || 0) > 12 || e.passive && e.type !== 'gold') continue;
+    if (e.dead || e.spawnT > 0 || e.ghost || outOfReach(e) || e.passive && e.type !== 'gold') continue;
     if (s.hitList && s.hitList.includes(e)) continue;
-    if (Math.hypot(e.x - s.x, e.y - e.h / 2 - s.y) < e.r + s.r) {
+    if (Math.hypot(e.x - s.x, shotY(e) - s.y) < e.r + s.r) {
       burst(s.x, s.y, 4, ['w', 'Y'], 60, 0.2);
       if (s.pierce > 0) { s.pierce--; (s.hitList || (s.hitList = [])).push(e); } else { s.life = 0; break; }
     }
