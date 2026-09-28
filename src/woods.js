@@ -91,6 +91,7 @@ function lampsBuild(room) {
 // A shot hit a lamp: it lights (again) for LAMP_T seconds. Only where the game runs.
 function lampHit(room, c, r) {
   if (NET.role === 'client') return;
+  if (room.dark) { poof(c * 16 + 8, OY + r * 16 - 2); return; } // the Eclipse: no lamp will take
   const was = tileAt(room, c, r);
   setTile(room, c, r, T_LAMPON); // setTile stamps the time, which is also the lamp's clock
   if (was === T_LAMPON) return;
@@ -183,7 +184,8 @@ LAND_MECH.lantern = {
       const g = glintAt(e), z = Math.round(e.z || 0);
       if (g && Math.floor(e.anim * 16) % 2) drawS(S('sparkle_0'), ox + e.x + g[0] - 1, oy + e.y + g[1] - z - 1);
       if (e.stag > 0) { const s = enemySprite(e); for (let k = 0; k < 3; k++) { const a = e.anim * 5 + k * 2.1; drawS(S('sparkle_c'), ox + e.x + Math.round(Math.cos(a) * 12) - 1, oy + e.y - z + 1 - s.h + Math.round(Math.sin(a) * 3) - 2); } }
-      if (lightAt(e.x, e.y - 6) === 0) foeEyes(e, ox, oy);
+      if (e.fk && e.state === 'shadow') hootEyes(e, ox, oy);
+      else if (lightAt(e.x, e.y - 6) === 0) foeEyes(e, ox, oy);
     }
     // light finds the cracks of a secret door
     if (room.hidden) for (const d in room.hidden) {
@@ -692,3 +694,253 @@ Object.assign(LAY_RULE, {
   creek: { pool: [['lmoth', 3], ['wisp', 2], ['stump', 1]] },
   field: { pool: [['stump', 2], ['owlet', 2], ['mime', 2], ['lmoth', 1]] },
 });
+
+// ---------- The Grand Hoot (boss of the Lantern Woods) ----------
+// A great plum owl with ember eyes and a lantern hooked on his wing. He hunts whoever stands in
+// lamplight with fans of feathers; a ring of feathers round him (0.8 s) is the tell for his wing
+// gust, which snuffs every lamp and throws the feathers out as a ring. Phase 2: every other
+// gust he melts into three shadow owls perched on dark lamp posts; lighting a post shows what
+// sits on it (a fake bursts into feathers, the real one falls off dazed). Phase 3, the Eclipse:
+// the lamps will not light, and only the heroes' own lanterns shine. His eyes sweep two beams
+// down across the room (a post or a rock is shade, and so is the strip beside and above him),
+// then he dives down a cyan lane: into a lamp post, and he crashes.
+(function hootArt() {
+  const o = { flash: true, sil: '1' };
+  const TUFT = ['00....\n0V0...\n0VV0..\n.0VV00', '....00\n...0V0\n..0VV0\n00VV0.'];
+  const hoot = (f) => {
+    const dy = f.d ? 5 : f.st ? 2 : f.b ? 1 : 0, up = f.m || f.tl;
+    const wing = f.d ? [[6, 26, 7, 4], [34, 26, 7, 4]] : f.a ? [[5, 20, 6, 5], [35, 20, 6, 5]]
+      : up ? [[6, 11 + (f.tl ? -2 : 0), 5.5, 8], [34, 11 + (f.tl ? -2 : 0), 5.5, 8]] : [[9, 20, 5, 9], [31, 20, 5, 9]];
+    let r = sculpt(40, 32, [
+      ...wing.map(([x, y, a, b]) => ({ e: [x, y + dy, a, b], ramp: '1vvV' })),
+      { e: [20, 18 + dy, 12, 11.5], ramp: '1vV3', cut: 31 },
+      { e: [20, 22 + dy, 7.5, 6.5], ramp: 'eaAA', cut: 31 },
+      { e: [15.5, 12.5 + dy, 5.5, 5], ramp: 'V344' }, { e: [24.5, 12.5 + dy, 5.5, 5], ramp: 'V344' },
+    ]);
+    if (!f.d) { r = stamp(r, 8, 3 + dy, TUFT[0]); r = stamp(r, 26, 3 + dy, TUFT[1]); }
+    // chevrons down the belly, talons, and the lantern hooked on his right wing
+    r = stamp(r, 16, 21 + dy, 'e.e.e.e.e\n.e.e.e.e.');
+    r = stamp(r, 17, 25 + dy, 'e.e.e.e');
+    if (!f.d) r = stamp(r, 15, 30 + Math.min(dy, 1) - (dy > 1 ? 1 : 0), 'O.O..O.O\n.o....o.');
+    const glass = f.st || f.d ? 'VvvV\nvvVV' : f.p ? 'RYyr\nrOor' : 'YwyO\nyYOO';
+    const [lx, ly] = f.d ? [34, 27] : f.a ? [36, 20] : up ? [34, 14 + (f.tl ? -2 : 0)] : [32, 25];
+    if (!f.d) r = stamp(r, lx + 1, ly - 2 + dy, 'n.\n.n');
+    r = stamp(r, lx, ly + dy, 'nnnn\n' + glass + '\nnnnn');
+    r = autoOutline(r);
+    r = rim(r, { v: '2', V: '3', a: 'A' });
+    // big ember eyes: an amber ring round the pupil
+    const ring = f.p ? '.rrrr.\nroooor\nroOOor\nroOOor\nroooor\n.rrrr.' : '.OOOO.\nOyyyyO\nOyYYyO\nOyYYyO\nOyyyyO\n.OOOO.';
+    if (f.face !== 'dead') { r = stamp(r, 13, 10 + dy, ring); r = stamp(r, 22, 10 + dy, ring); }
+    r = bossEyes(r, 14, 11 + dy, 9, f.face);
+    return stamp(r, 18, 16 + dy, f.a ? '.00.\n0Oo0\n0oo0\n.00.' : '0Oo0\n.0o0\n..0.');
+  };
+  bossFrames('hoot', hoot, o);
+  // his feathers, plum with a lavender tip
+  const pad = (rows) => autoOutline(['.'.repeat(rows[0].length + 2)].concat(rows.map(r => '.' + r + '.'), ['.'.repeat(rows[0].length + 2)]));
+  def('eb_feather', pad(['.4w.', '3V44', '2vV3', '.2v.'])); def('ebb_feather', pad(['..4w..', '.3V44.', '3vV4w3', '2vvV3.', '.2vV2.', '..2...']));
+  alias('ebcb_feather', 'eb_feather'); alias('ebbcb_feather', 'ebb_feather');
+})();
+const HOOT_Z = 14, HOOT_PZ = 18, HOOT_SAFE = 22, HOOT_BEAM = 7, HOOT_LEN = 190;
+const hootEye = (e) => [e.x, e.y - HOOT_Z - 19];
+const hootBeams = (e) => [Math.PI - e.w, e.w];
+// in phase 3 his eyes sweep two beams from level down to straight below; a post or rock shades
+function hootCaught(e, p) {
+  if (e.state !== 'beams') return false;
+  const [x, y] = hootEye(e), dx = p.x - x, dy = p.y - 6 - y;
+  if (Math.hypot(p.x - e.x, (p.y - e.y) / 0.6) < HOOT_SAFE) return false;
+  for (const a of hootBeams(e)) {
+    const c = Math.cos(a), s = Math.sin(a), along = dx * c + dy * s;
+    if (along > 12 && along < HOOT_LEN && Math.abs(-dx * s + dy * c) < HOOT_BEAM && clearLine(G.room, x, y, p.x, p.y - 6)) return true;
+  }
+  return false;
+}
+// a hero standing in lamplight, the nearest first
+function inLamp(room, x, y) {
+  const l = nearestLamp(room, x, y, T_LAMPON);
+  return l >= 0 && Math.hypot(x - lampXY(l)[0], y - lampXY(l)[1] - 8) < LAMP_R * 0.8;
+}
+// his perch on a lamp post, where the owlets sit
+const hootPerch = (i) => [lampXY(i)[0], lampXY(i)[1] + 12];
+Object.assign(EDEF, {
+  hoot: { hp: 600, r: 14, h: 30, hw: 14, hh: 7, sw: 36, boss: true, fly: true, intro: 'PUTS OUT THE LAMPS', phases: [0.66, 0.33], colors: ['v', 'V', 'O'],
+    sprite: (e) => bossFrame(e, { ruffle: 'tell', eclipse: 'tell', aim: 'tell', hide: 'move', rise: 'move', gust: 'atk', beams: 'atk', dive: 'atk' }[e.state] || bob(e, 3, 1, 0)),
+    glint: (e) => (e.state === 'fly' && e.n > hootGap(e) - 0.45 ? [0, -HOOT_Z - 16] : null),
+    hits: (e, p) => hootCaught(e, p),
+    light: (e) => {
+      if (e.state === 'shadow' || e.state === 'hide') return; // a shadow owl gives nothing away
+      lightAdd(e.x, e.y - 18, e.phase > 2 && e.stag <= 0 ? 12 : 28);
+      if (e.state !== 'beams' && e.state !== 'eclipse') return;
+      const [x, y] = hootEye(e);
+      for (const a of hootBeams(e)) for (const d of [30, 60, 95, 130, 165]) lightAdd(x + Math.cos(a) * d, y + Math.sin(a) * d, 8 + d * 0.12);
+    },
+    under: (e, ox, oy) => {
+      // the tell for his gust: eight feathers wheel round him, closing in
+      if (e.state === 'ruffle') {
+        const k = Math.max(0, e.t) / 0.8, s = S('eb_feather');
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4 + e.anim * 3;
+          drawS(s, ox + e.x + Math.cos(a) * (18 + 16 * k) - (s.w >> 1), oy + e.y - HOOT_Z - 14 + Math.sin(a) * (10 + 9 * k) - (s.h >> 1));
+        }
+      }
+      if (e.state !== 'eclipse' && e.state !== 'beams') return;
+      // the beams as dotted rays, stopped by what shades
+      const on = e.state === 'beams', col = on ? 'Y' : Math.floor(e.anim * 12) % 2 ? 'P' : 'q', step = on ? 4 : 8, sh = Math.floor(e.anim * 20) % step;
+      const [x0, y0] = hootEye(e);
+      for (const a of hootBeams(e)) {
+        const c = Math.cos(a), s = Math.sin(a);
+        for (let d = 12 + sh; d < HOOT_LEN; d += step) {
+          const x = x0 + c * d, y = y0 + s * d;
+          if (d > 20 && solidPx(G.room, x, y, 'shot')) break;
+          rect(Math.round(ox + x) - 1, Math.round(oy + y) - 1, 3, 3, '0');
+          rect(Math.round(ox + x), Math.round(oy + y), 1, 1, on && d % 8 < 4 ? 'w' : col);
+        }
+      }
+    },
+    // phase 2: three shadow owls on dark posts, only their ember eyes lit; the next to throw blinks white
+    draw: (e, ox, oy) => {
+      if (e.state !== 'shadow' || !e.fk) return false;
+      const s = S('hoot_0');
+      for (const [x, y] of [[e.x, e.y]].concat(e.fk)) { shadow(ox + x, oy + y, 20); drawFeet(s, ox + x, oy + y - HOOT_PZ, 4); }
+      return true;
+    },
+    die: (e) => { if (G.room) G.room.dark = false; e.fk = null; } },
+});
+EF_EXTRA.push('fk');
+// the shadow owls' ember eyes, drawn over the dark; the next to throw blinks white
+function hootEyes(e, ox, oy) {
+  const all = [[e.x, e.y]].concat(e.fk);
+  for (let i = 0; i < all.length; i++) {
+    const [x, y] = all[i], fy = Math.round(oy + y - HOOT_PZ);
+    const tell = i === ((e.w || 0) % all.length) && e.n > hootGap(e) - 0.45 && Math.floor(e.anim * 16) % 2;
+    for (const dx of [-5, 4]) { rect(Math.round(ox + x) + dx - 1, fy - 20, 4, 4, '0'); rect(Math.round(ox + x) + dx, fy - 19, 2, 2, tell ? 'w' : 'O'); }
+  }
+}
+FOE_NAMES.hoot = 'GRAND HOOT';
+const hootGap = (e) => (e.state === 'shadow' ? 1.1 : e.phase > 1 ? 1.3 : 1.6);
+function hootGust(e, room) {
+  const t = room.tiles;
+  for (let i = 0; i < t.length; i++) if (t[i] === T_LAMPON) {
+    setTile(room, i % COLS, (i / COLS) | 0, T_LAMP);
+    poof((i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 - 2);
+  }
+  Audio_.sfx('snuff'); Audio_.sfx('swish'); G.shake = Math.max(G.shake, 3); hapticAll('slam');
+  ring(e.x, e.y - HOOT_Z - 12, e.phase > 1 ? 14 : 12, 62, 'feather', grand());
+}
+// his shadow owls go: fakes into a puff of feathers, and he comes back as himself
+function hootRegroup(e, fell) {
+  for (const [x, y] of e.fk || []) { burst(x, y - HOOT_PZ - 12, 12, ['v', 'V', '3'], 60, 0.5); poof(x, y - HOOT_PZ - 8); }
+  e.fk = null; e.fl = null; e.ghost = false;
+  e.state = 'fly'; e.t = 3; e.n = 0;
+  if (fell) { e.z = 0; e.y += 10; stagger(e, 2.5); toast('THE LIGHT FOUND HIM!'); dust(e.x, e.y, 10, 20); }
+}
+AI.hoot = function (e, dt, room, p) {
+  e.t -= dt;
+  E_SRC = 'hoot';
+  if (e.hp < e.maxHp * 0.66) bossPhase(e, 2);
+  if (e.hp < e.maxHp * 0.33 && e.phase < 3) {
+    if (e.state === 'shadow') hootRegroup(e, false);
+    bossPhase(e, 3);
+    // the Eclipse: the lamps go out and will not light again while he lives
+    room.dark = true; hootGust(e, room); clearEBullets();
+    e.state = 'fly'; e.t = 2; e.n = 0;
+    G.banner = { title: 'THE ECLIPSE!', sub: 'ONLY YOUR LANTERNS SHINE NOW', t: 2.5, icon: null };
+  }
+  if (e.stag > 0) return;
+  const wantZ = e.state === 'dive' || e.state === 'aim' ? 0 : e.state === 'hide' ? 200 : HOOT_Z;
+  if (e.state !== 'shadow') e.z += (wantZ - e.z) * Math.min(1, (e.state === 'hide' ? 3 : 6) * dt);
+  switch (e.state) {
+    case 'intro': if (e.t <= 0) { e.state = 'fly'; e.t = 3; e.n = 0; e.k = 0; e.z = HOOT_Z; } break;
+    case 'fly': {
+      // he hunts whoever stands in lamplight
+      const prey = G.players.find(q => alive(q) && inLamp(room, q.x, q.y)) || p;
+      const tx = Math.max(60, Math.min(VW - 60, prey.x + Math.sin(e.anim * 0.8) * 50)), ty = e.phase > 2 ? OY + 56 : Math.max(OY + 56, Math.min(OY + 110, prey.y - 70));
+      hover(e, tx, ty, 50, dt, room);
+      if ((e.n += dt) > hootGap(e)) {
+        e.n = 0;
+        const x = e.x, y = e.y - HOOT_Z - 14;
+        fan(x, y, Math.atan2(prey.y - 7 - y, prey.x - x), inLamp(room, prey.x, prey.y) ? 5 : 3, 0.28, 80, 'feather');
+        Audio_.sfx('swish');
+      }
+      if (e.t > 0) break;
+      e.vx = e.vy = 0; e.n = 0;
+      if (e.phase > 2) { e.state = 'eclipse'; e.t = 0.8; e.w = 0; Audio_.sfx('charge'); }
+      else { e.state = 'ruffle'; e.t = 0.8; Audio_.sfx('crow'); }
+      break;
+    }
+    case 'ruffle':
+      if (e.t > 0) break;
+      e.state = 'gust'; e.t = 0.5; hootGust(e, room);
+      break;
+    case 'gust': {
+      if (e.t > 0) break;
+      const lamps = [];
+      for (let i = 0; i < room.tiles.length; i++) if (room.tiles[i] === T_LAMP) lamps.push(i);
+      if (e.phase === 2 && e.k++ % 2 === 0 && lamps.length >= 2) { e.state = 'hide'; e.t = 0.7; e.ghost = true; Audio_.sfx('crow'); }
+      else { stagger(e, 1.6); e.state = 'fly'; e.t = 3; }
+      break;
+    }
+    case 'hide': {
+      if (e.t > 0) break;
+      // perch on a dark post, with up to two shadow owls on others
+      const lamps = [];
+      for (let i = 0; i < room.tiles.length; i++) if (room.tiles[i] === T_LAMP) lamps.push(i);
+      if (lamps.length < 2) { hootRegroup(e, false); break; }
+      for (let i = lamps.length - 1; i > 0; i--) { const j = grnd(0, i + 1) | 0; [lamps[i], lamps[j]] = [lamps[j], lamps[i]]; }
+      const pick = lamps.slice(0, 3);
+      e.li = pick[0]; e.fl = pick.slice(1);
+      [e.x, e.y] = hootPerch(e.li); e.vx = e.vy = 0;
+      e.fk = e.fl.map(hootPerch);
+      e.z = HOOT_PZ; e.state = 'shadow'; e.t = 10; e.n = 0; e.w = grnd(0, 3) | 0;
+      toast('WHICH ONE IS HE? LIGHT THEIR LAMPS!');
+      break;
+    }
+    case 'shadow': {
+      if (room.tiles[e.li] === T_LAMPON) { hootRegroup(e, true); break; }
+      for (let k = e.fl.length - 1; k >= 0; k--) if (room.tiles[e.fl[k]] === T_LAMPON) {
+        const [x, y] = e.fk[k];
+        burst(x, y - HOOT_PZ - 12, 14, ['v', 'V', '3', '4'], 70, 0.6); poof(x, y - HOOT_PZ - 8); Audio_.sfx('pop');
+        e.fl.splice(k, 1); e.fk.splice(k, 1); e.fk = e.fk.slice(); // a new array, so the snapshot sees the change
+      }
+      if (e.t <= 0) { hootRegroup(e, false); break; }
+      // the owls take turns to throw a fan of feathers
+      if ((e.n += dt) > hootGap(e)) {
+        e.n = 0;
+        const all = [[e.x, e.y]].concat(e.fk), [x, y0] = all[e.w % all.length], y = y0 - HOOT_PZ - 14;
+        const tg = nearestHero(x, y0) || p;
+        fan(x, y, Math.atan2(tg.y - 7 - y, tg.x - x), 3, 0.3, 72, 'feather');
+        Audio_.sfx('swish'); e.w++;
+      }
+      break;
+    }
+    case 'eclipse':
+      hover(e, 192, OY + 56, 60, dt, room);
+      if (e.t > 0) break;
+      e.state = 'beams'; e.t = 2.6; e.w = 0; Audio_.sfx('roar');
+      break;
+    case 'beams':
+      e.vx = e.vy = 0;
+      e.w = Math.min(Math.PI / 2, (1 - Math.max(0, e.t) / 2.6) * Math.PI / 2 * 1.08);
+      for (const h of G.players) if (alive(h) && hootCaught(e, h)) hurtPlayer(h, 1, 'hoot');
+      if (e.t > 0) break;
+      e.state = 'aim'; e.t = 0.7; e.w = 0; lane(e, p); Audio_.sfx('charge');
+      break;
+    case 'aim': if (e.t <= 0) { e.state = 'dive'; e.t = 1.6; } break;
+    case 'dive': {
+      if (Math.random() < 0.5) part(e.x + rnd(-10, 10), e.y - 8, 0, -6, 0.4, Math.random() < 0.5 ? 'V' : '3', { size: 2 });
+      const bump = moveBox(room, e, Math.cos(e.la) * 180 * dt, Math.sin(e.la) * 180 * dt, 'enemy');
+      if (!bump && e.t > 0) break;
+      // into a lamp post he crashes hard; anything else only shakes him
+      let post = false;
+      for (const [dx, dy] of [[0, 0], [12, 0], [-12, 0], [0, 10], [0, -10]]) {
+        const c = Math.floor((e.x + dx + Math.cos(e.la) * 8) / 16), r = Math.floor((e.y + dy + Math.sin(e.la) * 8 - 1 - OY) / 16);
+        if (lampTile(tileAt(room, c, r))) post = true;
+      }
+      G.shake = Math.max(G.shake, post ? 6 : 3); dust(e.x, e.y, 10, 24); Audio_.sfx('boom'); hapticAll('slam');
+      if (post) { stagger(e, 3); toast('BONK! RIGHT INTO THE POST!'); ring(e.x, e.y - 12, 8, 50, 'feather', grand()); }
+      else stagger(e, 1.2);
+      e.state = 'fly'; e.t = 2.6; e.n = 0;
+      break;
+    }
+  }
+};
+BEASTS.push({ t: 'hoot', spr: 'hoot_0', boss: true, lore: ['HE PUTS OUT THE LAMPS OF THE WOODS.', 'LIGHT A SHADOW OWL\'S POST: IS IT HIM?', 'IN THE ECLIPSE, HIDE BEHIND A POST.'] });

@@ -17,6 +17,7 @@ const FROG_LINES = [
   { id: 'turtle', when: (r) => r.killer === 'turtle', text: 'WHEN THE HORN SOUNDS, FIND THE GAP OR HIDE BEHIND A ROCK.' },
   { id: 'geode', when: (r) => r.killer === 'geode', text: 'WHEN THE WEBS GLOW, GET OFF THE LINES. THEY SNAP TIGHT.' },
   { id: 'ram', when: (r) => r.killer === 'ram', text: 'WHEN THE RAM STOPS, STEP AWAY FROM ITS HORNS.' },
+  { id: 'hoot', when: (r) => r.killer === 'hoot', text: 'IN THE ECLIPSE, A LAMP POST IS SHADE FROM HIS EYES.' },
   { id: 'whale', when: (r) => r.killer === 'whale', text: 'WHEN THE WHALE CALLS THE STORM, FIND A GAP OR A SUNSTONE.' },
   { id: 'octo', when: (r) => r.killer === 'octo', text: 'WHEN THE OCTOPUS SINKS, GET READY TO MOVE.' },
   { id: 'cmoth', when: (r) => r.killer === 'cmoth', text: 'THAT MOTH SHEDS DUST. SHOOT IT BETWEEN THE CLOUDS.' },
