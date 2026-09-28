@@ -1044,6 +1044,7 @@ function drawHazards(ox, oy) {
 const COMBO_T = 2.4;
 function onKill(e, own) {
   if (own && own.thunder) thunderCall(e, own);
+  if (own && own.ffcharm && G.floor && G.floor.land.id === 'lantern') releaseFfly(e.x, e.y);
   const c = G.combo;
   c.n++; c.t = COMBO_T;
   addCharge(own, e.elite ? 0.22 : 0.1);

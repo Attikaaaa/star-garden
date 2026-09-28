@@ -24,7 +24,7 @@ const TITLES = {
   'HIGH ROLLER': 'A STAR CARD AT THE CASINO', 'LUCKY STAR': 'THE PRIZE COUNTER',
 };
 // Co-op: every screen draws every hero's pet and trail (net.js adds these to snapshots).
-const PF_EXTRA = ['pet', 'trail', 'buddies', 'charmCd', 'hero', 'leapZ', 'umbOpen'];
+const PF_EXTRA = ['pet', 'trail', 'buddies', 'charmCd', 'hero', 'leapZ', 'umbOpen', 'wick', 'owleye'];
 // (the hero and the wand aspect ride along, so the host can set up every remote hero)
 const myCosmetics = () => ({ pet: Save.pet, trail: Save.trail, title: Save.title, hero: heroUnlocked(Save.hero) ? Save.hero : 'pip', aspect: aspectOf(Save.wand) });
 function applyCosmetics(p, c) {

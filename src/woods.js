@@ -185,7 +185,7 @@ LAND_MECH.lantern = {
       if (g && Math.floor(e.anim * 16) % 2) drawS(S('sparkle_0'), ox + e.x + g[0] - 1, oy + e.y + g[1] - z - 1);
       if (e.stag > 0) { const s = enemySprite(e); for (let k = 0; k < 3; k++) { const a = e.anim * 5 + k * 2.1; drawS(S('sparkle_c'), ox + e.x + Math.round(Math.cos(a) * 12) - 1, oy + e.y - z + 1 - s.h + Math.round(Math.sin(a) * 3) - 2); } }
       if (e.fk && e.state === 'shadow') hootEyes(e, ox, oy);
-      else if (lightAt(e.x, e.y - 6) === 0) foeEyes(e, ox, oy);
+      else if (lightAt(e.x, e.y - 6) === 0) { if (G.player && G.player.owleye && e.state !== 'lamp') drawEnemy(e, ox, oy); else foeEyes(e, ox, oy); }
     }
     // light finds the cracks of a secret door
     if (room.hidden) for (const d in room.hidden) {
@@ -196,6 +196,13 @@ LAND_MECH.lantern = {
     }
   },
 };
+
+// the woods' own items
+Object.assign(ITEMS, {
+  wick: { name: 'BIGGER WICK', desc: 'YOUR OWN LIGHT REACHES FARTHER', land: 'lantern', apply: p => { p.wick = (p.wick || 0) + 1; } },
+  ffcharm: { name: 'FIREFLY CHARM', desc: 'WOODS KILLS FREE FIREFLIES', land: 'lantern', unique: true, apply: p => { p.ffcharm = true; } },
+  owleye: { name: 'OWL EYE', desc: 'YOU SEE FOES IN THE DARK', land: 'lantern', rare: 1, unique: true, apply: p => { p.owleye = true; } },
+});
 
 // ---------- Rooms ----------
 LAND_LAYOUTS.lantern = {
@@ -762,7 +769,7 @@ function inLamp(room, x, y) {
 // his perch on a lamp post, where the owlets sit
 const hootPerch = (i) => [lampXY(i)[0], lampXY(i)[1] + 12];
 Object.assign(EDEF, {
-  hoot: { hp: 600, r: 14, h: 30, hw: 14, hh: 7, sw: 36, boss: true, fly: true, intro: 'PUTS OUT THE LAMPS', phases: [0.66, 0.33], colors: ['v', 'V', 'O'],
+  hoot: { hp: 400, r: 14, h: 30, hw: 14, hh: 7, sw: 36, boss: true, fly: true, intro: 'PUTS OUT THE LAMPS', phases: [0.66, 0.33], colors: ['v', 'V', 'O'],
     sprite: (e) => bossFrame(e, { ruffle: 'tell', eclipse: 'tell', aim: 'tell', hide: 'move', rise: 'move', gust: 'atk', beams: 'atk', dive: 'atk' }[e.state] || bob(e, 3, 1, 0)),
     glint: (e) => (e.state === 'fly' && e.n > hootGap(e) - 0.45 ? [0, -HOOT_Z - 16] : null),
     hits: (e, p) => hootCaught(e, p),
@@ -816,7 +823,7 @@ function hootEyes(e, ox, oy) {
   }
 }
 FOE_NAMES.hoot = 'GRAND HOOT';
-const hootGap = (e) => (e.state === 'shadow' ? 1.1 : e.phase > 1 ? 1.3 : 1.6);
+const hootGap = (e) => (e.state === 'shadow' ? 1.3 : e.phase > 1 ? 1.7 : 2.1);
 function hootGust(e, room) {
   const t = room.tiles;
   for (let i = 0; i < t.length; i++) if (t[i] === T_LAMPON) {
@@ -824,7 +831,7 @@ function hootGust(e, room) {
     poof((i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 - 2);
   }
   Audio_.sfx('snuff'); Audio_.sfx('swish'); G.shake = Math.max(G.shake, 3); hapticAll('slam');
-  ring(e.x, e.y - HOOT_Z - 12, e.phase > 1 ? 14 : 12, 62, 'feather', grand());
+  ring(e.x, e.y - HOOT_Z - 12, e.phase > 1 ? 10 : 8, 56, 'feather', grand());
 }
 // his shadow owls go: fakes into a puff of feathers, and he comes back as himself
 function hootRegroup(e, fell) {
@@ -851,14 +858,14 @@ AI.hoot = function (e, dt, room, p) {
   switch (e.state) {
     case 'intro': if (e.t <= 0) { e.state = 'fly'; e.t = 3; e.n = 0; e.k = 0; e.z = HOOT_Z; } break;
     case 'fly': {
-      // he hunts whoever stands in lamplight
+      // he hunts whoever stands in lamplight, from the treetops
       const prey = G.players.find(q => alive(q) && inLamp(room, q.x, q.y)) || p;
-      const tx = Math.max(60, Math.min(VW - 60, prey.x + Math.sin(e.anim * 0.8) * 50)), ty = e.phase > 2 ? OY + 56 : Math.max(OY + 56, Math.min(OY + 110, prey.y - 70));
+      const tx = VW / 2 + Math.sin(e.anim * 0.5) * 120 + (prey.x - VW / 2) * 0.2, ty = e.phase > 2 ? OY + 56 : OY + 52 + Math.sin(e.anim * 0.9) * 12; // he sweeps the treetops and shoots down
       hover(e, tx, ty, 50, dt, room);
       if ((e.n += dt) > hootGap(e)) {
         e.n = 0;
         const x = e.x, y = e.y - HOOT_Z - 14;
-        fan(x, y, Math.atan2(prey.y - 7 - y, prey.x - x), inLamp(room, prey.x, prey.y) ? 5 : 3, 0.28, 80, 'feather');
+        fan(x, y, Math.atan2(prey.y - 7 - y, prey.x - x), inLamp(room, prey.x, prey.y) ? 4 : 3, 0.3, 70, 'feather');
         Audio_.sfx('swish');
       }
       if (e.t > 0) break;
@@ -890,7 +897,7 @@ AI.hoot = function (e, dt, room, p) {
       e.li = pick[0]; e.fl = pick.slice(1);
       [e.x, e.y] = hootPerch(e.li); e.vx = e.vy = 0;
       e.fk = e.fl.map(hootPerch);
-      e.z = HOOT_PZ; e.state = 'shadow'; e.t = 10; e.n = 0; e.w = grnd(0, 3) | 0;
+      e.z = HOOT_PZ; e.state = 'shadow'; e.t = 7; e.n = 0; e.w = grnd(0, 3) | 0;
       toast('WHICH ONE IS HE? LIGHT THEIR LAMPS!');
       break;
     }

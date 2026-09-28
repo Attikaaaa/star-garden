@@ -28,6 +28,12 @@ const SIC_SPOTS = (() => {
   for (let n = 1; n <= 6; n++) out.push({ id: 'f' + n, die: n, sub: 'PAYS 1-3', x: 14 + (n - 1) * 60, y: 134, w: 56, h: 30, col: 'z', hi: 'G', lo: 'g' });
   return out;
 })();
+// The long-run return of each spot, lifted to small's 97.2%: SIC_FIX[id] multiplies its pay.
+const SIC_FIX = (() => {
+  const out = {}, rtp = (id) => { let s = 0; for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) for (let c = 1; c <= 6; c++) s += sicPay({ [id]: 1 }, [a, b, c]); return s / 216; };
+  for (const sp of SIC_SPOTS) out[sp.id] = rtp('small') / rtp(sp.id);
+  return out;
+})();
 // Does a spot win with these dice?
 const sicWins = (id, d) => sicPay({ [id]: 1 }, d) > 0;
 const SB = { bets: {}, undo: [], last: null, chip: 0, roll: null, dice: [1, 3, 5], show: [1, 3, 5], hist: [], win: 0, bet: 0, done: false };
@@ -36,7 +42,9 @@ function sicRoll() {
   const total = sicTotal();
   if (!total || !casinoBet('sic', total)) { Audio_.sfx('deny'); return; }
   const d = [crand(6) + 1, crand(6) + 1, crand(6) + 1], pay = sicPay(SB.bets, d);
-  casPend('sic', pay);
+  let owed = 0; // every spot quietly returns what small / big do
+  for (const k in SB.bets) owed += sicPay({ [k]: SB.bets[k] }, d) * SIC_FIX[k];
+  casPend('sic', owed);
   SB.last = Object.assign({}, SB.bets);
   SB.roll = { t: 0, T: 1.7, d, pay, total, flip: 0 };
   SB.done = false; SB.undo = [];

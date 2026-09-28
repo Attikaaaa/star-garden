@@ -36,7 +36,7 @@ function cshuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = crand(
 // live.json can override any of these under tuning.casino.
 const CASINO_TUNING = {
   gift: 100, cashMax: 60, inRate: 10, inMax: 50, outRate: 25, outMax: 40,
-  comp: 25, compH: 4, jackSeed: 500, jackFeed: 0.01, breakMin: 20, breakDown: 300, luck: 1.02,
+  comp: 25, compH: 4, jackSeed: 500, jackFeed: 0.01, breakMin: 20, breakDown: 300, luck: 1.05,
 };
 function ctune(k) { const t = typeof liveTuning === 'function' ? liveTuning('casino', null) : null; return t && typeof t[k] === 'number' ? t[k] : CASINO_TUNING[k]; }
 // The house edge of each game: comp points are the expected loss times ten.
@@ -79,24 +79,28 @@ function casinoBet(g, n) {
 function casinoPay(g, n) {
   const c = cas();
   // Quiet luck: every payout is nudged so each game returns `luck` of what is bet in the long
-  // run (a little over 100%), rounded at random so small wins stay small.
-  n *= ctune('luck') / (1 - (EDGE[g] || 0.05));
+  // run (a little over 100%), rounded at random so small wins stay small. A player behind over
+  // their whole history is paid a little more still, in step with how far behind, so nobody
+  // stays down for long.
+  const behind = c.wag > 0 ? Math.max(0, c.wag - c.won) / c.wag : 0;
+  n *= (ctune('luck') + Math.min(0.25, behind * 2)) / (1 - (EDGE[g] || 0.05));
   n = Math.floor(n) + (crandf() < n % 1 ? 1 : 0);
-  if (!(n > 0)) return;
+  if (!(n > 0)) return 0;
   c.chips += n; c.won += n;
   const s = c.st[g] || (c.st[g] = { n: 0, bet: 0, won: 0, best: 0 });
   s.won += n; s.best = Math.max(s.best, n);
   CAS.sess.net += n;
+  return n;
 }
 // Commit what a round will pay before it animates; casSettle pays it.
-function casPend(g, n) { cas().pend = { g, n: Math.max(0, Math.floor(n)) }; Save.write(); }
+function casPend(g, n) { cas().pend = { g, n: Math.max(0, n) }; Save.write(); } // casinoPay rounds
 function casSettle() {
   const c = cas(), p = c.pend;
   if (!p || p.bj || p.vp) return 0; // a hand still in play resumes at its table
   c.pend = null;
-  casinoPay(p.g, p.n);
+  const n = casinoPay(p.g, p.n);
   Save.write();
-  return p.n;
+  return n;
 }
 function casTierUp(t) {
   const T = CAS_TIERS[t];
