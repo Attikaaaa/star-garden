@@ -862,7 +862,7 @@ function renderWorld(ox, oy) {
 }
 
 const MM_ICON = { boss: 'mm_boss', item: 'mm_item', shop: 'mm_shop', challenge: 'mm_chal', shrine: 'mm_shrine', altar: 'mm_altar', fountain: 'mm_fount',
-  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock', warden: 'mm_warden', slide: 'mm_slide' };
+  gamble: 'mm_gamble', rescue: 'mm_rescue', champion: 'mm_champ', vault: 'mm_lock', warden: 'mm_warden', slide: 'mm_slide', jar: 'mm_jar' };
 function drawEmblems(room, ox, oy) {
   for (const d in room.doors) {
     const t = room.doors[d].type;

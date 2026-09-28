@@ -74,7 +74,7 @@ function lampOk(room, c, r) {
 }
 function lampsBuild(room) {
   const t = room.tiles;
-  if (room.type === 'slide') return;
+  if (room.type === 'slide' || room.type === 'jar') return;
   let n = 0;
   for (let i = 0; i < t.length; i++) if (t[i] === T_LAMP) n++;
   if (room.type === 'boss' || room.type === 'warden' || room.type === 'arena' || !room.flip) {
@@ -105,7 +105,7 @@ const lampLeft = (room, i) => LAMP_T - (G.time - ((room.tAt && room.tAt.get(i)) 
 // ---------- The light ----------
 const TELL_STATES = new Set(['tele', 'aim', 'charge', 'rise']);
 function woodsLight(room) {
-  lightReset(0); // a sparse dither reads as a mesh, so the dusk stays whole and the pools do the work
+  lightReset(G.players.some(p => p.buff && p.buff.jar > 0) ? 4 : 0); // a Jar of Light lifts it all; a sparse dither reads as a mesh, so the dusk stays whole and the pools do the work
   for (const p of G.players) if (!p.dead) lightAdd(p.x, p.y - 6, alive(p) ? HERO_R + 16 * (p.wick || 0) : 24);
   const t = room.tiles;
   for (let i = 0; i < t.length; i++) if (t[i] === T_LAMPON) lightAdd((i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 - 1, LAMP_R);
@@ -116,7 +116,8 @@ function woodsLight(room) {
     else if (e.boss || EDEF[e.type].warden) lightAdd(e.x, e.y - 12, 28);
     else if (TELL_STATES.has(e.state) || glintAt(e)) lightAdd(e.x, e.y - 6, 20);
   }
-  for (const k of room.pickups) if (k.type === 'ffly') lightAdd(k.x, k.y - 8 - (k.z || 0), 16); else lightAdd(k.x, k.y - 3, 10);
+  { const o = jarOf(room); if (o) lightAdd(o.x, o.y - 8, 30 + 2 * o.got); }
+  for (const k of room.pickups) if (k.type === 'ffly' || k.type === 'jfly') lightAdd(k.x, k.y - 8 - (k.z || 0), 16); else lightAdd(k.x, k.y - 3, 10);
   for (const k of G.markers) if (k.kind === 'zap' && k.c === 'fire') lightAdd(k.x, k.y, 16);
 }
 // Two dots where a foe's face is, for foes the light does not reach.
@@ -135,6 +136,7 @@ LAND_MECH.lantern = {
   update(dt, room) {
     const t = room.tiles;
     fireflies(dt, room);
+    if (room.type === 'jar') jarUpdate(dt, room);
     // now and then a Pumpkin Hopper wanders into a fight
     if (room.phop === undefined) room.phop = room.type === 'normal' && !room.cleared && !G.first && grand() < 0.2 ? grnd(4, 8) : 0;
     if (room.phop > 0 && G.enemies.length && (room.phop -= dt) <= 0) {
@@ -172,6 +174,7 @@ LAND_MECH.lantern = {
       }
       return;
     }
+    if (layer === 2) jarDraw(ox, oy, room);
     if (layer !== 1) return;
     const amb = LIGHT.amb, n = LIGHT.n;
     for (const a of AMB) if (a.life > 0 && a.kind === 'ffly') lightAdd(a.x, a.y, 7); // fireflies glow, for the eye only
@@ -543,6 +546,117 @@ function fireflies(dt, room) {
   }
 }
 
+// ---------- The Firefly Jar (a special room, one per floor) ----------
+// Open the jar and fireflies swarm the dark room; they shy away from heroes, so corner them or
+// dash through them. Ten in thirty seconds fill the jar: a Jar of Light (a belt item that lights
+// the woods for a while). Fewer pay a coin each. The clock is the host's (skyNow).
+const JAR_N = 10, JAR_T = 30, JAR_FLIES = 6, JAR_WAIT = 0.8;
+def('jar_prop', `
+  ..000000000..
+  .0NNNNNNNNn0.
+  .0nnnnnnnnn0.
+  ..000000000..
+  .0Llllllllm0.
+  0Lw1111111md0
+  0Lw1111111md0
+  0L11111111md0
+  0L11111111md0
+  0L11111111md0
+  0l11111111dd0
+  0l1111111ddd0
+  .0mmmmmmmmd0.
+  ..000000000..`);
+def('pot_jar', autoOutline(parseArt('jar', `
+  ...........
+  ..NNNNNNN..
+  ..nnnnnnn..
+  ..Lllllmd..
+  ..Lw111md..
+  ..L1Y11md..
+  ..L111ymd..
+  ..L1y11md..
+  ..L11Y1dd..
+  ..mmmmmdd..
+  ...........
+  ...........
+  ...........`)));
+def('mm_jar', '.000.\n0nnn0\n0lYl0\n0lyl0\n.000.');
+POTIONS.jar = { name: 'JAR OF LIGHT', desc: 'LIGHTS UP THE WOODS FOR A WHILE', t: 20, price: 10 };
+POT_FX.jar = ['Y', 'y', 'w'];
+BUFF_IDS.push('jar');
+const jarOf = room => room.type === 'jar' ? room.props.find(o => o.kind === 'jar') : null;
+const jarSig = o => { o.sig = o.at + ':' + o.got + (o.done ? '!' : ''); };
+function jarStock(room) { const o = { kind: 'jar', x: 192, y: OY + 104, t: 0, at: 0, got: 0, done: false }; jarSig(o); room.props.push(o); }
+// host / solo: the lid comes off
+function jarStart(o, p) {
+  if (o.at) { say(p, o.done ? (o.got >= JAR_N ? 'THE JAR IS FULL!' : 'THEY GOT AWAY...') : 'CATCH THEM!'); return; }
+  o.at = skyNow() + JAR_WAIT; jarSig(o);
+  toast('CATCH TEN FIREFLIES!');
+  Audio_.sfx('lamp');
+}
+function jarEnd(room, o) {
+  o.done = true; jarSig(o);
+  room.pickups = room.pickups.filter(k => k.type !== 'jfly');
+  if (o.got >= JAR_N) { spawnPotion(o.x, o.y + 14, 'jar'); toast('THE JAR IS FULL!'); Audio_.sfx('win'); burst(o.x, o.y - 10, 20, ['Y', 'y', 'w'], 90, 0.7, { g: -30 }); }
+  else { if (o.got) gainCoins(o.got); toast('THE FIREFLIES GOT AWAY'); Audio_.sfx('snuff'); }
+}
+// host / solo: the swarm wanders, shies from heroes and is caught by a touch
+function jarUpdate(dt, room) {
+  const o = jarOf(room);
+  if (!o || !o.at || o.done) return;
+  const u = skyNow() - o.at;
+  if (u < 0) return;
+  if (u > JAR_T) { jarEnd(room, o); return; }
+  const list = room.pickups;
+  let n = 0;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const k = list[i];
+    if (k.type !== 'jfly') continue;
+    n++;
+    let ax = Math.cos(k.a), ay = Math.sin(k.a), sp = 30, near = null, nd = 1e9;
+    k.a += rnd(-3, 3) * dt;
+    for (const p of G.players) { if (!alive(p)) continue; const d = Math.hypot(k.x - p.x, k.y - p.y); if (d < nd) { nd = d; near = p; } }
+    if (near && nd < 12) {
+      list[i] = list[list.length - 1]; list.pop(); n--;
+      o.got++; jarSig(o);
+      burst(k.x, k.y - 14, 6, ['Y', 'y', 'w'], 50, 0.35, { g: -30 });
+      Audio_.sfx('graze');
+      if (o.got >= JAR_N) { jarEnd(room, o); return; }
+      continue;
+    }
+    if (near && nd < 56) { ax += (k.x - near.x) / nd * 1.6; ay += (k.y - near.y) / nd * 1.6; sp = 58; k.a = Math.atan2(ay, ax); }
+    const m = Math.hypot(ax, ay) || 1;
+    k.x += ax / m * sp * dt; k.y += ay / m * sp * dt;
+    // the walls turn them back
+    if (k.x < 28 || k.x > VW - 28) { k.x = Math.max(28, Math.min(VW - 28, k.x)); k.a = Math.PI - k.a; }
+    if (k.y < OY + 40 || k.y > OY + 184) { k.y = Math.max(OY + 40, Math.min(OY + 184, k.y)); k.a = -k.a; }
+  }
+  // the swarm stays full: new ones drift in by the far walls
+  for (; n < JAR_FLIES; n++) {
+    const x = Math.random() < 0.5 ? rnd(28, 60) : rnd(VW - 60, VW - 28);
+    list.push({ type: 'jfly', x, y: rnd(OY + 50, OY + 170), z: 6, vz: 0, vx: 0, vy: 0, t: rnd(0, 3), a: rnd(0, 6.3), ok: true });
+  }
+}
+// every screen: the jar's own glow, the count and the clock over it
+function jarDraw(ox, oy, room) {
+  const o = jarOf(room);
+  if (!o || !o.at || o.done) return;
+  const left = Math.ceil(Math.min(JAR_T, JAR_T - (skyNow() - o.at)));
+  text(o.got + ' / ' + JAR_N, ox + o.x, oy + o.y - 30, 'Y', 2, 1);
+  text(left + 'S', ox + o.x, oy + o.y - 40, left <= 5 ? 'R' : 'w', 2, 1);
+}
+// the prop: fireflies caught so far blink inside the glass
+function drawJar(o, x, y) {
+  shadow(x, y, 8);
+  const sp = S('jar_prop');
+  drawS(sp, x - (sp.w >> 1), y - sp.h + 1);
+  for (let i = 0; i < Math.min(o.got, JAR_N); i++) {
+    const h = hash(i, 31, 7), fx = x - 4 + h % 8, fy = y - 8 - (h >>> 4) % 6;
+    if ((G.time * 1.3 + i * 0.37) % 1.4 < 1) rect(fx, fy, 1, 1, i % 3 ? 'Y' : 'w');
+  }
+  if (!o.at && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 5, y - 16);
+}
+
 // ---------- The Scarecrow (warden of the Lantern Woods) ----------
 // A straw scarecrow on a pole with a lantern in its hand. It hops a little closer, then sweeps
 // its lantern's beam over the field (the dotted rays on the ground show it): a hero caught in
@@ -730,7 +844,7 @@ Object.assign(LAY_RULE, {
     r = stamp(r, 17, 25 + dy, 'e.e.e.e');
     if (!f.d) r = stamp(r, 15, 30 + Math.min(dy, 1) - (dy > 1 ? 1 : 0), 'O.O..O.O\n.o....o.');
     const glass = f.st || f.d ? 'VvvV\nvvVV' : f.p ? 'RYyr\nrOor' : 'YwyO\nyYOO';
-    const [lx, ly] = f.d ? [34, 27] : f.a ? [36, 20] : up ? [34, 14 + (f.tl ? -2 : 0)] : [32, 25];
+    const [lx, ly] = f.d ? [34, 27] : f.a ? [35, 20] : up ? [34, 14 + (f.tl ? -2 : 0)] : [32, 25];
     if (!f.d) r = stamp(r, lx + 1, ly - 2 + dy, 'n.\n.n');
     r = stamp(r, lx, ly + dy, 'nnnn\n' + glass + '\nnnnn');
     r = autoOutline(r);
@@ -771,7 +885,7 @@ const hootPerch = (i) => [lampXY(i)[0], lampXY(i)[1] + 12];
 Object.assign(EDEF, {
   hoot: { hp: 400, r: 14, h: 30, hw: 14, hh: 7, sw: 36, boss: true, fly: true, intro: 'PUTS OUT THE LAMPS', phases: [0.66, 0.33], colors: ['v', 'V', 'O'],
     sprite: (e) => bossFrame(e, { ruffle: 'tell', eclipse: 'tell', aim: 'tell', hide: 'move', rise: 'move', gust: 'atk', beams: 'atk', dive: 'atk' }[e.state] || bob(e, 3, 1, 0)),
-    glint: (e) => (e.state === 'fly' && e.n > hootGap(e) - 0.45 ? [0, -HOOT_Z - 16] : null),
+    glint: (e) => (e.state === 'fly' && e.t - (hootGap(e) - e.n) > 1.2 && e.n > hootGap(e) - 0.45 ? [0, -HOOT_Z - 16] : null),
     hits: (e, p) => hootCaught(e, p),
     light: (e) => {
       if (e.state === 'shadow' || e.state === 'hide') return; // a shadow owl gives nothing away
@@ -862,7 +976,7 @@ AI.hoot = function (e, dt, room, p) {
       const prey = G.players.find(q => alive(q) && inLamp(room, q.x, q.y)) || p;
       const tx = VW / 2 + Math.sin(e.anim * 0.5) * 120 + (prey.x - VW / 2) * 0.2, ty = e.phase > 2 ? OY + 56 : OY + 52 + Math.sin(e.anim * 0.9) * 12; // he sweeps the treetops and shoots down
       hover(e, tx, ty, 50, dt, room);
-      if ((e.n += dt) > hootGap(e)) {
+      if ((e.n += dt) > hootGap(e) && e.t > 1.2) { // no fan just before a gust, so its ring stays clean
         e.n = 0;
         const x = e.x, y = e.y - HOOT_Z - 14;
         fan(x, y, Math.atan2(prey.y - 7 - y, prey.x - x), inLamp(room, prey.x, prey.y) ? 4 : 3, 0.3, 70, 'feather');
@@ -951,3 +1065,184 @@ AI.hoot = function (e, dt, room, p) {
   }
 };
 BEASTS.push({ t: 'hoot', spr: 'hoot_0', boss: true, lore: ['HE PUTS OUT THE LAMPS OF THE WOODS.', 'LIGHT A SHADOW OWL\'S POST: IS IT HIM?', 'IN THE ECLIPSE, HIDE BEHIND A POST.'] });
+
+// ---------- The Pumpkin King (the Lantern Woods' other boss) ----------
+// A crowned pumpkin that stomps after the heroes throwing fans of seeds, and hops onto them (a
+// pink ring is where he lands). His trick: he splits into 3 / 4 / 5 pumpkin heads that light up
+// one by one. Shoot them in that order and he falls back together dazed; a wrong head, or too
+// slow, and they merge back with a ring of seeds. The heads spit seeds while they wait.
+(function pkingArt() {
+  const o = { flash: true, sil: '1' };
+  const king = (f) => {
+    const dy = f.d ? 6 : f.st ? 3 : f.tl ? 2 : f.b ? 1 : 0, sq = f.tl ? 1 : 0;
+    let r = sculpt(40, 32, [
+      { r: [18, 3 + dy, 4, 6, 1], ramp: 'gGGh', hi: false },
+      { e: [11 - sq, 20 + dy / 2, 9 + sq, 10.5 - dy / 3], ramp: 'noOy', cut: 31 },
+      { e: [29 + sq, 20 + dy / 2, 9 + sq, 10.5 - dy / 3], ramp: 'noOy', cut: 31 },
+      { e: [20, 19 + dy / 2, 11 + sq, 12 - dy / 3], ramp: 'noOy', cut: 31 },
+    ]);
+    if (!f.d) r = stamp(r, 22, 5 + dy, ['.gG', 'gGh', '.h.']); // a leaf by the stem
+    // the crown, askew and slipping when he is angry
+    const cx = f.p ? 13 : 14, cy = (f.d ? 20 : 5) + dy + (f.p ? 1 : 0);
+    r = stamp(r, cx, cy, f.d ? '.O..O..\nOyOOyOO' : 'Y..Y..Y\nYy.Yy.Y\nyYyRyYy\nOOOOOOO');
+    // carved face: glowing sockets behind the eyes and a jagged grin, dark once the candle is out
+    const g = f.d ? 'n' : f.p ? 'R' : 'Y', gl = f.d ? 'n' : 'y';
+    r = stamp(r, 12, 13 + dy, `${gl}${g}${g}${g}${gl}..${gl}${g}${g}${g}${gl}`.replace(/\./g, '.'));
+    r = stamp(r, 12, 18 + dy, f.a ? `${gl}${g}${g}${g}${g}${g}${g}${g}${g}${g}${g}${g}${gl}`.slice(0, 13) + '\n' + `.${g}0${g}${g}0${g}${g}0${g}${g}0.`.slice(0, 13) + '\n' + `..${gl}${g}${g}${g}${g}${g}${g}${g}${gl}..`.slice(0, 13)
+      : `${gl}.${g}.${g}.${g}.${g}.${g}.${gl}` + '\n' + `.${gl}${g}${g}${g}${g}${g}${g}${g}${g}${g}${gl}.`);
+    r = autoOutline(r);
+    r = rim(r, { n: 'r', o: 'r' });
+    if (f.face !== 'dead') r = bossEyes(r, 13, 12 + dy, 10, f.face);
+    return r;
+  };
+  bossFrames('pking', king, o);
+  // a pumpkin head: dark while it waits, its candle lit when it shows its place in the order
+  const head = (lit) => {
+    let r = sculpt(16, 15, [
+      { r: [7, 0, 3, 4, 1], ramp: 'gGGh', hi: false },
+      { e: [8, 9, 7, 5.5], ramp: 'noOy' },
+    ]);
+    r = stamp(r, 10, 1, ['hH', '.h']);
+    const g = lit ? 'Y' : 'n', gl = lit ? 'y' : 'n';
+    r = stamp(r, 4, 7, [`${gl}${g}..${g}${gl}`.replace(/\.\./, '..'), '.' + gl + '..' + gl + '.']);
+    r = stamp(r, 4, 10, [`${gl}${g}${g}${g}${g}${g}${gl}`.slice(0, 7), `.${gl}.${gl}.${gl}.`]);
+    return autoOutline(r);
+  };
+  def('phead_0', head(0), { flash: true }); def('phead_1', head(1), { flash: true });
+  // his seeds, cream with an orange heart
+  const pad = (rows) => autoOutline(['.'.repeat(rows[0].length + 2)].concat(rows.map(r => '.' + r + '.'), ['.'.repeat(rows[0].length + 2)]));
+  def('eb_pseed', pad(['.wy.', 'wYOy', 'yOoo', '.yo.'])); def('ebb_pseed', pad(['..wy..', '.wYYy.', 'wYOOoy', 'yOOoo.', '.yoo..', '..o...']));
+  alias('ebcb_pseed', 'eb_pseed'); alias('ebbcb_pseed', 'ebb_pseed');
+})();
+const PK_HOP = 0.7;
+const pkGap = (e) => (e.phase > 1 ? 2.1 : 2.4);
+const pkHeads = (e) => G.enemies.filter(h => h.type === 'phead' && !h.dead);
+Object.assign(EDEF, {
+  pking: { hp: 270, r: 14, h: 30, hw: 14, hh: 7, sw: 38, boss: true, intro: 'CARVES THE NIGHT', phases: [0.66, 0.33], colors: ['O', 'o', 'y'],
+    sprite: (e) => bossFrame(e, { crouch: 'tell', split: 'tell', hop: 'atk', merge: 'atk', walk: bob(e, 5, 'move', 0) }[e.state] || bob(e, 2, 1, 0)),
+    glint: (e) => (e.state === 'walk' && e.n > pkGap(e) - 0.45 && e.t > 0.6 ? [0, -20] : null),
+    light: (e) => { if (!e.ghost) lightAdd(e.x, e.y - 14, e.stag > 0 ? 14 : 28); },
+    // split into heads, he is nowhere; mid-hop he is drawn in the air
+    draw: (e, ox, oy) => {
+      if (e.ghost) return true;
+      if (e.state !== 'hop') return false;
+      shadow(ox + e.x, oy + e.y, 30);
+      drawFeet(bossFrame(e, 'atk'), ox + e.x, oy + e.y - e.z, e.flip ? 1 : 0);
+      return true;
+    } },
+  phead: { hp: 1e6, r: 7, h: 13, hw: 7, hh: 4, sw: 16, still: true, colors: ['O', 'o', 'y'], init: (e) => { e.calm = true; }, // no touch damage
+    sprite: (e) => S(e.state === 'lit' || e.state === 'aim' ? 'phead_1' : 'phead_0'),
+    glint: (e) => (e.state === 'aim' ? [0, -9] : null),
+    light: (e) => lightAdd(e.x, e.y - 6, e.state === 'lit' ? 34 : e.state === 'aim' ? 18 : 10) },
+});
+Object.assign(FOE_NAMES, { pking: 'PUMPKIN KING', phead: 'PUMPKIN HEAD' });
+LAND.lantern.alt = ['pking'];
+AI.phead = function (e, dt) { e.t -= dt; };
+// the heads go: in the right order he falls together dazed, otherwise they merge back
+function pkMerge(e, ok, room) {
+  const hs = pkHeads(e);
+  if (hs.length) { e.x = hs.reduce((s, h) => s + h.x, 0) / hs.length; e.y = hs.reduce((s, h) => s + h.y, 0) / hs.length; }
+  for (const h of hs) { h.dead = true; burst(h.x, h.y - 6, 10, ['O', 'o', 'y'], 70, 0.5); poof(h.x, h.y - 6); }
+  e.ghost = false; e.vx = e.vy = 0; e.n = 0; unstick(room, e, 'enemy');
+  poof(e.x, e.y - 14); dust(e.x, e.y, 10, 22); G.shake = Math.max(G.shake, 3); Audio_.sfx('boom');
+  if (ok) { stagger(e, 3); toast('IN THE RIGHT ORDER!'); e.state = 'walk'; e.t = 3.2; return; }
+  if (ok === false) { ring(e.x, e.y - 14, e.phase > 2 ? 10 : 8, 60, 'pseed', grand()); toast('THEY MERGED BACK!'); }
+  stagger(e, 1.2); e.state = 'walk'; e.t = 3;
+}
+AI.pking = function (e, dt, room, p) {
+  e.t -= dt;
+  E_SRC = 'pking';
+  for (const n of [2, 3]) if (e.hp < e.maxHp * (n === 2 ? 0.66 : 0.33) && (e.phase || 1) < n) {
+    if (e.ghost) pkMerge(e, null, room);
+    bossPhase(e, n); clearEBullets();
+  }
+  if (e.stag > 0) return;
+  switch (e.state) {
+    case 'intro': if (e.t <= 0) { e.state = 'walk'; e.t = 3; e.n = 0; e.k = 0; } break;
+    case 'walk': {
+      // he stomps after the nearest hero, a fan of seeds every gap
+      const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+      const sp = d > 90 ? 26 : d < 64 ? -22 : 0; // he keeps a stomp's distance
+      if (sp) moveBox(room, e, dx / d * sp * dt, dy / d * sp * dt, 'enemy');
+      e.flip = dx < 0;
+      if ((e.n += dt) > pkGap(e) && e.t > 0.6) {
+        e.n = 0;
+        const y = e.y - 18;
+        fan(e.x, y, Math.atan2(p.y - 7 - y, p.x - e.x), e.phase > 2 ? 3 : 2, 0.5, 54, 'pseed');
+        Audio_.sfx('eshoot');
+      }
+      if (e.t > 0) break;
+      e.n = 0;
+      // hop, hop, split; from phase 3 hop, split
+      if (e.k++ % (e.phase > 2 ? 2 : 3) === (e.phase > 2 ? 1 : 2)) { e.state = 'split'; e.t = 0.8; Audio_.sfx('charge'); }
+      else {
+        e.state = 'crouch'; e.t = 0.6; e.hx = p.x; e.hy = p.y; e.fx = e.x; e.fy = e.y;
+        G.markers.push({ kind: 'zone', x: p.x, y: p.y, r: 20, t: 0.6 + PK_HOP, max: 0.6 + PK_HOP });
+        Audio_.sfx('dash');
+      }
+      break;
+    }
+    case 'crouch': if (e.t <= 0) { e.state = 'hop'; e.t = PK_HOP; } break;
+    case 'hop': {
+      const k = 1 - Math.max(0, e.t) / PK_HOP;
+      e.x = e.fx + (e.hx - e.fx) * k; e.y = e.fy + (e.hy - e.fy) * k; e.z = Math.sin(k * Math.PI) * 50;
+      if (e.t > 0) break;
+      e.z = 0; unstick(room, e, 'enemy');
+      for (const q of G.players) if (alive(q) && Math.hypot(q.x - e.hx, (q.y - e.hy) / 0.6) < 20) hurtPlayer(q, 1, 'pking');
+      if (e.phase > 1) ring(e.x, e.y - 8, e.phase > 2 ? 7 : 5, 48, 'pseed', grand()); // from phase 2 the landing sprays seeds
+      dust(e.x, e.y, 12, 24); G.shake = Math.max(G.shake, 3); Audio_.sfx('boom'); hapticAll('slam');
+      e.state = 'walk'; e.t = 2.6; e.n = -1.4; // the fan waits for the ring to pass
+      break;
+    }
+    case 'split': {
+      if (e.t > 0) break;
+      // the heads roll out to spots away from the heroes, and light up in a shuffled order
+      const n = 2 + (e.phase || 1);
+      const far = (s) => Math.min(...G.players.filter(alive).map(q => Math.hypot(q.x - s[0], q.y - s[1])), 999);
+      const spots = [[64, 72], [320, 72], [64, 168], [320, 168], [192, 64], [192, 176], [128, 120], [256, 120]].sort((a, b) => far(b) - far(a)).slice(0, n);
+      for (let i = spots.length - 1; i > 0; i--) { const j = grnd(0, i + 1) | 0; [spots[i], spots[j]] = [spots[j], spots[i]]; }
+      e.hs = spots.map((s, i) => { const h = spawnEnemy('phead', s[0], s[1], { instant: true }); h.k = i; h.state = 'dark'; h.at = 1e9; return h; });
+      burst(e.x, e.y - 14, 20, ['O', 'o', 'y'], 110, 0.6); poof(e.x, e.y - 14); Audio_.sfx('pop');
+      e.ghost = true; e.x = 192; e.y = 124; e.state = 'show'; e.t = 0.6; e.w = -1; e.nx = 0; // out of the way while hidden
+      toast('REMEMBER THE ORDER!');
+      break;
+    }
+    case 'show': {
+      // each head lights in turn (in order of k), then all go dark
+      const step = e.phase > 2 ? 0.5 : 0.65;
+      if (e.t > 0) break;
+      e.w++;
+      for (const h of e.hs) h.state = h.k === e.w ? 'lit' : 'dark';
+      if (e.w < e.hs.length) { e.t = step; Audio_.sfx('lamp'); break; }
+      for (const h of e.hs) h.at = G.time; // shots only count from now on
+      e.state = 'heads'; e.t = 7 + e.hs.length; e.n = 0; e.w = 0;
+      break;
+    }
+    case 'heads': {
+      // a head shot in its turn pops; a hit in one go (a Starfall) counts in the right order
+      for (let go = true; go && e.nx < e.hs.length;) {
+        const h = e.hs.find(q => q.k === e.nx);
+        go = h.hurtAt > h.at;
+        if (go) { h.dead = true; burst(h.x, h.y - 6, 14, ['Y', 'y', 'O'], 90, 0.5); poof(h.x, h.y - 6); Audio_.sfx('coin'); e.nx++; e.lx = h.x; e.ly = h.y; }
+      }
+      if (e.nx >= e.hs.length) { e.hs = null; e.x = e.lx; e.y = e.ly; pkMerge(e, true, room); break; }
+      if (e.hs.some(h => !h.dead && h.hurtAt > h.at) || e.t <= 0) { e.hs = null; pkMerge(e, false, room); break; }
+      // meanwhile (from phase 2) the heads spit seeds in turn, each after a glint
+      const live = e.hs.filter(h => !h.dead);
+      if (e.phase > 1 && (e.n += dt) > 1.5) { // from phase 2 on
+        e.n = 0;
+        const h = live[e.w++ % live.length];
+        if (h.state === 'aim') break;
+        h.state = 'aim'; h.t = 0.5;
+      }
+      for (const h of live) if (h.state === 'aim' && h.t <= 0) {
+        h.state = 'dark';
+        const tg = nearestHero(h.x, h.y) || p;
+        fan(h.x, h.y - 8, Math.atan2(tg.y - 7 - (h.y - 8), tg.x - h.x), 1, 0, 60, 'pseed');
+        Audio_.sfx('eshoot');
+      }
+      break;
+    }
+  }
+};
+BEASTS.push({ t: 'pking', spr: 'pking_0', boss: true, lore: ['THE CROWNED PUMPKIN OF THE WOODS.', 'WATCH HIS HEADS LIGHT UP, THEN SHOOT', 'THEM IN THAT ORDER. WHERE HE HOPS, MOVE.'] });

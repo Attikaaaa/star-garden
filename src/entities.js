@@ -805,7 +805,7 @@ function updatePickups(dt) {
   for (let i = list.length - 1; i >= 0; i--) {
     const k = list[i];
     k.t += dt;
-    if (k.type === 'ffly') continue; // a freed firefly flies to a lamp on its own (woods.js)
+    if (k.type === 'ffly' || k.type === 'jfly') continue; // a freed firefly flies to a lamp on its own (woods.js)
     if (k.z > 0 || k.vz) {
       k.vz -= 320 * dt; k.z += k.vz * dt;
       if (k.z <= 0) { k.z = 0; k.vz = Math.abs(k.vz) > 40 ? -k.vz * 0.4 : 0; }
@@ -865,7 +865,7 @@ function updatePickups(dt) {
 const COIN_FR = ['coin_0', 'coin_1', 'coin_2', 'coin_1'];
 function drawPickup(k, ox, oy) {
   if (k.type === 'seed') { drawSeed(k, ox, oy); return; }
-  if (k.type === 'ffly') { drawFfly(k, ox, oy); return; }
+  if (k.type === 'ffly' || k.type === 'jfly') { drawFfly(k, ox, oy); return; }
   const bob = k.z > 0 ? k.z : Math.max(0, Math.sin(k.t * 4)) * 1.5;
   shadow(ox + k.x, oy + k.y, 7);
   let s, v = 0;

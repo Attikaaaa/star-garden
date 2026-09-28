@@ -11,6 +11,8 @@ function addSpecialRooms(list, at, add, depth, land) {
   // gets a new one, grown off a room with an empty neighbour
   // the Cloud Steps hold one Rainbow Slide per floor
   if (land.id === 'cloud' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'slide'; }
+  // the Lantern Woods hold one Firefly Jar
+  if (land.id === 'lantern' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'jar'; }
   if (WARDENS[land.id] && !G.first) {
     let w = list.find(r => r.type === 'normal' && Object.keys(r.doors).length === 1 && r.dist >= 2);
     if (!w) {
@@ -75,6 +77,7 @@ function stockSpecial(room) {
   } else if (t === 'fountain') room.props.push({ kind: 'fountain', x: 192, y: 126, t: 0, used: false });
   else if (t === 'gamble') room.props.push({ kind: 'gfrog', x: 192, y: 110, t: 0, plays: 0 });
   else if (t === 'slide') slideStock(room);
+  else if (t === 'jar') jarStock(room);
   else if (t === 'rescue') { const [x, y] = freeSpot(room); room.props.push({ kind: 'cage', x, y, t: 0, open: false, critter: nextCritter() }); }
   else if (t === 'vault') {
     const ids = itemPool(Math.min(3, 1 + G.players.length));
@@ -117,7 +120,7 @@ const CRITTERS = { chick: 'CHICK', hedgehog: 'HEDGEHOG', duck: 'DUCKLING' };
 function nextCritter() { const left = Object.keys(CRITTERS).filter(c => !Save.critters.includes(c)); return left.length ? gpick(left) : gpick(Object.keys(CRITTERS)); }
 
 // ---------- Talking to the special props ----------
-const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp', 'slide']);
+const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp', 'slide', 'jar']);
 // Returns true when the prop was one of ours.
 function roomInteract(o, p) {
   const room = G.room;
@@ -134,6 +137,7 @@ function roomInteract(o, p) {
   }
   if (o.kind === 'camp') { restAtCamp(o, p); return true; }
   if (o.kind === 'slide') { slideStart(o, p); return true; }
+  if (o.kind === 'jar') { jarStart(o, p); return true; }
   if (o.kind === 'fountain') {
     if (o.used) { say(p, 'THE FOUNTAIN IS DRY'); Audio_.sfx('deny'); return true; }
     o.used = true;
@@ -186,6 +190,7 @@ function roomPropTip(o) {
   if (o.kind === 'fountain') return ['A FOUNTAIN', o.used ? 'THE FOUNTAIN IS DRY' : 'HEALS EVERYONE', 'DRINK'];
   if (o.kind === 'gfrog') return ['THE LUCKY FROG', o.plays >= 3 ? 'NO MORE GAMES TODAY!' : 'A GAME? 8 COINS!', 'PLAY'];
   if (o.kind === 'slide') return ['A RAINBOW SLIDE', o.done ? 'WHAT A RIDE!' : 'RIDE IT AND GRAB THE COINS', 'RIDE'];
+  if (o.kind === 'jar') return ['A FIREFLY JAR', o.done ? (o.got >= JAR_N ? 'THE JAR IS FULL!' : 'THEY GOT AWAY...') : 'CATCH 10 FIREFLIES IN 30 SECONDS', 'OPEN'];
   if (o.kind === 'cage') return ['A CRITTER IN A CAGE!', G.room.cleared ? 'SET IT FREE' : 'DEFEAT THE GUARDS FIRST', 'OPEN'];
   return ['BIG STAR', 'RETURN A BIG STAR TO THE SKY', 'TAKE'];
 }
@@ -251,6 +256,7 @@ function drawRoomProp(o, ox, oy) {
     if (!o.at && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 6, y - 16);
     return true;
   }
+  if (o.kind === 'jar') { drawJar(o, x, y); return true; }
   if (o.kind === 'bigstar') {
     const bob = Math.round(Math.sin(o.t * 2) * 2);
     shadow(x, y, 14);

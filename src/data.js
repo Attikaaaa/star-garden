@@ -37,7 +37,7 @@ const LANDS = [
   { id: 'cloud', theme: 'cloud', song: 'cloud', rooms: 11, slime: 'sky', boss: 'whale', bossName: 'THUNDER WHALE',
     rule: 'PUFF FLOOR', hint: 'CLOUDS PUFF UNDER YOUR FEET', danger: 2,
     pool: [['slime', 2], ['sheep', 2], ['kiteray', 2], ['stormwisp', 2], ['pigeon', 2], ['nimbus', 1]] },
-  { id: 'lantern', wip: true, theme: 'lantern', song: 'lantern', rooms: 11, slime: 'moss', boss: 'hoot', bossName: 'GRAND HOOT',
+  { id: 'lantern', theme: 'lantern', song: 'lantern', rooms: 11, slime: 'moss', boss: 'hoot', bossName: 'GRAND HOOT',
     rule: 'LANTERN LIGHT', hint: 'SHOOT LAMPS TO LIGHT THEM', danger: 2,
     pool: [['wfox', 1], ['stump', 2], ['lmoth', 2], ['owlet', 2], ['mime', 2], ['wisp', 2]] },
 ];

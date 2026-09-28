@@ -485,7 +485,7 @@ function doorKind(room, d) {
   const o = room.doors[d];
   if (room.type === 'boss' || o.type === 'boss') return 'b';
   if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion' || room.type === 'warden' || o.type === 'warden') return 'c';
-  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret', 'slide'];
+  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret', 'slide', 'jar'];
   if (T.includes(room.type) || T.includes(o.type)) return 't';
   return 'n';
 }

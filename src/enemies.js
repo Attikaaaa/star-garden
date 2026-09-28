@@ -453,7 +453,7 @@ const AI = {
         break;
       case 'rest':
         // phase 2: every other slam is followed by a spinning spray of slime
-        if (e.t <= 0) { if (e.p2 && (e.k = (e.k || 0) + 1) % 2 === 0) { e.state = 'spin'; e.t = 2; e.n = 0; Audio_.sfx('charge'); } else { e.state = 'pre'; e.t = 0.2; } }
+        if (e.t <= 0) { if (e.p2 && (e.k = (e.k || 0) + 1) % 2 === 0) { e.state = 'spin'; e.t = 2.33; e.n = -0.33; Audio_.sfx('charge'); } else { e.state = 'pre'; e.t = 0.2; } }
         break;
       case 'spin':
         e.n += dt;
@@ -481,8 +481,9 @@ const AI = {
           const r = grand();
           // phase 2 adds a wall of bubbles with one gap to slip through
           e.state = e.p2 && r < 0.3 ? 'wall' : r < 0.6 ? 'tele' : 'spiral';
-          e.t = e.state === 'tele' ? 0.7 : e.state === 'wall' ? 0.6 : 2.4; e.n = 0;
-          if (e.state !== 'spiral') Audio_.sfx('charge');
+          // the spiral winds up for 0.45 s (e.t > 2.3: tell frame and glint) before its first bubble
+          e.t = e.state === 'tele' ? 0.7 : e.state === 'wall' ? 0.6 : 2.75; e.n = e.state === 'spiral' ? -0.35 : 0;
+          Audio_.sfx('charge');
           if (e.state === 'tele') lane(e, p);
         }
         break;
@@ -630,7 +631,7 @@ function updateMarkers(dt) {
     }
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan', whale: 'rain' }[k.src] || 'shard', grand());
+      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', pking: 'pseed', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan', whale: 'rain' }[k.src] || 'shard', grand());
       burst(k.x, k.y - 4, 10, k.src === 'bomber' ? ['P', 'q', 'w'] : k.src === 'castle' ? ['a', 'A', 'e'] : ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
@@ -724,8 +725,8 @@ function enemySprite(e) {
     case 'wisp': return S('wisp_' + (Math.floor(e.anim * 6) % 3));
     case 'jelly': return S(e.state === 'pulse' ? 'jelly_1' : 'jelly_0');
     case 'bat': return S('bat_' + [0, 1, 2, 1][Math.floor(e.anim * (e.state === 'swoop' ? 8 : 14)) % 4]);
-    case 'king': return bossFrame(e, { pre: 'tell', rise: 'tell', hop: 'move', hover: 'move', fall: 'move', intro: 'move', land: 'atk', spin: 'atk' }[e.state] || bob(e, 2, 1, 0));
-    case 'bcrab': return bossFrame(e, { tele: 'tell', wall: 'tell', charge: 'atk', spiral: 'atk', walk: bob(e, 6, 'move', 0) }[e.state] || bob(e, 2, 1, 0));
+    case 'king': return bossFrame(e, { pre: 'tell', rise: 'tell', hop: 'move', hover: 'move', fall: 'move', intro: 'move', land: 'atk', spin: e.t > 1.88 ? 'tell' : 'atk' }[e.state] || bob(e, 2, 1, 0));
+    case 'bcrab': return bossFrame(e, { tele: 'tell', wall: 'tell', charge: 'atk', spiral: e.t > 2.3 ? 'tell' : 'atk', walk: bob(e, 6, 'move', 0) }[e.state] || bob(e, 2, 1, 0));
     case 'golem': return bossFrame(e, { raise: 'tell', rain: 'tell', slam2: 'atk', burst: 'atk', waves: 'atk', walk: bob(e, 3, 'move', 0) }[e.state] || bob(e, 2, 1, 0));
     // newer foes describe their own look in EDEF (see foes.js)
     default: return EDEF[e.type].sprite(e);
@@ -771,7 +772,8 @@ function glintAt(e) {
     case 'flower': return e.state === 'charge' && e.t < 0.28 ? [0, -8] : null;
     case 'shroom': return e.state === 'charge' && e.t < 0.28 ? [0, -12] : null;
     case 'wisp': return e.state === 'appear' && e.t < 0.22 ? [0, -9] : null;
-    case 'bcrab': return e.state === 'walk' && e.n > crabGap(e) - 0.45 ? [0, -12] : null;
+    case 'bcrab': return e.state === 'walk' && e.n > crabGap(e) - 0.45 || e.state === 'spiral' && e.t > 2.3 ? [0, -12] : null;
+    case 'king': return e.state === 'spin' && e.t > 1.88 ? [0, -14] : null;
     case 'golem': return e.state === 'burst' ? [0, -16] : null;
     default: return EDEF[e.type] && EDEF[e.type].glint ? EDEF[e.type].glint(e) : null;
   }
