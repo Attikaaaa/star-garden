@@ -117,9 +117,26 @@ const Save = (() => {
     }
   } catch (e) { /* no storage */ }
   // Another tab saved since this one loaded, so this tab's copy is old: it must not write
-  // over the newer save. s.mayWrite (main.js) says when it still may (in a run), and
-  // s.onStale reloads the page to pick up the new save.
+  // over the newer save. s.mayWrite (main.js) says when it still may (in a run): then the
+  // newer save is merged in first, so neither tab's progress is lost. s.onStale reloads
+  // the page to pick up the new save.
   addEventListener('storage', (e) => { if (e.key === KEY || e.key === null) s._stale = true; });
+  const plain = (o) => o && typeof o === 'object' && !Array.isArray(o);
+  const flat = (a) => Array.isArray(a) && a.every(x => x === null || typeof x !== 'object');
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const CHOICE = new Set(['skin', 'born', 'music', 'sfx', 'vibe', 'diff', 'step', 'ranked']); // picks, not amounts: this tab's stands
+  // Three-way merge: what this tab changed since base goes on top of the newer save t.
+  // Numbers add up both tabs' changes (coins spent there, coins won here), bests keep the
+  // higher, flat lists keep what either added, records merge key by key.
+  function merge3(b, m, t, k) {
+    if (t === undefined || same(t, b)) return m;
+    if (same(m, b)) return t;
+    if (typeof m === 'number' && typeof t === 'number') return CHOICE.has(k) ? m : /^best|^days$|^max$/.test(k) || typeof b !== 'number' ? Math.max(m, t) : t + m - b;
+    if (flat(m) && flat(t)) { const bb = flat(b) ? b : []; return t.filter(x => bb.includes(x) === m.includes(x) || !bb.includes(x)).concat(m.filter(x => !bb.includes(x) && !t.includes(x))); }
+    if (plain(m) && plain(t)) { const o = {}; for (const j of new Set([...Object.keys(t), ...Object.keys(m)])) { const v = merge3(plain(b) ? b[j] : undefined, m[j], t[j], j); if (v !== undefined) o[j] = v; } return o; }
+    return m;
+  }
+  let base = null; // the save as this tab last read or wrote it
   let carryT = 0, carryJ = '';
   const carry = () => {
     carryT = 0;
@@ -128,15 +145,23 @@ const Save = (() => {
   s.write = () => {
     if (s._frozen) return; // a new save was put in place and the page is reloading
     if (s._stale && !(s.mayWrite && s.mayWrite())) { if (s.onStale) s.onStale(); return; }
-    s._stale = false;
     const out = {};
     for (const k in s) if (typeof s[k] !== 'function' && k[0] !== '_') out[k] = s[k];
     out.v = SAVE_V;
+    if (s._stale && base) {
+      let t = null;
+      try { t = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { t = null; }
+      if (plain(t)) Object.assign(s, merge3(base, JSON.parse(JSON.stringify(out)), t));
+      for (const k in out) out[k] = s[k];
+    }
+    s._stale = false;
     const json = JSON.stringify(out);
+    base = JSON.parse(json);
     try { localStorage.setItem(KEY, json); } catch (e) { /* no storage */ }
     // Safari limits address changes, so the carried copy follows at most once a second
     if (CARRY) { carryJ = json; if (!carryT) carryT = setTimeout(carry, 1000); }
   };
+  try { const o = {}; for (const k in s) if (typeof s[k] !== 'function' && k[0] !== '_') o[k] = s[k]; base = JSON.parse(JSON.stringify(o)); } catch (e) { /* */ }
   s._app = IOS && APP;
   // Called once per boot: count distinct days of play (letters, the calendar, analytics).
   s.touch = () => {

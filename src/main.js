@@ -571,6 +571,7 @@ function update(dt) {
   Input.aimWas = Input.lastAim;
   pollPad();
   pollTouch();
+  if (ovlUpdate(dt)) return;
   if (pressed('KeyM')) { Audio_.toggleMute(); toast(Save.settings.muted ? 'SOUND OFF (M)' : 'SOUND ON'); }
   if (pressed('KeyF')) toggleFullscreen();
   if (G.toast && (G.toast.t -= dt) <= 0) G.toast = null;
@@ -981,10 +982,11 @@ function render() {
   drawWipe();
   if ((IS_TOUCH || Input.lastAim === 'touch') && window.innerHeight > window.innerWidth) drawRotate();
   if (modalUp()) drawModal();
+  drawOvl();
   if (G.toast) { const w = textW(G.toast.msg) + 12, y = SCR.h - SCR.oy - 16; panel((VW - w) / 2, y, w, 15); text(G.toast.msg, VW / 2, y + 4, 'w', 0, 1); }
   drawCursor();
   // pause, menus, wipes and pop-ups are drawn on the game canvas: the HUD layer steps aside
-  const hide = s !== 'play' || Wipe.t >= 0 || modalUp() ? 'hidden' : '';
+  const hide = s !== 'play' || Wipe.t >= 0 || modalUp() || OVL.box || (OVL.isOpen && OVL.isOpen()) ? 'hidden' : '';
   if (hudCv.style.visibility !== hide) hudCv.style.visibility = hide;
 }
 
