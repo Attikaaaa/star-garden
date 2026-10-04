@@ -4,14 +4,14 @@
 // the Night Moth stole. Seven of them open the Star Well after the third land.
 
 Object.assign(EDEF, {
-  queen: { hp: 440, r: 13, h: 22, hw: 12, hh: 7, sw: 30, boss: true, intro: 'GUARDS THE HIVE', fly: true, colors: ['y', 'Y', 'o'], sprite: (e) => bossFrame(e, { aim: 'tell', dash: 'move', hive: 'atk', summon: 'atk' }[e.state] || bob(e, 14, 1, 0)),
-    glint: (e) => (e.state === 'aim' || (e.state === 'float' && e.n > (e.p2 ? 0.8 : 1.1) - 0.45) ? [e.flip ? -12 : 12, -12] : null) },
+  queen: { hp: 440, r: 13, h: 22, hw: 12, hh: 7, sw: 30, boss: true, intro: 'GUARDS THE HIVE', fly: true, colors: ['y', 'Y', 'o'], sprite: (e) => bossFrame(e, { aim: 'tell', dash: 'move', hive: e.t > 1.89 ? 'tell' : 'atk', summon: 'atk' }[e.state] || bob(e, 14, 1, 0)),
+    glint: (e) => (e.state === 'aim' || (e.state === 'float' && e.n > (e.p2 ? 0.8 : 1.1) - 0.45) ? [e.flip ? -12 : 12, -12] : e.state === 'hive' && e.t > 1.89 ? [0, -14] : null) },
   octo: { hp: 720, r: 14, h: 22, hw: 13, hh: 7, sw: 32, boss: true, intro: 'INKS THE TIDE', colors: ['P', 'q', 'p'], sprite: (e) => bossFrame(e, { ink: e.w ? 'atk' : 'tell', arms: e.w ? 'atk' : 'tell', sink: e.ghost ? 'move' : 'tell', beam: 'atk' }[e.state] || bob(e, 3, 1, 0)),
-    glint: (e) => (e.state === 'beam' && e.t > 2 ? [0, -6] : null) },
-  cmoth: { hp: 380, r: 13, h: 20, hw: 12, hh: 7, sw: 34, boss: true, intro: 'SHATTERS THE LIGHT', fly: true, colors: ['3', '4', 'C'], sprite: (e) => bossFrame(e, { shatter: 'tell', dust: 'atk' }[e.state] || bob(e, 8, 1, 0)),
-    glint: (e) => (e.state === 'flutter' && e.n > 0.75 ? [0, -10] : null) },
-  nmoth: { hp: 240, r: 16, h: 26, hw: 14, hh: 8, sw: 42, boss: true, intro: 'STOLE THE STARS', phases: [0.6, 0.25], fly: true, colors: ['2', '3', 'Y'], sprite: (e) => bossFrame(e, { stars: 'tell', call: 'tell', spiral: 'atk' }[e.state] || bob(e, 6, 1, 0)),
-    glint: (e) => (e.state === 'drift' && e.n > (e.p2 ? 0.7 : 1) - 0.45 ? [0, -12] : null) },
+    glint: (e) => (e.state === 'beam' && e.t > 2 ? [0, -6] : (e.state === 'ink' || e.state === 'arms') && e.t < 0.45 ? [0, -12] : null) },
+  cmoth: { hp: 380, r: 13, h: 20, hw: 12, hh: 7, sw: 34, boss: true, intro: 'SHATTERS THE LIGHT', fly: true, colors: ['3', '4', 'C'], sprite: (e) => bossFrame(e, { shatter: 'tell', dust: e.t > 1.48 ? 'tell' : 'atk' }[e.state] || bob(e, 8, 1, 0)),
+    glint: (e) => (e.state === 'flutter' && e.n > 0.75 || e.state === 'dust' && e.t > 1.48 ? [0, -10] : null) },
+  nmoth: { hp: 240, r: 16, h: 26, hw: 14, hh: 8, sw: 38, boss: true, intro: 'STOLE THE STARS', phases: [0.6, 0.25], fly: true, colors: ['2', '3', 'Y'], sprite: (e) => bossFrame(e, { stars: 'tell', call: 'tell', spiral: e.t > 2.1 ? 'tell' : 'atk' }[e.state] || bob(e, 6, 1, 0)),
+    glint: (e) => (e.state === 'drift' && e.n > (e.p2 ? 0.7 : 1) - 0.45 || e.state === 'spiral' && e.t > 2.1 ? [0, -12] : null) },
   mayor: { hp: 460, r: 13, h: 24, hw: 12, hh: 7, sw: 34, boss: true, intro: 'DIGS IN', phases: [0.66, 0.33], colors: ['N', 'n', 'p'],
     sprite: (e) => e.ghost ? S(mayorSet(e) + '_mound') : bossFrame(e, { dig: 'tell', grab: 'tell', sink: 'tell', hills: 'atk', walk: bob(e, 4, 'move', 0) }[e.state] || bob(e, 2, 1, 0), mayorSet(e)),
     glint: (e) => (e.state === 'walk' && e.n > mayorGap(e) - 0.45 ? [0, -26] : null) },
@@ -36,7 +36,7 @@ Object.assign(FOE_NAMES, { queen: 'QUEEN BEE', octo: 'PEARL OCTOPUS', cmoth: 'CR
 LAND.meadow.alt = ['queen', 'mayor']; LAND.shore.alt = ['octo', 'turtle']; LAND.crystal.alt = ['cmoth', 'geode']; LAND.cloud.alt = ['ram'];
 const bossName = (t) => foeName(t);
 // The boss of the current room (for the health bar and the entrance).
-const curBossName = () => bossName(G.boss ? G.boss.type : G.floor.boss || G.floor.land.boss);
+const curBossName = () => bossName(G.boss ? G.boss.type : isDuel() ? 'grin' : G.floor.boss || G.floor.land.boss);
 
 // ---------- Which boss waits at the end of a land ----------
 // The alternate bosses only turn up once the land's first boss has been beaten.
@@ -53,15 +53,19 @@ function chooseBoss(floor) {
 // ---------- The Star Well: a fourth land behind the third, for players with seven Big Stars ----------
 const WELL = { id: 'well', theme: 'well', song: 'well', rooms: 6, slime: 'pink', boss: 'nmoth', bossName: 'NIGHT MOTH',
   pool: [['gmoth', 3], ['wisp', 3], ['spider', 2], ['bat', 2], ['gemlet', 1], ['slime', 1]] };
-const BIG_STARS = ['king', 'bcrab', 'golem', 'queen', 'octo', 'cmoth', 'secret'];
-const wellOpen = () => !G.daily && G.mode === 'adv' && !NET.role && BIG_STARS.every(s => Save.story.stars.includes(s));
+// Every boss of the road (and its other boss) keeps a Big Star, and the secret room hides one more;
+// any seven of them open the Star Well. The Night Bloom keeps none: it ends the road.
+const BIG_STARS = ['king', 'bcrab', 'golem', 'queen', 'octo', 'cmoth', 'secret'], STAR_NEED = 7;
+const bigStarOf = (t) => BIG_STARS.includes(t) || (t !== 'nbloom' && LANDS.some(l => l.boss === t || (l.alt || []).includes(t)));
+const starsHome = () => Save.story.stars.length;
+const wellOpen = () => !G.daily && G.mode === 'adv' && !NET.role && starsHome() >= STAR_NEED;
 // A boss beaten for the first time gives its Big Star back to the sky.
 onNote((ev, a) => {
   if (ev !== 'boss' && ev !== 'bigstar') return;
-  if (!BIG_STARS.includes(a) || Save.story.stars.includes(a)) return;
+  if (!bigStarOf(a) || Save.story.stars.includes(a)) return;
   Save.story.stars.push(a);
   const n = Save.story.stars.length;
-  G.bannerNext = { title: 'A BIG STAR RETURNS TO THE SKY!', sub: n + ' OF 7' + (n === 7 ? ': THE STAR WELL IS OPEN!' : ''), t: 3, icon: null };
+  G.bannerNext = { title: 'A BIG STAR RETURNS TO THE SKY!', sub: n > STAR_NEED ? 'THE SKY GROWS BRIGHTER' : n + ' OF ' + STAR_NEED + (n === STAR_NEED ? ': THE STAR WELL IS OPEN!' : ''), t: 3, icon: null };
   logNews('star', 'BIG STAR ' + n + '/7', 'icon_big');
   Save.write();
   checkStars(true);
@@ -90,7 +94,8 @@ Object.assign(AI, {
         if (e.t <= 0) {
           const r = grand();
           e.state = e.p2 && r < 0.3 ? 'hive' : r < 0.55 ? 'summon' : 'aim';
-          e.t = e.state === 'hive' ? 2 : e.state === 'summon' ? 0.6 : 0.6; e.n = 0;
+          // the hive spray winds up for 0.45 s (e.t > 1.89: tell frame and glint)
+          e.t = e.state === 'hive' ? 2.34 : 0.6; e.n = e.state === 'hive' ? -0.34 : 0;
           Audio_.sfx('charge');
           if (e.state === 'aim') { e.vx = e.vy = 0; lane(e, p); }
         }
@@ -151,6 +156,7 @@ Object.assign(AI, {
         if (e.t <= 0 && !e.ghost) {
           e.ghost = true; e.t = 1.2; dust(e.x, e.y, 14, 30); Audio_.sfx('bubble');
           e.tx = grnd(80, 304); e.ty = grnd(80, 150);
+          G.markers.push({ kind: 'zone', x: e.tx, y: e.ty, r: 16, t: e.t + 0.1, max: e.t + 0.1 });
         } else if (e.ghost) {
           e.x += (e.tx - e.x) * Math.min(1, dt * 3); e.y += (e.ty - e.y) * Math.min(1, dt * 3);
           if (Math.random() < 0.4) part(e.x + rnd(-12, 12), e.y - rnd(0, 4), 0, -12, 0.5, 'C', { drag: 1 });
@@ -184,7 +190,7 @@ Object.assign(AI, {
           for (const s of [-1, 1]) fan(e.x + s * 12, e.y - 10, Math.PI / 2 + s * 0.9, 4, 0.22, 70, 'dust');
           Audio_.sfx('swish');
         }
-        if (e.t <= 0) { e.state = e.p2 && grand() < 0.45 ? 'shatter' : 'dust'; e.t = e.state === 'dust' ? 1.6 : 0.6; e.n = 0; Audio_.sfx('charge'); }
+        if (e.t <= 0) { e.state = e.p2 && grand() < 0.45 ? 'shatter' : 'dust'; e.t = e.state === 'dust' ? 1.93 : 0.6; e.n = e.state === 'dust' ? -0.33 : 0; Audio_.sfx('charge'); }
         break;
       case 'dust':
         e.vx *= 0.92; e.vy *= 0.92;
@@ -217,7 +223,7 @@ Object.assign(AI, {
         if (e.t <= 0) {
           const r = grand();
           e.state = r < 0.35 ? 'spiral' : r < 0.65 ? 'stars' : e.p2 ? 'call' : 'spiral';
-          e.t = e.state === 'spiral' ? 2.2 : e.state === 'stars' ? 0.6 : 0.8; e.n = 0; e.w = 0;
+          e.t = e.state === 'spiral' ? 2.55 : e.state === 'stars' ? 0.6 : 0.8; e.n = e.state === 'spiral' ? -0.35 : 0; e.w = 0;
           Audio_.sfx('charge');
         }
         break;

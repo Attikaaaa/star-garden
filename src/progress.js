@@ -58,7 +58,9 @@ function note(ev, a, b) {
     case 'potion': bump('potion'); bump('p:' + a); break;
     case 'item': bump('items'); break;
     case 'buy': bump('buy'); bump('spent', b || 0); Save.frog = cnt('spent'); break;
-    case 'land': maxCnt('land', a + 1); break;
+    case 'land': maxCnt('land', a + 1); if (G.floor && G.floor.land) bump('l:' + G.floor.land.id); break;
+    case 'roadend': bump('roadend'); if (G.run && G.run.plus) bump('pluswin'); break;
+    case 'actwin': if (a < 900) bump('win15'); if (a < 600) bump('win10'); break; // an act walked alone counts for the time stars
     case 'wave': b = RUNLOG.roomHits === 0; RUNLOG.roomHits = 0; maxCnt('wave', a); break;
     case 'start':
       resetRunLog(); bump('runs:' + a);
@@ -87,6 +89,7 @@ function note(ev, a, b) {
     case 'nemesis': bump('nemesis'); break;
     case 'rescue': bump('rescue'); break;
     case 'warden': bump('warden'); bump('wd:' + a); break;
+    case 'cas': bump(b === 'bet' ? 'cas' : 'cas:' + b); break; // a casino round, or what it hit
   }
   for (const fn of NOTE_HOOKS) fn(ev, a, b);
   // the end of a run: everything the hooks just recorded goes to disk

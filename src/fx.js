@@ -69,11 +69,35 @@ function spawnAmbient(theme, anywhere) {
     // fireflies, and now and then a leaf coming down
     if (Math.random() < 0.8) { if (AMB.filter(a => a.life > 0 && a.kind === 'ffly').length < 14) amb('ffly', rnd(16, VW - 16), rnd(44, 200), rnd(-6, 6), rnd(-6, 6), rnd(8, 14)); }
     else amb('leaf', rnd(xl - 40, xr), y0, rnd(6, 12), rnd(10, 14), 30);
+  } else if (theme === 'snow') {
+    // snowfall in three layers: far flakes slow and small, near ones big and quick
+    const l = Math.random() < 0.5 ? 0 : Math.random() < 0.6 ? 1 : 2;
+    amb('flake' + l, rnd(xl, xr), y0, rnd(-4, 4), [9, 15, 24][l], 40);
+  } else if (theme === 'sun') {
+    // sand drifting in on a warm wind, and dust motes turning gold in the light
+    if (Math.random() < 0.7) amb('sand', anywhere ? rnd(xl, xr) : xl - 4, rnd(-SCR.oy, SCR.h - SCR.oy), rnd(22, 40), rnd(-2, 3), 30);
+    else amb('mote', rnd(16, VW - 16), rnd(44, 200), rnd(-2, 2), rnd(-5, -2), rnd(3, 6));
+  } else if (theme === 'forge') {
+    // embers rising from the floor, and violet smoke from the chimneys
+    if (Math.random() < 0.75) amb('ember', rnd(16, VW - 16), rnd(120, 205), rnd(-4, 4), rnd(-22, -12), rnd(2, 4));
+    else amb('smoke', rnd(xl, xr), SCR.h - SCR.oy + 4, rnd(-3, 3), rnd(-12, -8), 40);
+  } else if (theme === 'deep') {
+    // glowing plankton drifting up, and now and then a far-off fish crossing the margin
+    if (Math.random() < 0.85) amb('plank', rnd(xl, xr), rnd(40, 210), rnd(-3, 3), rnd(-6, -2), rnd(5, 9));
+    else if (AMB.filter(a => a.life > 0 && a.kind === 'dfish').length < 3) { const l = Math.random() < 0.5; amb('dfish', l ? xl - 8 : xr + 8, rnd(-SCR.oy + 10, SCR.h - SCR.oy - 10), l ? rnd(8, 14) : -rnd(8, 14), 0, 60); }
+  } else if (theme === 'moon') {
+    // petals drifting down, and now and then a shooting star over the margins
+    if (Math.random() < 0.85) amb('petal', rnd(xl - 60, xr), y0, rnd(6, 12), rnd(7, 11), 30);
+    else amb('shoot', rnd(xl, xr - 60), rnd(-SCR.oy, 40), rnd(110, 150), rnd(30, 50), 0.7);
+  } else if (theme === 'library') {
+    // loose pages drifting down, and dust in the reading light
+    if (Math.random() < 0.4) amb('scrap', rnd(xl - 30, xr), y0, rnd(4, 9), rnd(8, 12), 30);
+    else amb('mote', rnd(16, VW - 16), rnd(44, 200), rnd(-2, 2), rnd(-5, -2), rnd(3, 6));
   } else {
     amb('mote', rnd(16, VW - 16), anywhere ? rnd(40, 200) : rnd(120, 205), rnd(-3, 3), rnd(-9, -4), rnd(3, 6));
   }
 }
-const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, cloud: 0.25, well: 4, lantern: 1.5 };
+const AMB_RATE = { meadow: 2.6, beach: 5, crystal: 3.4, cloud: 0.25, well: 4, lantern: 1.5, toy: 3, snow: 9, sun: 5, library: 2, forge: 4, deep: 4, moon: 2.4 };
 let ambAcc = 0;
 function resetAmbient(theme) {
   for (const a of AMB) a.life = 0;
@@ -89,7 +113,7 @@ function updateAmbient(dt, theme) {
       a.vx = a.dir * 16 + Math.sin(a.ph * 1.3) * 10;
       a.vy = Math.sin(a.ph * 2.1) * 14;
     } else if (a.kind === 'ffly') fireflyDrift(a, dt);
-    a.x += (a.kind === 'petal' || a.kind === 'leaf' ? a.vx + Math.sin(a.ph * 2) * 8 : a.vx) * dt;
+    a.x += (a.kind === 'petal' || a.kind === 'leaf' || a.kind === 'scrap' ? a.vx + Math.sin(a.ph * 2) * 8 : a.vx) * dt;
     a.y += a.vy * dt;
     if (a.x > SCR.w - SCR.ox + 70 || a.y > SCR.h - SCR.oy + 6 || a.x < -SCR.ox - 80 || a.y < -SCR.oy - 10) a.life = 0;
   }
@@ -123,7 +147,38 @@ function drawAmbient(ox, oy) {
       case 'glint': drawS(S(a.life / a.max > 0.5 ? 'sparkle_1' : 'sparkle_0'), x - 1, y - 1); break;
       case 'bubble': if (a.life > 0.15) drawS(S('bubble'), x - 1, y - 1); else rect(x, y, 1, 1, 'w'); break;
       case 'wisp': { const w = 6 + Math.floor(a.max * 7) % 5; rect(x, y, w, 1, 'w'); rect(x + 2, y - 1, w - 4, 1, 'w'); rect(x + 1, y + 1, w - 1, 1, 'C'); break; }
+      case 'flake0': rect(x + Math.round(Math.sin(a.ph * 1.3 + a.max) * 2), y, 1, 1, 'C'); break;
+      case 'flake1': rect(x + Math.round(Math.sin(a.ph * 1.7 + a.max) * 3), y, 1, 1, 'w'); break;
+      case 'flake2': { const sx = x + Math.round(Math.sin(a.ph * 2 + a.max) * 4); rect(sx, y, 2, 2, 'w'); rect(sx + 1, y + 1, 1, 1, 'C'); break; }
+      case 'sand': rect(x, y + Math.round(Math.sin(a.ph * 2 + a.max) * 1.5), Math.floor(a.max * 5) % 3 ? 1 : 2, 1, ['A', 'e', 'N'][Math.floor(a.max * 7) % 3]); break;
+      case 'scrap': if (Math.floor(a.ph * 3) % 2) { rect(x, y, 3, 2, 'L'); rect(x + 1, y, 1, 1, 'l'); } else rect(x, y, 1, 2, 'L'); break;
+      case 'ember': if (a.life > 0.3 || Math.floor(a.ph * 10) % 2) rect(x + Math.round(Math.sin(a.ph * 3 + a.max) * 1.5), y, 1, 1, a.life / a.max > 0.6 ? 'y' : a.life / a.max > 0.3 ? 'O' : 'o'); break;
+      case 'smoke': { const w = 2 + Math.floor(a.max * 3) % 3; rect(x + Math.round(Math.sin(a.ph * 0.8 + a.max) * 4), y, w, w, Math.floor(a.max * 7) % 2 ? 'V' : '3'); break; }
+      case 'shoot': { const k = a.life / a.max; rect(x, y, 1, 1, 'w'); rect(x - 2, y - 1, 2, 1, 'Y'); if (k > 0.3) rect(x - 5, y - 2, 3, 1, '4'); break; }
+      case 'plank': if ((a.ph + a.max) % 3 < 2.4) rect(x + Math.round(Math.sin(a.ph * 1.1 + a.max) * 2), y, 1, 1, ['H', 'T', 'q', 'C'][Math.floor(a.max * 7) % 4]); break;
+      case 'dfish': { if (a.x > -4 && a.x < VW + 4) break; /* far behind the room: seen only in the margins */ const d = a.vx > 0 ? 1 : -1; rect(x - 2, y, 5, 2, '1'); rect(x - 3 * d, y - 1, 1, 4, '1'); rect(x + 2 * d, y, 1, 1, '2'); break; }
       case 'mote': rect(x, y, 1, 1, ['c', 'q', 'Y', 'w'][Math.floor(a.ph * 3 + a.max) % 4]); break;
+    }
+  }
+}
+
+// ---------- Gravity wells: where a bent bullet is going ----------
+// A foe bullet near a well (room.wells) shows its arc as faint dots for its first moments, so the
+// gap in a bending volley is readable. Capped: the newest WELL_ARCS bullets, a few steps each.
+const WELL_ARCS = 24, ARC_STEPS = 9, ARC_DT = 0.1;
+function drawWellArcs(ox, oy, room) {
+  const W = room.wells;
+  if (!W || !W.length) return;
+  let n = 0;
+  for (let i = EBULLETS.length - 1; i >= 0 && n < WELL_ARCS; i--) {
+    const b = EBULLETS[i];
+    if (b.life <= 0 || b.t > 0.8) continue;
+    n++;
+    let x = b.x, y = b.y, vx = b.vx, vy = b.vy;
+    for (let k = 1; k <= ARC_STEPS; k++) {
+      const w = wellTurn(W, x, y, vx, vy) * ARC_DT, c = Math.cos(w), sn = Math.sin(w), nx = vx * c - vy * sn;
+      vy = vx * sn + vy * c; vx = nx; x += vx * ARC_DT; y += vy * ARC_DT;
+      if (k % 2 && k > 1) rect(Math.round(ox + x), Math.round(oy + y), 1, 1, b.t > 0.5 && k > 5 ? 'q' : 'P');
     }
   }
 }
@@ -211,7 +266,7 @@ function pageRow(corner, v) { return corner & 2 ? PAGE_Y + PAGE_H - 1 - v : PAGE
 function pageSpan(corner, u0, u1) { return corner & 1 ? PAGE_X + PAGE_W - u1 : PAGE_X + u0; } // left x of [u0, u1)
 function drawPageTurn(room, ox, oy) {
   const T = room.turn, p = (G.time - T.at) / PAGE_T;
-  if (p >= 1) { room.turn = null; return; }
+  if (p >= 1 || !Save.settings.shake) { room.turn = null; return; } // SCREEN SHAKE off: the page swaps without the sweep
   const e = p < 0.5 ? 2 * p * p : 1 - 2 * (1 - p) * (1 - p);
   const s = Math.round(e * (PAGE_W + PAGE_H + FLAP_W)), c = T.corner;
   for (let v = 0; v < PAGE_H; v++) {
@@ -236,7 +291,7 @@ function drawPageTurn(room, ox, oy) {
 // The tell: a dog-ear lifts at the corner and flutters.
 function drawPageCurl(room, ox, oy) {
   const C = room.curl, t = G.time - C.at;
-  if (t >= CURL_T) { room.curl = null; return; }
+  if (t >= (C.dur || CURL_T)) { room.curl = null; return; }
   const k = Math.round(4 + 8 * Math.min(1, t / 0.3)) + (Math.sin(t * 24) > 0 ? 1 : 0), c = C.corner;
   for (let v = 0; v < k + 1; v++) {
     const y = pageRow(c, v), fill = (col, a, b) => {

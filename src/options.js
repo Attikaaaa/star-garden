@@ -157,6 +157,8 @@ function drawPrep() {
 
 // ---------- Assist mode, colour-blind shapes, left-handed touch ----------
 const ASSIST_SPEED = 0.85;
+// assist also slows the beat (the Toy Attic, the Ember Forge, the Glow Deep) and the music locked to it
+const beatK = () => (assistOn() ? ASSIST_SPEED : 1);
 const assistOn = () => !!Save.settings.assist && !NET.role;
 // Colour-blind shapes: each bullet colour also gets its own shape.
 const CB_SHAPE = { pink: 'dot', cyan: 'diamond', orange: 'square', purple: 'cross' };

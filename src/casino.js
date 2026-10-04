@@ -8,7 +8,7 @@ const ROU_RED = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 
 // Fair play, always: every game draws from crypto randomness (never the seeded streams),
 // commits its outcome before it animates (`c.pend`, paid on the next visit if the page
 // closes mid-spin), shows its true odds behind the `i` button and never fakes a near miss.
-// The games live in slot.js, cards.js, roulette.js, scratch.js and lounge.js, each an
+// The games live in slot.js, cards.js, roulette.js, scratch.js, lounge.js and holdem.js, each an
 // entry in CAS_GAMES: { name, enter(arg), update(dt), draw(), leave(), odds() }.
 
 // ---------- Fair randomness ----------
@@ -37,17 +37,18 @@ function cshuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = crand(
 const CASINO_TUNING = {
   gift: 100, cashMax: 60, inRate: 10, inMax: 50, outRate: 25, outMax: 40,
   comp: 25, compH: 4, jackSeed: 500, jackFeed: 0.01, breakMin: 20, breakDown: 300, luck: 1.08,
+  rainChip: 2, rainMax: 20, // Star Rain: chips that fall on the floor, a day's cap
 };
 function ctune(k) { const t = typeof liveTuning === 'function' ? liveTuning('casino', null) : null; return t && typeof t[k] === 'number' ? t[k] : CASINO_TUNING[k]; }
 // The house edge of each game: comp points are the expected loss times ten.
-const EDGE = { slot: 0.05, land: 0.06, bj: 0.006, rou: 0.027, vp: 0.027, wof: 0.08, scr: 0.125, sic: 0.03 };
+const EDGE = { slot: 0.05, land: 0.06, bj: 0.006, rou: 0.027, vp: 0.027, wof: 0.08, scr: 0.125, sic: 0.03, hold: 50 / 550 }; // Hold'em: the house fee
 const CAS_TIERS = [
   { name: 'BRONZE', at: 0, col: 'R' }, { name: 'SILVER', at: 2000, col: 'l' },
   { name: 'GOLD', at: 10000, col: 'Y' }, { name: 'STAR', at: 50000, col: 'c' },
 ];
 const CAS_DEF = {
   chips: 0, wag: 0, won: 0, pts: 0, day: '', vin: 0, vout: 0, wheel: '', comp: 0, jack: 0,
-  st: {}, own: [], pend: null, fs: {}, gift: false, lands: [], back: 'star', cab: 'plum', charm: 0, nudge: '',
+  st: {}, own: [], pend: null, fs: {}, gift: false, lands: [], back: 'star', cab: 'plum', charm: 0, nudge: '', rain: 0,
 };
 function cas() {
   const c = Save.casino || (Save.casino = {});
@@ -58,9 +59,13 @@ function cas() {
   c.chips = Math.max(0, Math.floor(c.chips) || 0);
   if (!(c.jack >= ctune('jackSeed'))) c.jack = ctune('jackSeed');
   const day = dayKey();
-  if (c.day !== day) { c.day = day; c.vin = 0; c.vout = 0; }
+  if (c.day !== day) { c.day = day; c.vin = 0; c.vout = 0; c.rain = 0; }
   return c;
 }
+// The games on the main floor (Sic Bo waits in the VIP lounge).
+const CAS_FLOOR = ['slot', 'land', 'bj', 'rou', 'vp', 'wof', 'scr'];
+// Visited, not hidden: the casino's quests, letter and constellation show up.
+const casShown = () => !!(Save.casino && Save.casino.gift) && !Save.settings.noCasino && menuOpen('casino');
 const casTier = () => { const p = cas().pts; let t = 0; CAS_TIERS.forEach((x, i) => { if (p >= x.at) t = i; }); return t; };
 // Take a bet from the purse. false when it does not fit.
 function casinoBet(g, n) {
@@ -74,6 +79,7 @@ function casinoBet(g, n) {
   c.jack += n * ctune('jackFeed'); // every bet in the casino feeds the Star Jackpot
   const t1 = casTier();
   if (t1 > t0) casTierUp(t1);
+  note('cas', g, 'bet');
   return true;
 }
 function casinoPay(g, n) {
@@ -82,10 +88,13 @@ function casinoPay(g, n) {
   // run (a little over 100%), rounded at random so small wins stay small. A player behind over
   // their whole history is paid a little more still, in step with how far behind, so nobody
   // stays down for long; this visit counts too, so a bad evening turns around within it.
-  const sw = CAS.sess.wag || 0;
-  const behind = Math.max(c.wag > 0 ? Math.max(0, c.wag - c.won) / c.wag : 0, sw > 0 ? Math.max(0, -CAS.sess.net) / sw : 0);
-  n *= (ctune('luck') + Math.min(0.6, behind * 3)) / (1 - (EDGE[g] || 0.05));
-  n = Math.floor(n) + (crandf() < n % 1 ? 1 : 0);
+  // A Hold'em prize is the pot, won by play: it is paid as it is.
+  if (g !== 'hold') {
+    const sw = CAS.sess.wag || 0;
+    const behind = Math.max(c.wag > 0 ? Math.max(0, c.wag - c.won) / c.wag : 0, sw > 0 ? Math.max(0, -CAS.sess.net) / sw : 0);
+    n *= (ctune('luck') + Math.min(0.6, behind * 3)) / (1 - (EDGE[g] || 0.05));
+    n = Math.floor(n) + (crandf() < n % 1 ? 1 : 0);
+  }
   if (!(n > 0)) return 0;
   c.chips += n; c.won += n;
   const s = c.st[g] || (c.st[g] = { n: 0, bet: 0, won: 0, best: 0 });
@@ -97,7 +106,7 @@ function casinoPay(g, n) {
 function casPend(g, n) { cas().pend = { g, n: Math.max(0, n) }; Save.write(); } // casinoPay rounds
 function casSettle() {
   const c = cas(), p = c.pend;
-  if (!p || p.bj || p.vp) return 0; // a hand still in play resumes at its table
+  if (!p || p.bj || p.vp || p.hold) return 0; // a hand still in play resumes at its table
   c.pend = null;
   const n = casinoPay(p.g, p.n);
   Save.write();
@@ -113,7 +122,7 @@ function casTierUp(t) {
 // ---------- Screen state ----------
 const CAS = {
   game: null, p: null, t: 0, shown: 0, fx: [], sess: { t0: 0, net: 0, nudged: false }, near: null,
-  target: null, path: null, bg: null, felt: {},
+  target: null, path: null, bg: null, felt: {}, crit: [], drops: [], spray: 0, rainT: 4,
 };
 // Every game registers here (see the files named at the top).
 const CAS_GAMES = {};
@@ -216,38 +225,43 @@ function casFelt(kind) {
   }));
 }
 // The casino hall: walls, the neon sign's wall, the carpet and its gold border.
-function casHall() {
-  if (CAS.bg) return CAS.bg;
-  return (CAS.bg = casBake(VW, VH, (x, y) => {
-    const inX = x >= 16 && x < 368;
-    // the exit: a gap in the bottom wall
-    if (y >= 200 && x >= 180 && x < 204) return y < 202 ? 'O' : y < 204 ? '1' : '0';
-    if (y < 22 || (!inX && y < 200) || y >= 200) {
-      if ((y === 21 && inX) || (y === 200 && x >= 15 && x < 369)) return 'y';
-      if ((y === 20 && inX) || (y === 201 && x >= 15 && x < 369) || ((x === 15 || x === 368) && y >= 20 && y <= 201)) return 'O';
-      const d = _star(x, y, 16);
-      return d ? (d === 'y' ? '2' : null) || '1' : (x + y) % 8 === 0 ? '1' : '0';
-    }
-    if (y < 40) {
-      // the wall face: plum panels between gold-capped pilasters, a rail at the bottom
-      if (y === 38) return 'O';
-      if (y === 39) return '0';
-      const u = (x - 16) % 32;
-      if (u === 0 || u === 31) return '0';
-      if (u === 1 || u === 30) return y === 22 ? 'y' : 'v';
-      if (y === 22) return '1';
-      if (u > 4 && u < 27 && (y === 26 || y === 34) || (u === 5 || u === 26) && y > 26 && y < 34) return 'v';
-      return 'V';
-    }
-    // the carpet
-    if (x < 19 || x > 364 || y > 196) return x === 16 || x === 367 || y === 199 ? '0' : 'v';
-    if (x === 19 || x === 364 || y === 196) return 'y';
-    if (x === 20 || x === 363 || y === 195) return 'O';
-    const s = _star(x - 8, y - 48, 16);
-    if (s) return s;
-    if ((x + y) % 16 === 0 || (x - y + 512) % 16 === 0) return 'V';
-    return y < 42 ? '1' : 'v';
-  }));
+// The VIP lounge is the same room in night colours: a charcoal carpet, blue panels.
+const VIP_WALL = { V: 'b', v: '1' }, VIP_FLOOR = { v: 'x', V: 'X', 1: '0' };
+function casHall(kind = CAS.room) {
+  const bg = CAS.bgs || (CAS.bgs = {});
+  if (bg[kind]) return bg[kind];
+  const map = (y, k) => (kind !== 'vip' || !k ? k : (y < 40 && y >= 22 ? VIP_WALL : y >= 40 && y < 200 ? VIP_FLOOR : {})[k] || k);
+  return (bg[kind] = casBake(VW, VH, (x, y) => map(y, casHallPx(x, y))));
+}
+function casHallPx(x, y) {
+  const inX = x >= 16 && x < 368;
+  // the exit: a gap in the bottom wall
+  if (y >= 200 && x >= 180 && x < 204) return y < 202 ? 'O' : y < 204 ? '1' : '0';
+  if (y < 22 || (!inX && y < 200) || y >= 200) {
+    if ((y === 21 && inX) || (y === 200 && x >= 15 && x < 369)) return 'y';
+    if ((y === 20 && inX) || (y === 201 && x >= 15 && x < 369) || ((x === 15 || x === 368) && y >= 20 && y <= 201)) return 'O';
+    const d = _star(x, y, 16);
+    return d ? (d === 'y' ? '2' : null) || '1' : (x + y) % 8 === 0 ? '1' : '0';
+  }
+  if (y < 40) {
+    // the wall face: plum panels between gold-capped pilasters, a rail at the bottom
+    if (y === 38) return 'O';
+    if (y === 39) return '0';
+    const u = (x - 16) % 32;
+    if (u === 0 || u === 31) return '0';
+    if (u === 1 || u === 30) return y === 22 ? 'y' : 'v';
+    if (y === 22) return '1';
+    if (u > 4 && u < 27 && (y === 26 || y === 34) || (u === 5 || u === 26) && y > 26 && y < 34) return 'v';
+    return 'V';
+  }
+  // the carpet
+  if (x < 19 || x > 364 || y > 196) return x === 16 || x === 367 || y === 199 ? '0' : 'v';
+  if (x === 19 || x === 364 || y === 196) return 'y';
+  if (x === 20 || x === 363 || y === 195) return 'O';
+  const s = _star(x - 8, y - 48, 16);
+  if (s) return s;
+  if ((x + y) % 16 === 0 || (x - y + 512) % 16 === 0) return 'V';
+  return y < 42 ? '1' : 'v';
 }
 
 // ---------- The hall ----------
@@ -268,32 +282,57 @@ const CAS_SPOTS = [
   { id: 'owl', x: 160, y: 182, w: 6, h: 4, label: 'COSMO', go: () => casCosmo() },
   { id: 'vip', x: 336, y: 180, w: 20, h: 5, label: 'VIP LOUNGE', go: () => casVip() },
   { id: 'exit', x: 192, y: 198, w: 0, h: 0, pass: true, label: 'LEAVE', go: () => casExit() },
+  { id: 'fount', x: 40, y: 124, w: 12, h: 4 }, // no go: just in the way, and pretty
 ];
+// The VIP lounge (the Gold card): high limit tables, Sic Bo and Hold'em, out the way you came.
+const VIP_SPOTS = [
+  { id: 'sic', x: 120, y: 100, w: 20, h: 6, label: 'SIC BO', go: () => casPlay('sic') },
+  { id: 'hold', x: 264, y: 98, w: 24, h: 7, label: "HOLD'EM", go: () => casPlay('hold') },
+  { id: 'vbj', x: 100, y: 146, w: 26, h: 7, label: 'HIGH LIMIT BLACKJACK', go: () => casPlay('bj') },
+  { id: 'vrou', x: 284, y: 146, w: 30, h: 7, label: 'HIGH LIMIT ROULETTE', go: () => casPlay('rou') },
+  { id: 'vout', x: 192, y: 198, w: 0, h: 0, pass: true, label: 'THE MAIN FLOOR', go: () => casRoom('hall') },
+  { id: 'bar', x: 56, y: 72, w: 18, h: 5 }, { id: 'bar2', x: 328, y: 72, w: 18, h: 5 }, // the bar: the lucky cats' corner
+];
+const casSpots = () => (CAS.room === 'vip' ? VIP_SPOTS : CAS_SPOTS);
+// Walk from one room to the other (behind the wipe), standing by the door between them.
+function casRoom(room) {
+  Audio_.sfx('confirm');
+  wipe(() => {
+    CAS.room = room; CAS.target = null; CAS.path = null; CAS.drops.length = 0;
+    Object.assign(CAS.p, room === 'vip' ? { x: 192, y: 186, face: 'u' } : { x: 336, y: 192, face: 'd' });
+    Object.assign(CAS.pet, { x: CAS.p.x - 16, y: CAS.p.y });
+    for (const k of CAS.crit) { k.x = CAS.p.x; k.y = Math.min(190, CAS.p.y); k.t = 0; }
+    Audio_.play(room === 'vip' ? 'vip' : 'lounge');
+  });
+}
 // The land slots open when that land's boss falls.
 const casLandOpen = (land) => cas().lands.includes(land);
 function casBlocked(x, y) {
   if (x < 24 || x > 360 || y < 46 || y > 194) return true;
-  for (const s of CAS_SPOTS) if (!s.pass && Math.abs(x - s.x) < s.w + 5 && Math.abs(y - s.y) < s.h + 5) return true;
+  for (const s of casSpots()) if (!s.pass && Math.abs(x - s.x) < s.w + 5 && Math.abs(y - s.y) < s.h + 5) return true;
   return false;
 }
 function casNear() {
   const p = CAS.p;
   let best = null, bd = 26;
-  for (const s of CAS_SPOTS) { const d = Math.hypot(p.x - s.x, (p.y - s.y - s.h) * 1.3); if (d < bd) { bd = d; best = s; } }
+  for (const s of casSpots()) { const d = Math.hypot(p.x - s.x, (p.y - s.y - s.h) * 1.3); if (s.go && d < bd) { bd = d; best = s; } }
   return best;
 }
 function casSpotAt(x, y) {
-  for (const s of CAS_SPOTS) if (Math.abs(x - s.x) < Math.max(10, s.w + 6) && y > s.y - (s.id === 'wheel' ? 40 : 30) && y < s.y + 8) return { o: s, tx: s.x, ty: Math.min(192, s.y + s.h + 9) };
+  for (const s of casSpots()) if (s.go && Math.abs(x - s.x) < Math.max(10, s.w + 6) && y > s.y - (s.id === 'wheel' ? 40 : 30) && y < s.y + 8) return { o: s, tx: s.x, ty: Math.min(192, s.y + s.h + 9) };
   return null;
 }
 
 function enterCasino() {
   const c = cas();
   setState('casino');
-  CAS.game = null; CAS.t = 0; CAS.fx.length = 0; CAS.target = null; CAS.path = null;
+  CAS.game = null; CAS.room = 'hall'; CAS.t = 0; CAS.fx.length = 0; CAS.target = null; CAS.path = null;
   CAS.p = { x: 192, y: 186, face: 'u', flip: false, moving: false, walkT: 0, idleT: 0 };
   CAS.pet = { x: 176, y: 190, flip: false, moving: false };
   CAS.sess = { t0: performance.now(), net: 0, nudged: false };
+  // up to three of the Garden's critters come along and wander between the machines
+  CAS.crit = Save.critters.slice(0, 3).map((k, i) => ({ c: k, x: 80 + i * 112, y: 104, tx: 80 + i * 112, ty: 104, t: i, moving: false, flip: false }));
+  CAS.drops = []; CAS.rainT = 4; CAS.spray = 0;
   const paid = casSettle();
   CAS.shown = c.chips;
   Audio_.play('lounge');
@@ -304,7 +343,16 @@ function enterCasino() {
   else if (Save.stats && G.chipsIn) toast('+' + G.chipsIn + ' CHIPS FROM YOUR LAST RUN');
   G.chipsIn = 0;
 }
-function casExit() { Audio_.sfx('select'); Audio_.stop(); Save.write(); titleReturn('CASINO'); }
+function casExit() {
+  Audio_.sfx('select'); Audio_.stop(); Save.write();
+  if (typeof track === 'function') track('casino_out', { mins: Math.round((performance.now() - CAS.sess.t0) / 60000), wag: CAS.sess.wag || 0, net: CAS.sess.net });
+  titleReturn('CASINO');
+}
+// The floor's menu (TAB, Y, or a tap on the corner): the counters without the walk.
+function casMenu() {
+  openModal({ title: 'STAR CASINO', icon: 'icon_chip', lines: ['CHIPS: ' + cas().chips + '    ' + CAS_TIERS[casTier()].name + ' CARD'],
+    buttons: [{ label: 'CASHIER', fn: casCashier }, { label: 'PRIZES', fn: () => casPlay('prize') }, { label: 'MY STATS', fn: casStats }, { label: 'LEAVE', col: 'h', fn: casExit }, { label: 'BACK' }] });
+}
 // Open a game screen (behind the diamond wipe).
 function casPlay(id, arg) {
   const g = CAS_GAMES[id];
@@ -316,7 +364,7 @@ function casLeave() {
   const g = CAS_GAMES[CAS.game];
   const paid = casSettle();
   if (paid) toast('+' + paid + ' CHIPS');
-  wipe(() => { if (g && g.leave) g.leave(); CAS.game = null; Audio_.play('lounge'); Save.write(); });
+  wipe(() => { if (g && g.leave) g.leave(); CAS.game = null; Audio_.play(CAS.room === 'vip' ? 'vip' : 'lounge'); Save.write(); });
 }
 function casLand(land) {
   if (casLandOpen(land)) { casPlay('land', land); return; }
@@ -357,7 +405,7 @@ function casCosmo() {
   if (c.chips < 5 && now - c.comp < H) lines.push('THE NEXT COMP IN ' + fmtLeft(H - (now - c.comp)));
   openModal({ title: 'COSMO THE OWL', icon: 'cz_owl_0', lead: true, lines, buttons: [{ label: 'MY STATS', fn: casStats }, { label: 'THANKS' }] });
 }
-const CAS_NAMES = { slot: 'STAR SLOT', land: 'LAND SLOTS', bj: 'BLACKJACK', rou: 'ROULETTE', vp: 'VIDEO POKER', wof: 'THE BIG WHEEL', scr: 'SCRATCH CARDS', sic: 'SIC BO' };
+const CAS_NAMES = { slot: 'STAR SLOT', land: 'LAND SLOTS', bj: 'BLACKJACK', rou: 'ROULETTE', vp: 'VIDEO POKER', wof: 'THE BIG WHEEL', scr: 'SCRATCH CARDS', sic: 'SIC BO', hold: "HOLD'EM" };
 function casStats() {
   const c = cas(), lines = [];
   for (const g in CAS_NAMES) { const s = c.st[g]; if (s && s.n) lines.push(CAS_NAMES[g] + ': ' + s.n + ' PLAYS, NET ' + (s.won - s.bet >= 0 ? '+' : '') + (s.won - s.bet)); }
@@ -386,7 +434,7 @@ function casCashier() {
 }
 function casVip() {
   const c = cas();
-  if (casTier() >= 2) { casPlay('sic'); return; }
+  if (casTier() >= 2) { casRoom('vip'); return; }
   openModal({ title: 'THE VIP LOUNGE', icon: 'icon_card', lines: ['THE ROPE OPENS FOR GOLD CARDS.', 'YOUR POINTS: ' + Math.floor(c.pts) + ' / ' + CAS_TIERS[2].at, 'EVERY BET EARNS POINTS.'], buttons: [{ label: 'OK' }] });
 }
 // The one-time nudge per visit: after a long session or a big loss.
@@ -416,40 +464,39 @@ function updateCasino(dt) {
     return;
   }
   const p = CAS.p;
-  if (pressed(...K_BACK)) { casExit(); return; }
+  if (pressed(...K_BACK)) { if (CAS.room === 'vip') casRoom('hall'); else casExit(); return; }
+  const e = screenEdges();
+  if (pressed('Tab', 'PadY') || (Input.mouseHit && Input.mx < e.l + 60 && Input.my > e.b - 16)) { Audio_.sfx('select'); casMenu(); return; }
   const pad = Input.pad;
   let mx = (key(keyOf('right')) || key('ArrowRight') ? 1 : 0) - (key(keyOf('left')) || key('ArrowLeft') ? 1 : 0) + pad.mx;
   let my = (key(keyOf('down')) || key('ArrowDown') ? 1 : 0) - (key(keyOf('up')) || key('ArrowUp') ? 1 : 0) + pad.my;
   if (Input.mouseHit) {
     const hit = casSpotAt(Input.mx, Input.my);
     CAS.target = { x: hit ? hit.tx : Input.mx, y: hit ? hit.ty : Input.my, use: hit && hit.o };
-    CAS.path = yardPath(p.x, p.y, CAS.target.x, CAS.target.y, casBlocked);
+    CAS.path = yardPath(p.x, p.y, CAS.target.x, CAS.target.y, casBlocked, 4);
   }
   if (mx || my) CAS.target = null;
   else if (CAS.target) {
     const T = CAS.target;
-    while (CAS.path && CAS.path.length && Math.hypot(CAS.path[0][0] - p.x, CAS.path[0][1] - p.y) < 4) CAS.path.shift();
-    const wp = CAS.path && CAS.path.length ? CAS.path[0] : [T.x, T.y];
-    const dx = wp[0] - p.x, dy = wp[1] - p.y, d = Math.hypot(dx, dy) || 1, nb = T.use && casNear();
+    const dir = pathDir(p, CAS.path, T.x, T.y, casBlocked), nb = T.use && casNear();
     if (Math.hypot(T.x - p.x, T.y - p.y) < 4 || (nb && nb === T.use)) {
       CAS.target = null;
       if (T.use) { p.face = 'u'; T.use.go(); return; }
-    } else { mx = dx / d; my = dy / d; }
+    } else [mx, my] = dir;
   }
   const l = Math.hypot(mx, my);
   if (l > 1) { mx /= l; my /= l; }
   p.moving = !!(mx || my);
   if (p.moving) {
-    const nx = p.x + mx * 90 * dt, ny = p.y + my * 90 * dt;
-    if (!casBlocked(nx, p.y)) p.x = nx; else if (CAS.target) CAS.target = null;
-    if (!casBlocked(p.x, ny)) p.y = ny; else if (CAS.target) CAS.target = null;
+    if (!slideStep(p, mx, my, 90, dt, casBlocked) && CAS.target) CAS.target = null;
     p.walkT += dt; p.idleT = 0;
     if (Math.abs(mx) > Math.abs(my) * 1.1) { p.face = 's'; p.flip = mx < 0; } else p.face = my < 0 ? 'u' : 'd';
     // walking out through the door leaves
-    if (p.y > 193 && Math.abs(p.x - 192) < 12 && my > 0) { casExit(); return; }
+    if (p.y > 193 && Math.abs(p.x - 192) < 12 && my > 0) { if (CAS.room === 'vip') casRoom('hall'); else casExit(); return; }
   } else p.idleT += dt;
   CAS.near = casNear();
   if ((pressed(...K_OK) || pressed('PadX')) && CAS.near) { p.face = 'u'; Audio_.sfx('confirm'); CAS.near.go(); return; }
+  casLife(dt);
   // the pet trots after the hero
   const q = CAS.pet, tx = p.x - (p.flip ? -1 : 1) * 16, ty = p.y + 3, dd = Math.hypot(tx - q.x, ty - q.y);
   q.moving = dd > 5;
@@ -457,21 +504,72 @@ function updateCasino(dt) {
   casBreakCheck();
 }
 
+// ---------- Life on the floor ----------
+// Critters stroll from machine to machine; in a Star Rain, stars fall and leave chips
+// (rainChip each, rainMax a day); after a big win the fountain throws coins.
+function casLife(dt) {
+  const p = CAS.p, c = cas();
+  for (const k of CAS.crit) {
+    if ((k.t -= dt) <= 0) {
+      const L = casSpots(), s = L[crand(L.length)];
+      k.t = 2 + crandf() * 4; k.tx = s.x + crand(30) - 15; k.ty = Math.min(192, s.y + s.h + 8 + crand(10));
+    }
+    const dx = k.tx - k.x, dy = k.ty - k.y, d = Math.hypot(dx, dy);
+    k.moving = d > 3;
+    if (k.moving) { const nx = k.x + dx / d * 22 * dt, ny = k.y + dy / d * 22 * dt; if (!casBlocked(nx, ny)) { k.x = nx; k.y = ny; } else k.t = 0; k.flip = dx < 0; }
+  }
+  if (typeof showerAt === 'function' && showerAt(Date.now()) && c.rain < ctune('rainMax') && CAS.drops.length < 3 && (CAS.rainT -= dt) <= 0) {
+    CAS.rainT = 8 + crandf() * 6;
+    for (let k = 0; k < 20; k++) {
+      const x = 30 + crand(324), y = 50 + crand(140);
+      if (!casBlocked(x, y)) { CAS.drops.push({ x, y, fall: 0.6 }); Audio_.sfx('star'); break; }
+    }
+  }
+  for (let i = CAS.drops.length - 1; i >= 0; i--) {
+    const o = CAS.drops[i];
+    if (o.fall > 0) { if ((o.fall -= dt) <= 0) casBurst(o.x, o.y, 4); continue; }
+    if (Math.hypot(o.x - p.x, o.y - p.y) > 10) continue;
+    CAS.drops.splice(i, 1);
+    const n = Math.min(ctune('rainChip'), ctune('rainMax') - c.rain);
+    if (n > 0) { c.rain += n; c.chips += n; Save.write(); Audio_.sfx('coin'); toast('STAR RAIN: +' + n + ' CHIPS'); }
+  }
+  if (CAS.spray > 0) { CAS.spray -= dt; if (Math.floor(CAS.spray * 5) !== Math.floor((CAS.spray + dt) * 5)) casBurst(40, 102, 2); }
+}
+// Halloween week: carved pumpkins by the walls, and an orange sign.
+const CAS_PUMPKINS = [[68, 48], [318, 48], [30, 190], [354, 190], [124, 194], [260, 194]];
+function drawFount(x, y) {
+  drawFeet(S('cz_fount'), x, y + 1);
+  // the water: a few drops arc up from the spout and fall back into the bowl
+  for (let i = 0; i < 6; i++) {
+    const u = (CAS.t * 0.9 + i / 6) % 1, side = i % 2 ? 1 : -1, dx = side * (2 + u * 8), dy = -20 * u * (1 - u) * 4;
+    rect(Math.round(x + dx), Math.round(y - 20 + dy + u * 12), 1, 1, u < 0.5 ? 'w' : 'c');
+  }
+}
+
 // ---------- Drawing the hall ----------
 function drawCasino() {
   fillScreen(PAL['0']);
+  const c = cas();
   if (CAS.game) { CAS_GAMES[CAS.game].draw(); drawCasFx(); if (G.banner) drawBanner(); return; }
-  ctx.drawImage(casHall(), 0, 0);
+  ctx.drawImage(casHall(CAS.room), 0, 0);
   const t = CAS.t, p = CAS.p;
   // the neon sign: STAR CASINO between two stars, one letter blinking now and then
   const flick = Math.floor(t * 7) % 37 === 0;
-  text('STAR CASINO', 192, 11, flick ? '1' : 'P', 3, 1);
-  drawS(S('bigstar'), 192 - textW('STAR CASINO') / 2 - 22, 2);
-  drawS(S('bigstar'), 192 + textW('STAR CASINO') / 2 + 6, 2);
+  const hall = typeof holiday === 'function' && holiday() === 'halloween';
+  const sign = CAS.room === 'vip' ? 'VIP LOUNGE' : 'STAR CASINO';
+  text(sign, 192, 8, flick ? '1' : CAS.room === 'vip' ? 'Y' : hall ? 'O' : 'P', 3, 1);
+  drawS(S('bigstar'), 192 - textW(sign) / 2 - 22, 0);
+  drawS(S('bigstar'), 192 + textW(sign) / 2 + 6, 0);
   // wall lamps
   for (let x = 48; x < 368; x += 64) { if (Math.abs(x - 192) < 30) continue; drawS(S('cz_lamp'), x - 3, 25); }
   const list = [];
-  for (const s of CAS_SPOTS) list.push([s.y, () => drawCasSpot(s)]);
+  for (const s of casSpots()) list.push([s.y, () => drawCasSpot(s)]);
+  for (const k of CAS.crit) list.push([k.y, () => { shadow(k.x, k.y, 6); drawFeet(S('crit_' + k.c + '_' + (k.moving ? Math.floor(t * 6) % 2 : Math.floor(t * 1.5) % 2)), k.x, k.y + 1, k.flip ? 1 : 0); }]);
+  if (hall && CAS.room !== 'vip') for (const [x, y] of CAS_PUMPKINS) list.push([y, () => { shadow(x, y, 8); drawFeet(S('phop_' + (Math.floor(t * 2 + x) % 7 ? 0 : 1)), x, y + 1); }]);
+  for (const o of CAS.drops) list.push([o.y, () => {
+    if (o.fall > 0) { const k = o.fall / 0.6; drawS(S('sparkle_1'), Math.round(o.x - 60 * k) - 1, Math.round(o.y - 100 * k) - 1); return; }
+    drawS(S('cz_chip'), o.x - 4, o.y - 6 - (Math.floor(t * 3) % 2));
+  }]);
   if (Save.pet) list.push([CAS.pet.y, () => { const q = CAS.pet, f = q.moving ? Math.floor(t * 6) % 2 : Math.floor(t * 1.5) % 2; shadow(q.x, q.y, 7); drawFeet(S('pet_' + Save.pet + '_' + f), q.x, q.y + 1 - (Save.pet === 'bee' ? 7 : 0), q.flip ? 1 : 0); }]);
   list.push([p.y, () => {
     shadow(p.x, p.y, 12);
@@ -490,7 +588,10 @@ function drawCasino() {
   casPurse(screenEdges().r - 6, screenEdges().t + 7);
   const e = screenEdges(), T = CAS_TIERS[casTier()];
   text(T.name + ' CARD', e.l + 6, e.t + 7, T.col, 2);
-  text(IS_TOUCH ? 'TAP A GAME TO PLAY' : Input.lastAim === 'pad' ? 'B: LEAVE' : 'ESC: LEAVE', e.l + 6, e.b - 7, '3', 2);
+  const nx = CAS_TIERS[casTier() + 1];
+  if (nx) { const f = Math.min(1, (c.pts - T.at) / (nx.at - T.at)); rect(e.l + 6, e.t + 17, 50, 3, '0'); rect(e.l + 7, e.t + 18, Math.round(48 * f), 1, T.col); }
+  const out = CAS.room === 'vip' ? 'BACK' : 'LEAVE';
+  text(IS_TOUCH ? 'MENU' : Input.lastAim === 'pad' ? 'Y: MENU   B: ' + out : 'TAB: MENU   ESC: ' + out, e.l + 6, e.b - 7, IS_TOUCH ? 'w' : '3', 2);
   drawCasFx();
   if (G.banner) drawBanner();
 }
@@ -535,6 +636,18 @@ const WHEELS = {};
 function drawCasSpot(s) {
   const x = s.x, y = s.y, t = CAS.t;
   if (s.id === 'exit') { drawS(S('cz_mat'), x - 12, y + 1); return; }
+  if (s.id === 'fount') { shadow(x, y, 26); drawFount(x, y); return; }
+  if (s.id === 'vout') { drawS(S('cz_mat'), x - 12, y + 1); return; }
+  if (s.id === 'sic') { shadow(x, y, 40); drawFeet(S('cz_sic'), x, y + 1); return; }
+  if (s.id === 'hold') {
+    // the three regulars, always at their seats: the owl behind, the frog and the fox at the ends
+    const f = Math.floor(t * 1.5) % 2, owl = S('cz_owl_' + f), frog = S('frog_' + ((f + 1) % 2)), fox = S('wfox_' + f);
+    drawS(owl, x - (owl.w >> 1), y - 26 - owl.h + 8);
+    drawS(frog, x - 34 - (frog.w >> 1), y - 8 - frog.h + 2);
+    drawS(fox, x + 34 - (fox.w >> 1), y - 8 - fox.h + 2);
+    shadow(x, y, 48); drawFeet(S('cz_poker'), x, y + 1); return;
+  }
+  if (s.id === 'bar' || s.id === 'bar2') { shadow(x, y, 34); drawFeet(S('cz_counter'), x, y + 1); drawS(S('pet_cat_' + (Math.floor(t * 2 + x) % 2)), x - 4, y - 26); return; }
   if (s.id === 'wheel') {
     // the Big Wheel hangs on the wall and idles round slowly
     shadow(x, y, 30);
@@ -548,8 +661,8 @@ function drawCasSpot(s) {
   if (s.id === 'cash') { drawFeet(S('cz_bunny_' + (Math.floor(t * 1.6) % 2)), x, y - 9); drawFeet(S('cz_booth'), x, y + 1); return; }
   if (s.id === 'prize') { drawFeet(S(Math.floor(t * 2) % 2 ? 'frog_1' : 'frog_0'), x, y - 11); drawFeet(S('cz_counter'), x, y + 1); drawS(S('pet_cat_' + (Math.floor(t * 2) % 2)), x + 7, y - 26); return; }
   if (s.id === 'owl') { drawFeet(S('cz_perch'), x, y + 1); drawFeet(S('cz_owl_' + (t % 4 > 3.8 ? 1 : 0)), x, y - 8); return; }
-  if (s.id === 'bj') { drawFeet(S('cz_bj'), x, y + 1); return; }
-  if (s.id === 'rou') { drawFeet(S('cz_rou'), x, y + 1); const disk = rouDisk(8); ctx.drawImage(disk(-t * 2), x - 29, y - 22); return; }
+  if (s.id === 'bj' || s.id === 'vbj') { drawFeet(S('cz_bj'), x, y + 1); return; }
+  if (s.id === 'rou' || s.id === 'vrou') { drawFeet(S('cz_rou'), x, y + 1); const disk = rouDisk(8); ctx.drawImage(disk(-t * 2), x - 29, y - 22); return; }
   if (s.id === 'scr') { drawFeet(S('cz_kiosk'), x, y + 1); return; }
   if (s.id === 'vip') { drawFeet(S('cz_rope'), x, y + 1); if (casTier() < 2) drawS(S('cz_lock'), x - 3, y - 26); return; }
   if (s.id === 'vp' || s.id === 'vp2') { drawFeet(S('cz_vp'), x, y + 1); if (Math.floor(t * 2 + x) % 3 === 0) rect(x - 5, y - 19, 3, 1, 'y'); return; }
@@ -557,7 +670,8 @@ function drawCasSpot(s) {
   const land = s.land, open = !land || casLandOpen(land);
   drawFeet(S('cz_cab_' + (land || (SLOT_FRAME[cas().cab] ? cas().cab : 'classic')) + (open ? '' : '_off')), x, y + 1);
   if (!open) { drawS(S('cz_lock'), x - 3, y - 20); return; }
-  for (let i = 0; i < 4; i++) if ((Math.floor(t * 6) + i) % 4 === 0) rect(x - 6 + i * 4, y - 33, 2, 1, 'Y');
+  // the marquee chases; after a big win the whole bank flashes
+  for (let i = 0; i < 4; i++) if (CAS.spray > 0 ? Math.floor(t * 8) % 2 : (Math.floor(t * 6) + i) % 4 === 0) rect(x - 6 + i * 4, y - 33, 2, 1, 'Y');
 }
 
 // ---------- Celebration ----------
@@ -575,6 +689,8 @@ function drawCasFx() { for (const f of CAS.fx) if (f.t > 0) drawS(S(f.s), f.x - 
 function casWin(won, bet, x, y) {
   if (won > bet) {
     const big = won >= bet * 20;
+    note('cas', CAS.game, 'win');
+    if (big) { note('cas', CAS.game, 'big'); CAS.spray = 3; }
     Audio_.sfx(big ? 'bigwin' : 'cwin');
     haptic('item');
     casBurst(x || VW / 2, y || 100, big ? 24 : Math.min(12, 3 + Math.floor(won / bet)));
@@ -619,7 +735,7 @@ if (typeof onNote === 'function') onNote((ev, a) => {
   if (!Save.casino && ev !== 'end') return;
   if (ev === 'end' && !(typeof isDuel === 'function' && isDuel()) && Save.stats.runs > 0) {
     const n = Math.min(ctune('cashMax'), Math.max(0, G.coins | 0)) + (G.daily ? 5 : 0);
-    if (n > 0) { cas().chips += n; G.chipsIn = n; Save.write(); }
+    if (n > 0) { cas().chips += n; G.chipsIn = n; Save.write(); if (casShown()) logNews('chips', '+' + n + ' CHIPS FOR THE STAR CASINO', 'cz_chip'); }
   } else if (ev === 'boss' && G.floor && G.floor.land) {
     const c = cas(), id = G.floor.land.theme;
     if (!c.lands.includes(id)) { c.lands.push(id); Save.write(); }

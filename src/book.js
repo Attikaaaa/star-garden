@@ -73,6 +73,19 @@ const BEASTS = [
   { t: 'golem', spr: 'golem_0', boss: true, lore: ['THE CRYSTAL GOLEM SLEPT FOR A THOUSAND YEARS.', 'A FALLEN STAR WOKE IT UP.', 'IT DREAMS OF THE SKY IT CANNOT REACH.'] },
 ];
 const beastN = (b) => cnt((b.boss ? 'b:' : 'k:') + b.t);
+// The pages in road order, land by land: its foes, its warden, then its bosses. A foe no land
+// lists (a split slime, an elite, a boss's helper) stays with the land whose file added it
+// just before it. Sorted once, when the Book first opens (every land file has added its pages).
+function sortBeasts() {
+  if (BEASTS.landed) return;
+  BEASTS.landed = true;
+  const lands = [].concat(...ROAD.map(actLands));
+  const landOf = (t) => lands.findIndex(id => { const L = LAND[id]; return L.boss === t || (L.alt || []).includes(t) || WARDENS[id] === t || L.pool.some(q => q[0] === t); });
+  let last = 0;
+  for (const b of BEASTS) { const k = landOf(b.t); b.lk = k >= 0 ? k : b.boss ? lands.length : last; if (k >= 0 && !b.boss) last = k; b.land = lands[b.lk]; }
+  const kind = (b) => (b.boss ? 2 : (EDEF[b.t] || 0).warden ? 1 : 0);
+  BEASTS.sort((a, b) => a.lk - b.lk || kind(a) - kind(b));
+}
 // bosses and wardens are met once a run, so their pages fill sooner
 const loreSteps = (b) => b.boss || (EDEF[b.t] && EDEF[b.t].warden) ? [1, 3, 5] : [1, 10, 50];
 const loreN = (b) => { const n = beastN(b); return loreSteps(b).filter(k => n >= k).length; };
@@ -92,10 +105,12 @@ function wrapText(str, w) {
 }
 
 // ---------- Screen ----------
-const BOOK_TABS = ['ITEMS', 'FOES', 'COMBOS', 'RUNS', 'STATS'];
+// the casino's page shows once the casino has been visited (and is not hidden)
+const bookTabs = () => ['ITEMS', 'FOES', 'COMBOS', 'RUNS', 'STATS'].concat(casShown() ? ['CASINO'] : []);
 const BK = { x: 30, y: 50, pane: 216 };
 function bookCount() {
   const t = G.bookTab;
+  if (t === 1) sortBeasts();
   return t === 0 ? Object.keys(ITEMS).length : t === 1 ? BEASTS.length : t === 2 ? SYNERGIES.length : t === 3 ? Save.hist.length : 0;
 }
 // columns, row pitch and visible rows per tab; longer lists scroll by rows (G.bookTop)
@@ -118,9 +133,9 @@ function bookArrows() {
 function updateBook() {
   // tabs: Q / E, LB / RB, Tab, or a click
   let tab = pressed('PadLB', 'KeyQ') ? G.bookTab - 1 : pressed('PadRB', 'KeyE', 'Tab') ? G.bookTab + 1 : null;
-  BOOK_TABS.forEach((t, i) => { const x = bookTabX(i); if (mouseOn() && Input.mouseHit && Input.mx >= x - 4 && Input.mx < x + textW(t) + 4 && Input.my >= 28 && Input.my < 42) tab = i; });
+  bookTabs().forEach((t, i) => { const x = bookTabX(i); if (mouseOn() && Input.mouseHit && Input.mx >= x - 4 && Input.mx < x + textW(t) + 4 && Input.my >= 28 && Input.my < 42) tab = i; });
   if (tab !== null) {
-    G.bookTab = (tab + BOOK_TABS.length) % BOOK_TABS.length; G.menuSel = 0; G.bookTop = 0;
+    G.bookTab = (tab + bookTabs().length) % bookTabs().length; G.menuSel = 0; G.bookTop = 0;
     Audio_.sfx('select'); return false;
   }
   const n = bookCount(), g = BOOK_GRID[G.bookTab], cols = g ? g[0] : 1;
@@ -130,14 +145,14 @@ function updateBook() {
       if (pressed(...K_RIGHT) && s % cols < cols - 1 && s + 1 < n) s++;
       if (pressed(...K_LEFT) && s % cols > 0) s--;
     } else {
-      if (pressed(...K_RIGHT)) { G.bookTab = (G.bookTab + 1) % BOOK_TABS.length; G.menuSel = 0; G.bookTop = 0; Audio_.sfx('select'); return false; }
-      if (pressed(...K_LEFT)) { G.bookTab = (G.bookTab + BOOK_TABS.length - 1) % BOOK_TABS.length; G.menuSel = 0; G.bookTop = 0; Audio_.sfx('select'); return false; }
+      if (pressed(...K_RIGHT)) { G.bookTab = (G.bookTab + 1) % bookTabs().length; G.menuSel = 0; G.bookTop = 0; Audio_.sfx('select'); return false; }
+      if (pressed(...K_LEFT)) { G.bookTab = (G.bookTab + bookTabs().length - 1) % bookTabs().length; G.menuSel = 0; G.bookTop = 0; Audio_.sfx('select'); return false; }
     }
     if (pressed(...K_UP) && s >= cols) s -= cols;
   } else if (pressed(...K_UP) && n) s = n - 1;
   if (pressed(...K_DOWN) && s < n) s = Math.floor(s / cols) < Math.floor((n - 1) / cols) ? Math.min(s + cols, n - 1) : n;
   if (cols === 1 && n === 0 && (pressed(...K_RIGHT) || pressed(...K_LEFT))) {
-    G.bookTab = (G.bookTab + (pressed(...K_RIGHT) ? 1 : BOOK_TABS.length - 1)) % BOOK_TABS.length; G.menuSel = 0; Audio_.sfx('select'); return false;
+    G.bookTab = (G.bookTab + (pressed(...K_RIGHT) ? 1 : bookTabs().length - 1)) % bookTabs().length; G.menuSel = 0; Audio_.sfx('select'); return false;
   }
   if (g) {
     // long lists scroll: follow the selection, the wheel and the margin arrows
@@ -154,19 +169,25 @@ function updateBook() {
   if (hoverRow(n, VW / 2 - bw / 2, 199, bw, 13) && Input.mouseHit) return true;
   return pressed(...K_BACK) || (pressed(...K_OK) && G.menuSel === n);
 }
-const bookTabX = (i) => 40 + i * 64;
+// the tabs spread evenly by their (translated) widths between x 40 and 340
+function bookTabX(i) {
+  const T = bookTabs(), w = T.map(t => textW(t)), gap = (300 - w.reduce((a, b) => a + b, 0)) / (T.length - 1);
+  let x = 40;
+  for (let k = 0; k < i; k++) x += w[k] + gap;
+  return Math.round(x);
+}
 function boxFrame(x, y, w, h, col) { rect(x - 1, y - 1, w + 2, 1, col); rect(x - 1, y + h, w + 2, 1, col); rect(x - 1, y, 1, h, col); rect(x + w, y, 1, h, col); }
 function drawBook() {
   drawTitleBg();
   dim(0.5);
   panel(22, 24, 340, 172);
-  BOOK_TABS.forEach((t, i) => {
+  bookTabs().forEach((t, i) => {
     const x = bookTabX(i), on = G.bookTab === i;
     text(t, x, 31, on ? 'Y' : '3', 1);
     if (on) rect(x - 2, 40, textW(t) + 4, 1, 'Y');
   });
   if (Input.lastAim === 'pad') { text('LB', 28, 31, 'l', 0); text('RB', 346, 31, 'l', 0); }
-  [drawBookItems, drawBookFoes, drawBookCombos, drawBookRuns, drawBookStats][G.bookTab]();
+  [drawBookItems, drawBookFoes, drawBookCombos, drawBookRuns, drawBookStats, drawBookCasino][G.bookTab]();
   const ar = bookArrows(), g = BOOK_GRID[G.bookTab];
   if (ar) {
     const top = G.bookTop || 0, more = top + g[2] < Math.ceil(bookCount() / g[0]);
@@ -207,10 +228,11 @@ function drawBookItems() {
   }
 }
 function drawBookFoes() {
+  sortBeasts();
   BEASTS.forEach((b, i) => {
     const c = bookCell(i); if (!c) return;
     const [x, y, w, h] = c, n = beastN(b);
-    rect(x, y, w, h, '0'); rect(x + 1, y + 1, w - 2, h - 2, n ? '2' : '1');
+    rect(x, y, w, h, '0'); rect(x + 1, y + 1, w - 2, h - 2, n ? (b.lk % 2 ? '3' : '2') : '1'); // the lands take turns in two shades
     const icon = b.boss || (EDEF[b.t] || 0).warden; // big ones show their map mark
     if (n) { const sp = S(b.boss ? 'mm_boss' : icon ? 'mm_warden' : b.spr); drawFeet(sp, x + w / 2, y + (icon ? 15 : h - 2)); }
     else text('?', x + w / 2, y + 12, 'l', 1, 1);
@@ -227,6 +249,7 @@ function drawBookFoes() {
   drawFeet(sp, BK.pane + 64, 79);
   let y = 84;
   text(foeName(b.t), BK.pane + 64, y, 'Y', 1, 1); y += 10;
+  if (b.land) { text(THEMES[LAND[b.land].theme].name, BK.pane + 64, y, 'l', 1, 1); y += 10; }
   text((b.boss ? 'BEATEN ' : 'DEFEATED ') + n + (b.boss && cnt('nhb:' + b.t) ? '   NO HIT: YES' : ''), BK.pane + 64, y, 'c', 1, 1); y += 13;
   y = paneLines(b.lore.slice(0, loreN(b)), y, 'w');
   const nx = loreNext(b);
@@ -270,6 +293,23 @@ function drawBookRuns() {
   items.forEach((id, i) => { if (ITEMS[id]) drawS(S('icon_' + id), x0 + i * 17, 168); });
   const d = new Date(r.t), when = pad2(d.getMonth() + 1) + '.' + pad2(d.getDate()) + '. ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   text(when + '   ' + (WANDS[r.wand] ? WANDS[r.wand].name : '') + '   ' + (DIFFS[r.diff] ? DIFFS[r.diff].name : ''), VW / 2, 187, 'l', 1, 1);
+}
+// Every game's plays, chips bet and won, and the biggest single win; then the card.
+function drawBookCasino() {
+  const c = cas(), T = CAS_TIERS[casTier()], cols = [34, 170, 222, 274, 330];
+  ['GAME', 'PLAYS', 'BET', 'WON', 'BEST'].forEach((h, i) => text(h, cols[i], 48, 'Y', 1, i ? 2 : 0));
+  let y = 61;
+  for (const g in CAS_NAMES) {
+    const st = c.st[g];
+    if (!st || !st.n) continue;
+    text(CAS_NAMES[g], cols[0], y, 'l', 1);
+    [st.n, st.bet, st.won, st.best].forEach((v, i) => text(String(v), cols[i + 1], y, 'w', 1, 2));
+    y += 11;
+  }
+  if (y === 61) { text('NOTHING PLAYED YET.', VW / 2, y, '3', 1, 1); y += 11; }
+  y = Math.max(y + 6, 158);
+  text(T.name + ' CARD   ' + Math.floor(c.pts) + ' POINTS   ' + c.chips + ' CHIPS', VW / 2, y, T.col, 1, 1);
+  text('CHIPS ARE NOT MONEY. EVERY GAME SHOWS ITS ODDS BEHIND I.', VW / 2, y + 12, '3', 1, 1);
 }
 function drawBookStats() {
   const st = Save.stats, rows = [

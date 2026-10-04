@@ -242,7 +242,12 @@ function bjPay(hand, bet, res, dealer) {
 function bjSettle() {
   const D = BJ.dealer.map(k => k.c), dBJ = bjNatural(D);
   let pay = dBJ ? BJ.ins * 3 : 0;
-  for (const h of BJ.hands) { const [p, r] = bjPay(bjCards(h), h.bet, h.res, D); h.pay = p; h.res = r; pay += p; }
+  for (const h of BJ.hands) {
+    const [p, r] = bjPay(bjCards(h), h.bet, h.res, D);
+    h.pay = p; h.res = r; pay += p;
+    if (r === 'WIN' || r === 'BLACKJACK') note('cas', 'bj', 'bjwin');
+    if (r === 'BLACKJACK') note('cas', 'bj', 'bj');
+  }
   casPend('bj', pay);
   casSettle();
   const net = pay - BJ.staked, d = bjTotal(D).t;
@@ -494,6 +499,7 @@ CAS_GAMES.vp = {
       VP.phase = 'bet';
       casSettle();
       if (VP.win) casWin(VP.win, VP.bet, 192, VP_Y + 16); else Audio_.sfx('rstop');
+      if (VP.res >= 0 && VP.res <= 2) note('cas', 'vp', 'quad'); // four of a kind or better
     }
     const choose = VP.phase === 'bet';
     VP.den = casStepper('den', 16, 196, 'CHIP VALUE', VP_DENS, VP.den, !choose);

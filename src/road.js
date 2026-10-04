@@ -6,7 +6,7 @@
 // (built the same way as roadPath, so the two always line up).
 function roadSlots() {
   const out = [];
-  ROAD.forEach((a, i) => {
+  openActs().forEach((a, i) => {
     if (landLive(a.fixed)) out.push({ act: i, fork: false });
     for (const id of a.fork.filter(landLive).slice(0, a.pick)) out.push({ act: i, fork: true });
     if (a.finale && landLive(a.finale)) out.push({ act: i, fork: false });
@@ -91,12 +91,11 @@ function drawForkView(land, x, y, w, h, t) {
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   for (let ty = 0; ty < 3; ty++) for (let tx = 0; tx < 7; tx++) {
-    const k = hash(tx, ty, th.length) % 100;
-    drawS(S((k < 60 ? 'floor_0' : k < 80 ? 'floor_1' : k < 90 ? 'floor_3' : 'floor_2') + '@' + th), x + tx * 16, y + 16 + ty * 16);
+    drawS(S(floorTile(tx, ty, th.length) + '@' + th), x + tx * 16, y + 16 + ty * 16);
   }
   for (let tx = 0; tx < 7; tx++) {
     drawS(S('cap@' + th), x + tx * 16, y - 12);
-    drawS(S('face_' + (tx === 2 ? 1 : 0) + '@' + th), x + tx * 16, y + 4);
+    drawS(S(faceTile(tx, th.length) + '@' + th), x + tx * 16, y + 4);
   }
   rect(x, y + 20, w, 2, SHADOW);
   drawS(S('rock_' + th), x + w - 26, y + h - 22);
@@ -161,6 +160,7 @@ const actSpan = (i) => { const s = roadSlots(), d = s.map((q, j) => (q.act === i
 // The choices, in order: the full road, each reached act (once there are two), a surprise land, each land.
 function runLens() {
   const out = ['full'], acts = [...new Set(roadSlots().map(s => s.act))];
+  if (Save.story.roadEnd) out.push('plus');
   if (acts.length > 1) for (const i of acts) if (actSpan(i)[0] < reachedDepth()) out.push('act' + i);
   out.push('quick');
   for (const id of quickIds()) out.push('quick:' + id);
@@ -169,7 +169,8 @@ function runLens() {
 const runLen = () => { const l = runLens(), v = Save.settings.runLen; return l.includes(v) ? v : 'full'; };
 function lenValue(len) {
   const n = roadPath().length;
-  if (len === 'full') return ['FULL ROAD', n + ' LANDS AND ' + n + ' BOSSES, ABOUT ' + n * 5 + ' MINUTES' + (roadActs() > 1 ? '. VAULT X' + roadActs() : '')];
+  if (len === 'plus') return ['ROAD+', n + ' LANDS, A TWIST IN EACH ACT AND TOUGHER FOES. VAULT X2'];
+  if (len === 'full') return ['FULL ROAD', n + ' LANDS AND ' + n + ' BOSSES, ABOUT ' + n * 5 + ' MINUTES' + (roadActs() > 1 ? '. VAULT X' + actsX(roadActs()) : '')];
   if (len.startsWith('act')) { const i = +len.slice(3), [a, b] = actSpan(i); return [actName(i), (b - a + 1) + ' LANDS, ABOUT ' + (b - a + 1) * 5 + ' MINUTES' + (a ? '. A STARTER KIT' : '')]; }
   const desc = 'ONE LAND, ONE BOSS, ABOUT 5 MINUTES. VAULT X0.4';
   return [len === 'quick' ? 'QUICK: ANY LAND' : 'QUICK: ' + THEMES[LAND[len.slice(6)].theme].name, desc];
@@ -184,16 +185,20 @@ function lenOpts(len) {
     return { quick: true, path, depth: d, span: [d, d] };
   }
   if (len.startsWith('act')) { const span = actSpan(+len.slice(3)); return { depth: span[0], span }; }
+  if (len === 'plus') return { plus: true };
   return {};
 }
-// Vault pay for the length and the Star Trial: a quick run x0.4, the road x1 for each act it walks.
+// Vault pay for the length and the Star Trial: a quick run x0.4, an act x1, and a quarter more for
+// each further act walked in one go (a longer road already pays more, land by land); ROAD+ x2.
+const actsX = (n) => 1 + 0.25 * (n - 1);
 function applyRunX() {
   const r = G.run, s = r.span, slots = roadSlots();
-  let x = r.quick && !r.bow ? 0.4 : slots.length === r.path.length ? new Set(slots.filter((q, j) => !s || (j >= s[0] && j <= s[1])).map(q => q.act)).size : 1;
+  let x = r.plus ? 2 : r.quick && !r.bow ? 0.4 : slots.length === r.path.length ? actsX(new Set(slots.filter((q, j) => !s || (j >= s[0] && j <= s[1])).map(q => q.act)).size) : 1;
   x *= 1 + 0.05 * (G.trial || 0);
   if (x === 1) return;
   G.diffX = G.diffX || Object.assign({}, DIFFS[G.diff]);
   G.diffX.vault *= x;
+  if (r.plus) G.diffX.hp *= 1.25; // ROAD+: tougher foes
 }
 // A run that starts further down the road: an item and a heart for each land skipped (three at most).
 function starterKit(depth) {
@@ -205,6 +210,31 @@ function starterKit(depth) {
       p.maxHp += 2 * n; p.hp = p.maxHp;
     }
   });
+}
+// ROAD+: each act brings its own twist, dealt from the run's seed when the act's first land loads.
+const PLUS_MODS = ['swift', 'crowd', 'glowing', 'giants', 'echo', 'windy'];
+function plusAct(depth) {
+  const slots = roadSlots(), s = slots[depth % slots.length];
+  if (!s || (depth > 0 && slots[(depth - 1) % slots.length].act === s.act && G.mods.length)) return;
+  const id = withSeed(hashSeed(G.run.seed, 'plus', s.act), () => gpick(PLUS_MODS));
+  setMods([...new Set([id].concat(trialMods(G.trial)))]);
+  applyRunX();
+  G.bannerNext = { title: 'ROAD+: ' + MODS[id].name, sub: MODS[id].desc, t: 2.6, icon: null };
+}
+// How far down the road the heroes' power is: a run that starts further down (an act, a
+// quick run) brings a starter kit, about one land's worth of loot.
+function powDepth() {
+  const d = G.floor.depth, s = G.mode === 'adv' && G.run.span && !G.daily && !G.run.bow ? G.run.span[0] : 0;
+  return s ? d - s + 1 : d;
+}
+// Foe health by depth: the classic three lands as they always were, then steeper, since items
+// stack up over a nine-land road. A sim of 2-3 items a land gives about x14 damage by land
+// nine; damage over foe health goes from x2.4 at land three to x3.5 at land nine (bosses x2.1
+// to x2.8), so the road still gets a little easier as the heroes grow.
+function depthHp(boss) {
+  if (G.mode !== 'adv') return boss ? 1 + G.floor.depth * 0.3 : 1 + G.floor.depth * 0.2;
+  const d = powDepth(), e = Math.min(d, 2), k = Math.max(0, d - 2);
+  return boss ? 1 + e * 0.3 + k * 0.6 : 1 + e * 0.2 + k * 0.45;
 }
 // The end of a span: a quick run's land, or the act's last land.
 const spanDone = () => !!G.run.span && G.floor.depth >= G.run.span[1];

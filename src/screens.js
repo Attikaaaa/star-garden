@@ -62,6 +62,11 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.13.0', lines: ['THE LAST LAND: THE MOON GARDEN, WHERE THE STAR ROAD ENDS', 'LOW GRAVITY: YOU SLIDE, AND GOLD ROCKS BEND YOUR SHOTS', 'BEAT THE NIGHT BLOOM TO OPEN ROAD+: THE SAME ROAD, A LITTLE WILDER', 'DAILY RUNS NOW VISIT THE WHOLE STAR ROAD', 'THE CASINO: A VIP LOUNGE, A FOUNTAIN, QUESTS AND A CONSTELLATION', "HOLD'EM IN THE LOUNGE: BEAT A FROG, AN OWL AND A FOX", 'A VELVET ROBE AT THE PRIZE COUNTER'] },
+  { v: '1.12.0', lines: ['A NEW LAND: THE GLOW DEEP', 'THE CURRENT CARRIES EVERYTHING: WATCH THE FLOOR ARROWS', 'CATCH A BUBBLE FOR ONE BIG BUBBLE SHOT'] },
+  { v: '1.11.0', lines: ['TWO NEW LANDS: THE STORY LIBRARY AND THE EMBER FORGE', 'THE PAGES TURN: STEP CLEAR OF THE NEW SHELVES', 'THE FORGE KEEPS TIME: WATCH THE RUNES, THEN STEP OFF'] },
+  { v: '1.10.0', lines: ['TWO NEW LANDS: THE SNOWGLOBE AND THE SUN TEMPLE', 'SHOOT ICE BRIDGES, HOLD ON WHEN THE GLOBE SHAKES', 'LIGHT THE PLATES AND ANSWER THE SPHINX'] },
+  { v: '1.9.0', lines: ['A NEW LAND ON THE STAR ROAD: THE TOY ATTIC', 'EVERY TOY MOVES ON THE BEAT: DODGE IN TIME', 'TWO NEW BOSSES: THE MUSIC BOX BALLERINA AND JESTER JACK'] },
   { v: '1.8.0', lines: ['A NEW LAND ON THE STAR ROAD: THE CLOUD STEPS', 'HOP FROM SUNSTONE TO SUNSTONE BEFORE THE CLOUDS PUFF AWAY', 'TWO NEW BOSSES IN THE SKY: THE THUNDER WHALE AND THE STORM RAM'] },
   { v: '1.7.0', lines: ['THE STAR CASINO OPENS: FIND IT ON THE TITLE SCREEN', 'SLOTS, BLACKJACK, POKER, ROULETTE, SIC BO AND SCRATCH CARDS', 'PLAY FOR STAR CHIPS, NEVER FOR REAL MONEY'] },
   { v: '1.6.0', lines: ['A NEW BOSS IN THE CRYSTAL CAVE: THE GEODE SPIDER'] },
@@ -72,13 +77,15 @@ const NEWS = [
   { v: '1.3.0', lines: ['THE SKY: STAR RAIN, MOON NIGHTS AND SEASONS', 'A NEW BOSS OF THE WEEK EVERY MONDAY', 'COUCH CO-OP: PLUG IN MORE CONTROLLERS', 'CO-OP: REJOIN A GAME AFTER A DROP', 'SAVE CODES: TAKE YOUR GARDEN ANYWHERE', 'A NEW LANGUAGE: MAGYAR'] },
   { v: '1.2.0', lines: ['THE GARDEN: QUESTS, CONSTELLATIONS, A BOOK AND A MAILBOX', 'MISTER RIBBIT WRITES LETTERS AND GIVES DAILY GIFTS', 'ROLL THROUGH BULLETS TO CHARGE STARFALL', '15 ITEM COMBOS WITH REAL BONUSES TO FIND', 'THE END SCREEN SHOWS YOUR NEXT GOAL', 'TRAILS, PETS AND TITLES IN THE WARDROBE'] },
 ];
+// '1.10.0' is newer than '1.9.0' (a plain string compare says otherwise)
+const verNewer = (a, b) => { const x = a.split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
 function titleNotices() {
   if (modalUp() || G.noticesShown) return;
   G.noticesShown = true;
   // what's new, for players who played an older version
   if (Save.ver !== GAME_VERSION) {
     const old = Save.ver, lines = [];
-    if (Save.stats.runs > 0) for (const n of NEWS) if (!old || n.v > old) lines.push(...n.lines);
+    if (Save.stats.runs > 0) for (const n of NEWS) if (!old || verNewer(n.v, old)) lines.push(...n.lines);
     const live = ONLINE.live && Array.isArray(ONLINE.live.news) ? ONLINE.live.news.filter(n => n && n.v === GAME_VERSION) : [];
     for (const n of live) if (Array.isArray(n.lines)) lines.push(...n.lines.map(String));
     Save.ver = GAME_VERSION; Save.write();
@@ -183,7 +190,10 @@ function drawEndScreen(title, col, sub) {
   dim(0.55);
   const daily = G.daily && G.daily.score, team = G.players.length > 1, news = RUNLOG.news, goal = !team && !daily ? nextGoal() : null;
   const x = VW / 2 - 112, w = 224;
-  let h = daily ? 178 : 158 + (goal ? 24 : 0) + (news.length && !team ? 26 : 0) + (team ? 10 * Math.ceil(G.players.length / 2) : 0) + (!team && G.frogLine ? 10 : 0);
+  const base = 158 + (goal ? 24 : 0) + (news.length && !team ? 26 : 0) + (team ? 10 * Math.ceil(G.players.length / 2) : 0);
+  // the frog's second line gets its own row only while the panel still fits the screen
+  const frogRow = !team && G.frogLine && base + 10 <= VH - 8;
+  let h = daily ? 178 : base + (frogRow ? 10 : 0);
   const y = Math.max(4, Math.round((VH - h) / 2));
   panel(x, y, w, h);
   const bob = Math.round(Math.sin(G.time * 3) * 1.5);
@@ -243,8 +253,9 @@ function drawEndScreen(title, col, sub) {
   if (NET.role === 'client') text('WAITING FOR THE HOST...', VW / 2, y + h - 10, 'c', 1, 1);
   else if (!team) {
     // Mister Ribbit's word about this run, taking turns with a reason to come back
-    const why = comeBackLine(), frog = G.frogLine, show = frog && (!why || Math.floor(G.time / 4) % 2 === 0);
-    if (show) wrapText(frog, w - 20).slice(0, 2).forEach((l, i, a) => text(l, VW / 2, y + h - 10 - (a.length - 1 - i) * 10, 'h', 1, 1));
+    const why = comeBackLine(), lines = G.frogLine ? wrapText(G.frogLine, w - 20).slice(0, 2) : [];
+    const show = lines.length && (frogRow || lines.length < 2) && (!why || Math.floor(G.time / 4) % 2 === 0);
+    if (show) lines.forEach((l, i, a) => text(l, VW / 2, y + h - 10 - (a.length - 1 - i) * 10, 'h', 1, 1));
     else if (why) text(why, VW / 2, y + h - 10, 'c', 1, 1);
   }
 }

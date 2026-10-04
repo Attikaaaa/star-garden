@@ -238,6 +238,7 @@ CAS_GAMES.rou = {
       ROU.res = s.n; ROU.win = s.pay;
       ROU.hist.unshift(s.n); if (ROU.hist.length > 12) ROU.hist.pop();
       if (s.pay > 0) casWin(s.pay, s.total, 56, 76); else Audio_.sfx('rstop');
+      if ([...ROU.bets.values()].some(b => b.nums.length === 4 && b.nums.includes(s.n))) note('cas', 'rou', 'corner');
       ROU.bets.clear(); ROU.undo = [];
     }
   },

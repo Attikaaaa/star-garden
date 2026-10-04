@@ -3,8 +3,8 @@
 **Play it: https://attikaaaa.github.io/star-garden/**
 
 A top-down pixel-art roguelite with a slight three-quarter view. Pip, the little star
-wizard, fights through three colourful lands room by room, collects magic items, shops at
-the frog's stall and beats a boss at the end of every land. Every run is generated anew;
+wizard, fights room by room along the Star Road through eight colourful lands, collects
+magic items, shops at the frog's stall and beats a boss at the end of every land. Every run is generated anew;
 part of every coin you find goes into your **vault**, which buys permanent upgrades and new
 wands in the Garden. Play alone, in the endless **Arena**, or in **online co-op** with up
 to four heroes.
@@ -53,8 +53,12 @@ Menus work with mouse, keyboard, controller (A: select, B: back) and touch.
 
 ## How it plays
 
-- **Lands:** Bloom Meadow, Sunny Shore and Crystal Cave, each with its own enemies,
-  music, atmosphere and boss (Slime King, Giant Crab, Crystal Golem).
+- **Lands:** Bloom Meadow, Sunny Shore, Crystal Cave, Cloud Steps, Lantern Woods, the Toy
+  Attic, the Snowglobe and the Sun Temple, each with its own enemies, rule, music, atmosphere and boss (Slime King, Giant Crab,
+  Crystal Golem, Thunder Whale, Grand Hoot, Music Box Ballerina, Yeti Yodel, Riddle Sphinx). A run starts in the Meadow;
+  after a boss the team picks the next land where the road forks, and at dusk it reaches the
+  Lantern Woods and then two of the Toy Attic (every toy moves on the beat), the Snowglobe
+  and the Sun Temple.
 - **Rooms:** the doors shut until every enemy is gone. Some rooms throw a second wave at
   you. The minimap shows the boss (crown), treasure room (star), shop (coin) and
   challenge room (swords). The number under the map counts your defeated enemies.
@@ -67,7 +71,7 @@ Menus work with mouse, keyboard, controller (A: select, B: back) and touch.
   for a free item. **Chests** sometimes appear in cleared rooms.
 - **Shop:** the frog sells hearts, a potion and magic items for coins.
 - **Boss:** after it falls you get another item choice and the Star Gate to the next land.
-- **Endless mode:** after the third land you can keep going; the lands return, harder.
+- **Endless mode:** after the road's last land you can keep going; the lands return, harder.
 - **Difficulty:** Easy, Normal, Hard or Starbreaker, picked before each run. Harder runs
   pay more vault coins.
 

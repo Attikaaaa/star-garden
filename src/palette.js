@@ -103,4 +103,66 @@ THEMES.lantern = {
   'a': 'v', 'b': 'V', 'c': 'P', 'i': 'O', 'j': 'y',
   'e': '0', 'f': 'b', 'g': 'B', 'h': 'O',
 };
-const THEME_ORDER = ['meadow', 'beach', 'crystal', 'cloud', 'well', 'lantern'];
+// Toy Attic: warm floorboards under a rug, walls of wallpaper over a skirting board, letter
+// blocks for rocks (the floor itself is painted by THEMES.toy.paint in toy.js). Its pits are
+// gaps in the boards.
+THEMES.toy = {
+  name: 'TOY ATTIC',
+  '1': 'n', '2': 'N', '3': 'e', '4': 'r', '5': 'y', '6': 'B',
+  '7': 'u', '8': 'n', '9': 'N',
+  'a': 'e', 'b': 'a', 'c': 'A', 'i': 'r', 'j': 'R',
+  'e': '0', 'f': 'u', 'g': 'n', 'h': 'O',
+};
+// Snowglobe: fresh snow on the floor, ice-brick walls under a snow cap, frozen blue water in the
+// pits (and slippery ice, T_ICE, from the layouts). The glass of the globe shows in the margins.
+THEMES.snow = {
+  name: 'SNOWGLOBE',
+  '1': 'l', '2': 'L', '3': 'w', '4': 'c', '5': 'q', '6': 'C',
+  '7': 'C', '8': 'L', '9': 'w',
+  'a': 'b', 'b': 'B', 'c': 'c', 'i': 'C', 'j': 'w',
+  'e': 'b', 'f': 'B', 'g': 'c', 'h': 'w',
+};
+// Sun Temple: warm sandstone slabs, walls with a turquoise frieze, oasis water in the pits (and
+// quicksand, T_QSAND, from the layouts; its mirrors and plates are drawn by sun.js).
+THEMES.sun = {
+  name: 'SUN TEMPLE',
+  '1': 'e', '2': 'a', '3': 'A', '4': 'T', '5': 'o', '6': 'y',
+  '7': 'N', '8': 'a', '9': 'A',
+  'a': 'n', 'b': 'N', 'c': 'T', 'i': 'y', 'j': 'Y',
+  'e': 't', 'f': 'T', 'g': 'C', 'h': 'w',
+};
+// Story Library: parchment floors, violet bookshelves in the walls, ink in the pits (and ink
+// puddles and turning pages, library.js).
+THEMES.library = {
+  name: 'STORY LIBRARY',
+  '1': 'A', '2': 'a', '3': 'A', '4': 'e', '5': 'q', '6': 'A',
+  '7': '1', '8': '2', '9': '3',
+  'a': '1', 'b': '2', 'c': '3', 'i': 'y', 'j': 'Y',
+  'e': '0', 'f': '1', 'g': '2', 'h': '3',
+};
+// Ember Forge: plum iron plates with runes cut in them, cherry brick walls under a dark iron cap,
+// molten metal in the pits (the runes' heat, belts and barrels are forge.js).
+THEMES.forge = {
+  name: 'EMBER FORGE',
+  '1': 'v', '2': 'V', '3': 'p', '4': 'O', '5': 'y', '6': 'T',
+  '7': 'x', '8': 'X', '9': 'd',
+  'a': 'n', 'b': 'r', 'c': 'R', 'i': 'o', 'j': 'y',
+  'e': 'r', 'f': 'o', 'g': 'O', 'h': 'Y',
+};
+// Glow Deep: a dark blue sea floor, coral rock walls with pink anemones, a trench of black water
+THEMES.deep = {
+  name: 'GLOW DEEP',
+  '1': '0', '2': '1', '3': 'b', '4': 'T', '5': 'P', '6': 'H',
+  '7': '0', '8': '1', '9': '2',
+  'a': '1', 'b': '2', 'c': '3', 'i': 'P', 'j': 'q',
+  'e': '0', 'f': '1', 'g': '2', 'h': 'T',
+};
+// Moon Garden: a lavender lawn under the night, silver moon-rock walls, gold moonflowers, a pit of stars
+THEMES.moon = {
+  name: 'MOON GARDEN',
+  '1': '1', '2': '2', '3': '3', '4': 'Y', '5': 'y', '6': 'C',
+  '7': 'd', '8': 'm', '9': 'l',
+  'a': 'd', 'b': 'm', 'c': 'l', 'i': 'y', 'j': 'Y',
+  'e': '0', 'f': '1', 'g': '1', 'h': 'Y',
+};
+const THEME_ORDER = ['meadow', 'beach', 'crystal', 'cloud', 'well', 'lantern', 'toy', 'snow', 'sun', 'library', 'forge', 'deep', 'moon'];

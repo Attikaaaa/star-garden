@@ -60,12 +60,14 @@ async function open({ w = 1152, h = 648 } = {}) {
   await cmd('Runtime.enable');
   await cmd('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
   await cmd('Page.navigate', { url: 'file://' + path.join(ROOT, 'index.html') });
-  await sleep(1500);
   const ev = async (expr) => {
     const r = await cmd('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
     if (r.result?.exceptionDetails) throw new Error((r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text) + '\n  in: ' + expr.slice(0, 160));
     return r.result?.result?.value;
   };
+  // wait for the last script (net.js), then a moment for the title to settle; a busy machine is slow
+  for (let i = 0; i < 300 && !(await ev('typeof NET !== "undefined" && typeof G !== "undefined"')); i++) await sleep(100);
+  await sleep(1000);
   const shot = async (file) => {
     const r = await cmd('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(path.join(OUT, file), Buffer.from(r.result.data, 'base64'));
@@ -91,7 +93,7 @@ function checkLayout(L) {
   if (L.length !== 10) return ['has ' + L.length + ' rows, expected 10'];
   L.forEach((r, y) => {
     if (r.length !== 22) bad.push('row ' + y + ' has ' + r.length + ' chars');
-    const u = r.replace(/[.#b~epsgouil7931]/g, '');
+    const u = r.replace(/[.#b~epsgouilz7931<>^vkwW]/g, '');
     if (u) bad.push('row ' + y + ' has unknown "' + u + '"');
   });
   if (bad.length) return bad;
@@ -113,7 +115,7 @@ function checkLayout(L) {
     }
     return seen;
   };
-  const walk = flood('.eoui'), dig = flood('.eouibg');
+  const walk = flood('.eouiz<>^vkw'), dig = flood('.eouizbg<>^vkw'); // belts, piano keys and cooling water are floor
   for (const [d, cells] of Object.entries(lanes)) for (const [x, y] of cells) if (!walk[y * 22 + x]) bad.push(d + ' door unreachable');
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
     const c = at(x, y), i = y * 22 + x;
@@ -189,7 +191,7 @@ async function bot(land, floors = 3) {
   let failed = false;
   try {
     await b.ev(`(() => {
-      Save.stats.runs = Math.max(5, Save.stats.runs || 0); Save.settings.sfx = 0; Save.settings.music = 0;
+      Save.stats.runs = Math.max(5, Save.stats.runs || 0); Save.stats.wins = Math.max(1, Save.stats.wins || 0); Save.settings.sfx = 0; Save.settings.music = 0; // a won save walks the whole road
       startRun('adv', null, {});
       ${land ? `if (!LAND[${JSON.stringify(land)}]) throw new Error('no land ${land}');
       G.run.path = [${JSON.stringify(land)}].concat(roadPath().filter(id => id !== ${JSON.stringify(land)})); loadFloor(0);` : ''}
@@ -219,7 +221,7 @@ async function bot(land, floors = 3) {
         return { p50: a[a.length >> 1], p99: a[Math.floor(a.length * 0.99)], max: a[a.length - 1] }; })()`);
       console.log('land ' + (info.depth + 1) + ' ' + info.land + ': ' + info.rooms + ' rooms in ' + ((Date.now() - t0) / 1000).toFixed(0) + ' s, frame ms p50 '
         + fr.p50.toFixed(1) + ' p99 ' + fr.p99.toFixed(1) + ' max ' + fr.max.toFixed(1) + '  ' + shot);
-      if (f < floors - 1) { await sleep(1500); await b.ev(`G.nextLock = 0; nextFloor(); 1`); await sleep(2500); }
+      if (f < floors - 1) { await sleep(1500); await b.ev(`G.nextLock = 0; nextFloor(); if (G.state === "fork") chooseFork(); 1`); await sleep(2500); }
     }
   } finally {
     const errs = b.realErrors();
@@ -251,7 +253,7 @@ async function room(land, js = '', ms = 1500, type = 'normal') {
   const b = await open();
   try {
     await b.ev(`(() => {
-      Save.stats.runs = Math.max(5, Save.stats.runs || 0); Save.settings.sfx = 0; Save.settings.music = 0;
+      Save.stats.runs = Math.max(5, Save.stats.runs || 0); Save.stats.wins = Math.max(1, Save.stats.wins || 0); Save.settings.sfx = 0; Save.settings.music = 0; // a won save walks the whole road
       startRun('adv', null, {});
       G.run.path = [${JSON.stringify(land)}].concat(roadPath().filter(id => id !== ${JSON.stringify(land)})); loadFloor(0);
       MODALS.length = 0; enterRoom(G.floor.rooms.find(r => r.type === ${JSON.stringify(type)}), 'd');

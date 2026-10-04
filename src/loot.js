@@ -73,6 +73,8 @@ function learnScroll(id) {
 }
 
 // ---------- The item pool ----------
+// Rare and epic items turn up more often further down the road.
+const tierW = (r) => RARE_W[r] * (1 + (G.mode === 'adv' && G.floor ? r * 0.05 * powDepth() : 0));
 // Offered items: unlocked ones (all of them in daily runs, for fairness), rarer ones less
 // often, unique ones only once.
 function itemPool(n) {
@@ -81,7 +83,7 @@ function itemPool(n) {
   const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)) && (ITEMS[k].land ? landItem(k) : !unl || unl.has(k)));
   const out = [];
   while (out.length < n && pool.length) {
-    const w = pool.map(k => RARE_W[ITEMS[k].rare || 0]), tot = w.reduce((a, b) => a + b, 0);
+    const w = pool.map(k => tierW(ITEMS[k].rare || 0)), tot = w.reduce((a, b) => a + b, 0);
     let r = grand() * tot, i = 0;
     while (i < pool.length - 1 && r >= w[i]) r -= w[i++];
     out.push(pool.splice(i, 1)[0]);

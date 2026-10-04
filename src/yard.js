@@ -102,25 +102,20 @@ function updateYard(dt) {
   if (mx || my) Y.target = null;
   else if (Y.target) {
     // follow the path's next waypoint, then the target itself
-    while (Y.path && Y.path.length && Math.hypot(Y.path[0][0] - p.x, Y.path[0][1] - p.y) < 4) Y.path.shift();
-    const wp = Y.path && Y.path.length ? Y.path[0] : [Y.target.x, Y.target.y];
-    const dx = wp[0] - p.x, dy = wp[1] - p.y, d0 = Math.hypot(Y.target.x - p.x, Y.target.y - p.y), d = Math.hypot(dx, dy) || 1;
+    const dir = pathDir(p, Y.path, Y.target.x, Y.target.y, yardBlocked), d0 = Math.hypot(Y.target.x - p.x, Y.target.y - p.y);
     const nb = Y.target.use && yardNear();
     if (d0 < 4 || (nb && nb.id === Y.target.use.o.id && nb.i === Y.target.use.o.i)) {
       const u = Y.target.use;
       Y.target = null;
       if (u) { yardUse(u.o); return; }
-    } else { mx = dx / d; my = dy / d; }
+    } else [mx, my] = dir;
   }
   const l = Math.hypot(mx, my);
   if (l > 1) { mx /= l; my /= l; }
   p.moving = !!(mx || my);
   if (p.moving) {
     p.dx = mx; p.dy = my;
-    const sp = 90;
-    const nx = p.x + mx * sp * dt, ny = p.y + my * sp * dt;
-    if (!yardBlocked(nx, p.y)) p.x = nx; else if (Y.target) Y.target = null;
-    if (!yardBlocked(p.x, ny)) p.y = ny; else if (Y.target) Y.target = null;
+    if (!slideStep(p, mx, my, 90, dt, yardBlocked) && Y.target) Y.target = null;
     p.walkT += dt; p.idleT = 0;
     if (Math.abs(mx) > Math.abs(my) * 1.1) { p.face = 's'; p.flip = mx < 0; } else p.face = my < 0 ? 'u' : 'd';
   } else p.idleT += dt;
@@ -135,12 +130,30 @@ function updateYard(dt) {
   }
   Y.t = (Y.t || 0) + dt;
 }
+// Walking to a tapped place (the Garden and the casino). pathDir: the way to the path's next
+// waypoint, then the target; a waypoint reached is stood on exactly (path cells can sit right
+// on an edge, where a hair of float drift would read as inside the thing next to it).
+function pathDir(p, path, tx, ty, blocked) {
+  while (path && path.length && Math.hypot(path[0][0] - p.x, path[0][1] - p.y) < 2) { const w = path.shift(); if (!blocked(w[0], w[1])) { p.x = w[0]; p.y = w[1]; } }
+  const wp = path && path.length ? path[0] : [tx, ty], dx = wp[0] - p.x, dy = wp[1] - p.y, d = Math.hypot(dx, dy) || 1;
+  return [dx / d, dy / d];
+}
+// One step that slides along whatever is in the way; false when it could not move at all.
+function slideStep(p, mx, my, sp, dt, blocked) {
+  const ox = p.x, oy = p.y, nx = p.x + mx * sp * dt, ny = p.y + my * sp * dt;
+  if (!blocked(nx, p.y)) p.x = nx;
+  if (!blocked(p.x, ny)) p.y = ny;
+  return p.x !== ox || p.y !== oy;
+}
 // A walking path around the garden's things: breadth-first search on an 8 px grid.
-function yardPath(x0, y0, x1, y1, blocked = yardBlocked) {
-  const C = 8, W = Math.ceil(VW / C), H = Math.ceil(VH / C), idx = (x, y) => y * W + x;
+// C: the cell size (the casino walks a finer grid: its stools leave narrow aisles).
+function yardPath(x0, y0, x1, y1, blocked = yardBlocked, C = 8) {
+  const W = Math.ceil(VW / C), H = Math.ceil(VH / C), idx = (x, y) => y * W + x;
   const sx = Math.floor(x0 / C), sy = Math.floor(y0 / C), tx = Math.floor(x1 / C), ty = Math.floor(y1 / C);
   const prev = new Int32Array(W * H).fill(-1), q = [idx(sx, sy)];
   prev[q[0]] = q[0];
+  // a goal inside something (a stand point by a wall) is also reached from any open cell next to it
+  const near = blocked(tx * C + C / 2, ty * C + C / 2);
   let found = -1;
   for (let k = 0; k < q.length && found < 0; k++) {
     const c = q[k], cx = c % W, cy = (c / W) | 0;
@@ -149,8 +162,9 @@ function yardPath(x0, y0, x1, y1, blocked = yardBlocked) {
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const n = idx(nx, ny);
       if (prev[n] >= 0) continue;
-      const goal = nx === tx && ny === ty;
-      if (!goal && blocked(nx * C + C / 2, ny * C + C / 2)) continue;
+      const exact = nx === tx && ny === ty, bl = !exact && blocked(nx * C + C / 2, ny * C + C / 2);
+      const goal = exact || (near && !bl && Math.abs(nx - tx) <= 1 && Math.abs(ny - ty) <= 1);
+      if (bl) continue;
       prev[n] = c;
       if (goal) { found = n; break; }
       q.push(n);
@@ -163,7 +177,8 @@ function yardPath(x0, y0, x1, y1, blocked = yardBlocked) {
 }
 // The place, plant or plot under a click, and where to stand to use it.
 function yardAt(x, y) {
-  for (const s of yardSolids()) if (s.go && Math.abs(x - s.x) < s.w + 8 && y > s.y - 26 && y < s.y + 8) return { o: s, tx: s.x, ty: s.y + s.h + 9 };
+  // stand in front of a place; one against the bottom wall (the stall) is used from above
+  for (const s of yardSolids()) if (s.go && Math.abs(x - s.x) < s.w + 8 && y > s.y - 26 && y < s.y + 8) return { o: s, tx: s.x, ty: yardBlocked(s.x, s.y + s.h + 9) ? s.y - s.h - 6 : s.y + s.h + 9 };
   for (let i = 0; i < UPGRADES.length; i++) { const q = plantSpot(i); if (Math.abs(x - q.x) < 10 && y > q.y - 14 && y < q.y + 4) return { o: { id: 'plant', i }, tx: q.x, ty: q.y + 11 }; }
   for (let i = 0; i < 3; i++) if (Math.abs(x - PLOT_X[i]) < 12 && Math.abs(y - PLOT_Y) < 10) return { o: { id: 'plot', i }, tx: PLOT_X[i], ty: PLOT_Y + 12 };
   return null;

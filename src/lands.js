@@ -455,15 +455,16 @@ LA('toadstool', `
   ....AAe.....
   ............`);
 // Picnic: a gingham blanket with a plate and apples on it (a floor prop; the chest sits on top)
-def('blanket', stamp(stamp(stamp(grid(88, 44).fill((x, y) => {
-  const edge = x === 0 || x === 87 || y === 0 || y === 43;
-  if ((x === 0 || x === 87) && (y === 0 || y === 43)) return null;
+// soft coral / pink / cream and small, so it decorates the room without pulling the eye off the fight
+def('blanket', stamp(stamp(stamp(grid(64, 34).fill((x, y) => {
+  const edge = x === 0 || x === 63 || y === 0 || y === 33;
+  if ((x === 0 || x === 63) && (y === 0 || y === 33)) return null;
   if (edge) return '0';
-  const v = Math.floor((x - 1) / 6) % 2 === 0, h = Math.floor((y - 1) / 5) % 2 === 0;
-  if (y >= 40) return v ? 'p' : 'l'; // the folded front edge, in shade
-  if (y === 1 || x === 1) return v && h ? 'R' : 'w'; // light from the top left
-  return v && h ? 'r' : v || h ? 'R' : 'w';
-}).rows(), 10, 23, [
+  const v = Math.floor((x - 1) / 5) % 2 === 0, h = Math.floor((y - 1) / 4) % 2 === 0;
+  if (y >= 30) return v ? 'r' : 'P'; // the folded front edge, in shade
+  if (y === 1 || x === 1) return v && h ? 'q' : 'Y'; // light from the top left
+  return v && h ? 'R' : v || h ? 'q' : 'Y';
+}).rows(), 4, 21, [
   '...00000000...',
   '..0LLLLLLLL0..',
   '.0LLaAAAaLLl0.',
@@ -471,14 +472,14 @@ def('blanket', stamp(stamp(stamp(grid(88, 44).fill((x, y) => {
   '0lLLnNNNnLlll0',
   '.0llllllllll0.',
   '..0000000000..',
-]), 66, 8, [
+]), 46, 5, [
   '...0...',
   '.00G00.',
   '0wRrrr0',
   '0RRrrr0',
   '0rrrrp0',
   '.00000.',
-]), 72, 14, [
+]), 52, 11, [
   '...0...',
   '.00h00.',
   '0HyyyO0',

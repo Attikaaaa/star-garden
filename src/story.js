@@ -32,7 +32,7 @@ const FROG_LINES = [
   { id: 'cave', when: (r) => r.depth >= 2 && !r.won && cnt('land') === 3, text: 'THE CAVE IS DARK, BUT THE CRYSTALS REMEMBER THE STARS.' },
   { id: 'arena', when: (r) => r.mode === 'arena' && r.wave >= 10, text: 'TEN WAVES! THE ARENA SLIME IS IMPRESSED.' },
   { id: 'stars4', when: () => Save.story.stars.length >= 4, text: 'FOUR BIG STARS HOME. THE SKY IS WAKING UP.' },
-  { id: 'stars6', when: () => Save.story.stars.length === 6, text: 'SIX STARS... I THINK THE LAST ONE IS HIDDEN. LOOK FOR CRACKS.' },
+  { id: 'stars6', when: () => Save.story.stars.length === 6, text: 'SIX STARS. ONE MORE OPENS THE WELL. SOME HIDE BEHIND CRACKS.' },
   { id: 'well', when: () => cnt('well') > 0 && !cnt('ending'), text: 'THE STAR WELL! NOBODY HAS BEEN THERE IN A THOUSAND YEARS.' },
   { id: 'deaths10', when: () => cnt('deaths') === 10, text: 'TEN FALLS AND YOU ARE STILL HERE. THAT IS COURAGE.' },
   { id: 'coop', when: (r) => r.team > 1 && cnt('coop') === 1, text: 'FRIENDS MAKE EVERY GARDEN GROW FASTER.' },
@@ -73,7 +73,23 @@ const ENDING = [
   ['STAR GARDEN', 'P'], ['', 'w'], ['MADE WITH LOVE, PIXEL BY PIXEL', 'l'], ['', 'w'],
   ['THANK YOU FOR PLAYING!', 'Y'], ['', 'w'], ['THE LANDS ARE STILL OUT THERE,', 'l'], ['AND SO ARE THE SLIMES.', 'l'],
 ];
+// The end of the Star Road: the Night Bloom falls, the Big Stars brought home rise into the sky.
+// A run that opened the Star Well goes on down into it afterwards (solo; co-op goes to the win).
+const ROAD_ENDING = [
+  ['THE NIGHT BLOOM CLOSES ITS PETALS.', 'Y'], ['', 'w'],
+  ['IT WAS ONLY DREAMING.', 'w'], ['NOW IT SLEEPS.', 'w'], ['', 'w'],
+  ['THE BIG STARS YOU BROUGHT HOME', 'c'], ['RISE OVER THE MOON GARDEN', 'c'], ['AND FIND THEIR PLACES IN THE SKY.', 'c'], ['', 'w'],
+  ['MISTER RIBBIT WAVES FROM THE GARDEN.', 'w'], ['HE MADE TEA FOR EVERYONE.', 'w'], ['', 'w'],
+  ['THE STAR ROAD IS WALKED.', 'Y'], ['', 'w'], ['ROAD+ IS OPEN:', 'l'], ['THE SAME ROAD, A LITTLE WILDER.', 'l'],
+];
+function startRoadEnding() {
+  Save.story.roadEnd = true; note('roadend'); Save.write();
+  G.endKind = 'road'; G.endT = 0;
+  Audio_.stop(); Audio_.sfx('win');
+  wipe(() => setState('ending'));
+}
 function startEnding() {
+  G.endKind = null;
   G.won = true;
   Audio_.stop(); Audio_.sfx('win');
   const first = !cnt('ending');
@@ -86,6 +102,14 @@ function startEnding() {
 }
 function updateEnding(dt) {
   G.endT += dt;
+  if (G.endT > 3 && (pressed(...K_OK, ...K_BACK) || Input.mouseHit || G.endT > 32) && G.endKind === 'road') {
+    G.endKind = null;
+    if (wellOpen()) { setState('play'); enterWell(); return; } // seven Big Stars: on into the Star Well
+    noteTeam('end', runSummary(true));
+    preselectGarden();
+    wipe(() => setState('win'));
+    return;
+  }
   if (G.endT > 3 && (pressed(...K_OK, ...K_BACK) || Input.mouseHit || G.endT > 32)) {
     noteCoins();
     note('end', runSummary(true));
@@ -95,14 +119,23 @@ function updateEnding(dt) {
 function drawEnding() {
   drawSkyBg();
   // the constellations light up one by one
-  const lit = Math.min(CONSTELLATIONS.length, Math.floor(G.endT * 1.2));
-  CONSTELLATIONS.forEach((c, i) => {
-    const x = 16 + (i % 5) * 72, y = 8 + Math.floor(i / 5) * 40;
+  const L = skyList(), lit = Math.min(L.length, Math.floor(G.endT * 1.2));
+  L.forEach((c, i) => {
+    const x = 12 + (i % 6) * 60, y = 8 + Math.floor(i / 6) * 40;
     for (const [a, b] of c.edges) { const A = c.pts[a], B = c.pts[b]; pxLine(x + A[0], y + A[1], x + B[0], y + B[1], i < lit ? 'y' : '1'); }
     if (i < lit) c.pts.forEach(([px, py], k) => drawS(S(Math.floor(G.time * 2 + k) % 5 ? 'sparkle_0' : 'sparkle_1'), x + px - 1, y + py - 1));
   });
   dim(0.35);
-  const y0 = Math.round(VH + 10 - G.endT * 14);
-  ENDING.forEach(([t, c], i) => { const y = y0 + i * 12; if (t && y > -10 && y < VH + 10) text(t, VW / 2, y, c, 2, 1); });
+  const road = G.endKind === 'road', y0 = Math.round(VH + 10 - G.endT * 14);
+  if (road) {
+    // the Big Stars rise from the garden into a row across the sky
+    const n = Save.story.stars.length;
+    for (let i = 0; i < n; i++) {
+      const k = Math.max(0, Math.min(1, (G.endT - 1 - i * 0.35) / 2.5)), e = 1 - (1 - k) * (1 - k);
+      const tx = 24 + (n > 1 ? i * (VW - 48) / (n - 1) : VW / 2 - 24), ty = 20 + (i % 3) * 12;
+      drawS(S('ebb_mstar'), Math.round(VW / 2 + (tx - VW / 2) * e) - 3, Math.round(VH + 4 + (ty - VH - 4) * e) - 3);
+    }
+  }
+  (road ? ROAD_ENDING : ENDING).forEach(([t, c], i) => { const y = y0 + i * 12; if (t && y > -10 && y < VH + 10) text(t, VW / 2, y, c, 2, 1); });
   if (G.endT > 3) { rect(-SCR.ox, VH - 16, SCR.w, 16 + SCR.oy, '0'); text(Input.lastAim === 'pad' ? 'A: CONTINUE' : 'PRESS TO CONTINUE', VW / 2, VH - 11, 'l', 2, 1); }
 }

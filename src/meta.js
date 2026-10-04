@@ -228,6 +228,7 @@ function loadRun(d) {
   G.trial = G.run.trial || 0;
   applyRunX();
   G.floor = { depth: d.depth, land, theme: land.theme, rooms, start: rooms[d.start], boss: d.boss || land.boss };
+  for (const r of rooms) rebuildMech(r);
   const fresh = { orbitHit: new Map(), in: newInput(), inv: 1, dashT: 0, cool: 0, hurtT: 0, down: false };
   if (d.players) {
     // today's team: a saved hero goes to the same player, the rest by order, newcomers start fresh

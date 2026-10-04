@@ -69,6 +69,7 @@ function itemOnHit(s, e) {
   if (p.poison) e.poisonT = 3;
   if (p.burn) e.burnT = 2;
   if (p.frost) e.slowT = 1.2;
+  if (p.gquill) e.slowT = Math.max(e.slowT || 0, 1.5); // GOLDEN QUILL
 }
 // Per-frame shot rules: ROCKET SHOTS speed up, MAGNIFIER grows stronger, SPLIT SHOT splits once.
 function itemShotMove(s, dt) {
@@ -230,6 +231,7 @@ function drawEnemyStatus(e, ox, oy) {
 // SLEEPY BELL: a room's foes start asleep.
 function itemRoomStart() {
   for (const p of G.players) if (p.umbrella) p.umbOpen = true; // UMBRELLA opens again
+  for (const p of G.players) if (p.eraser) p.erOpen = true; // so does the ERASER
   if (!teamHas('bell')) return;
   for (const e of G.enemies) if (!e.boss) e.sleepT = 1.6 + grand() * 0.6;
 }

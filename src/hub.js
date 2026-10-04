@@ -21,7 +21,7 @@ const PETS = {
 // Titles come from constellations and letters; how: where they come from.
 const TITLES = {
   GARDENER: 'THE GARDENER', STARKEEPER: 'THE NIGHT SKY', 'OLD FRIEND': "THE FROG'S LAST LETTER",
-  'HIGH ROLLER': 'A STAR CARD AT THE CASINO', 'LUCKY STAR': 'THE PRIZE COUNTER',
+  'HIGH ROLLER': 'A STAR CARD AT THE CASINO', 'LUCKY STAR': 'THE PRIZE COUNTER', ROADWALKER: 'THE STAR ROAD', 'LUCKY OWL': 'THE LUCKY CHIP',
 };
 // Co-op: every screen draws every hero's pet and trail (net.js adds these to snapshots).
 const PF_EXTRA = ['pet', 'trail', 'buddies', 'charmCd', 'hero', 'leapZ', 'umbOpen', 'wick', 'owleye'];
@@ -34,7 +34,8 @@ function applyCosmetics(p, c) {
   p.title = typeof c.title === 'string' ? c.title.slice(0, 12) : '';
 }
 // The robes this player may wear (the rest come from constellations).
-const robeList = () => ROBES.map((r, i) => i).filter(i => i >= 8 || Save.unl.robes.includes(i));
+const robeList = () => ROBES.map((r, i) => i).filter(i => robeFree(i) || Save.unl.robes.includes(i));
+if (Save.skin >= 8 && !robeList().includes(Save.skin)) Save.skin = 0;
 function nextRobe(cur, dir) {
   const list = robeList();
   if (!list.includes(cur)) return list[0];
@@ -86,7 +87,7 @@ const HUB = [
     info: () => { const Q = Save.quests; if (!Q) return ['', 'l']; const n = Q.list.filter(q => q.done).length; return n === Q.list.length ? ['ALL DONE', 'h'] : [n + '/' + Q.list.length + ' DONE', 'c']; },
     tip: 'THREE SMALL GOALS A DAY, ONE A WEEK' },
   { id: 'stars', name: 'STARS', icon: () => 'icon_scope2', open: () => menuOpen('stars'), lock: 'EARN YOUR FIRST STAR IN A RUN',
-    info: () => [Object.keys(Save.ach).length + '/' + STAR_TOTAL, 'c'], tip: 'CONSTELLATIONS: GOALS THAT LIGHT UP THE SKY' },
+    info: () => [starGot() + '/' + starTotal(), 'c'], tip: 'CONSTELLATIONS: GOALS THAT LIGHT UP THE SKY' },
   { id: 'book', name: 'BOOK', icon: () => 'icon_book', open: () => menuOpen('book'), lock: 'PLAY A RUN TO START THE BOOK',
     info: () => [Save.found.length + '/' + Object.keys(ITEMS).length, 'l'], tip: 'ITEMS, FOES, COMBOS AND YOUR RUNS' },
   { id: 'mail', name: 'MAILBOX', icon: () => 'icon_mail', open: () => menuOpen('mail'), lock: 'THE FROG WRITES AFTER YOUR FIRST RUN',
@@ -198,7 +199,7 @@ function wardList(row) {
   if (row === 'title') return [''].concat(Object.keys(TITLES));
   return ROBES.map((r, i) => i);
 }
-const wardOwned = (row, v) => v === '' || (row === 'robe' ? v >= 8 || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? v !== 'cat' || !!(Save.casino && Save.casino.own && Save.casino.own.includes('cat')) : Save.unl.titles.includes(v));
+const wardOwned = (row, v) => v === '' || (row === 'robe' ? robeFree(v) || Save.unl.robes.includes(v) : row === 'trail' ? Save.unl.trails.includes(v) : row === 'pet' ? v !== 'cat' || !!(Save.casino && Save.casino.own && Save.casino.own.includes('cat')) : Save.unl.titles.includes(v));
 const wardCur = (row) => (row === 'robe' ? Save.skin : row === 'trail' ? Save.trail : row === 'pet' ? Save.pet : Save.title);
 function wardSet(row, v) {
   if (row === 'robe') Save.skin = v; else if (row === 'trail') Save.trail = v; else if (row === 'pet') Save.pet = v; else Save.title = v;
@@ -272,6 +273,6 @@ function wardHow(row, v) {
   if (row === 'trail') return TRAILS[v].how;
   if (row === 'pet') return PETS[v].how;
   if (row === 'title') return TITLES[v];
-  const c = CONSTELLATIONS.find(k => k.rew.robe === v);
-  return c ? c.name : 'SOMEWHERE';
+  const c = CONSTELLATIONS.find(k => k.rew.robe === v), late = LATE_ROBES[v - 8 - MEME_SKINS.length];
+  return c ? c.name : late ? late.how : 'SOMEWHERE';
 }

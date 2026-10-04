@@ -39,6 +39,18 @@ const LETTERS = [
     'THE CRITTERS TALK ABOUT YOU, YOU KNOW.',
     'THE BEES SAY YOU ARE FAST. THE SLIMES SAY YOU ARE BOUNCY.',
     'I SAY YOU ARE THE BEST GARDENER I HAVE MET IN A HUNDRED YEARS.'] },
+  // after the first win, whatever the day: the rest of the Star Road opens
+  { id: 'road', need: () => Save.stats.wins > 0, title: 'THE STAR ROAD', gift: { vault: 20 }, lines: [
+    'YOU MADE IT THROUGH THE CAVE! IT IS QUIET AGAIN.',
+    'BUT THE BIG STARS FELL MUCH FURTHER THAN THE CAVE.',
+    'THE STAR ROAD GOES ON: THROUGH LANTERN WOODS AND THE STORY LIBRARY, ALL THE WAY TO THE MOON GARDEN.',
+    'FROM NOW ON THE ROAD FORKS. PICK YOUR WAY, AND LOOK FOR ME BY THE CAMPFIRE.'] },
+  // after the first casino visit (and never while the casino is hidden)
+  { id: 'cosmo', need: () => casShown(), from: 'COSMO THE OWL', title: 'A NOTE FROM THE CASINO', gift: { chips: 50 }, lines: [
+    'HOOT! THANK YOU FOR VISITING THE STAR CASINO.',
+    'AN OWL TIP: THE HOUSE ALWAYS KEEPS A LITTLE. PLAY FOR FUN, AND STOP WHILE IT IS STILL FUN.',
+    'THE BIG WHEEL GIVES A FREE SPIN EVERY DAY, AND I HELP OUT WHEN A PURSE RUNS EMPTY.',
+    'HERE ARE A FEW CHIPS FOR YOUR NEXT VISIT. SEE YOU ON THE FLOOR!'] },
   { id: 'month', day: 29, title: 'A MONTH OF STARS', gift: { vault: 60, seeds: 2, title: 'OLD FRIEND' }, lines: [
     'A MONTH! I HAVE WRITTEN YOU A LETTER FOR EVERY BIG DAY.',
     'THIS IS THE LAST ONE FOR NOW, BUT I WILL KEEP WATCHING THE SKY.',
@@ -52,7 +64,7 @@ function checkMail() {
   if (Save.stats.runs < 1) return 0;
   const days = daysBetween(firstDay(), dayKey());
   let n = 0;
-  for (const l of LETTERS) if (days >= l.day && !Save.mail.got.includes(l.id)) { Save.mail.got.push(l.id); n++; }
+  for (const l of LETTERS) if ((l.need ? l.need() : days >= l.day) && !Save.mail.got.includes(l.id)) { Save.mail.got.push(l.id); n++; }
   if (n) { checkMenus(); Save.write(); }
   return n;
 }
@@ -62,6 +74,7 @@ function giftText(g) {
   if (g.seeds) out.push('+' + g.seeds + ' STAR SEED' + (g.seeds > 1 ? 'S' : ''));
   if (g.trail) out.push('THE ' + TRAILS[g.trail].name + ' TRAIL');
   if (g.title) out.push('THE TITLE ' + g.title);
+  if (g.chips) out.push('+' + g.chips + ' STAR CHIPS');
   return out.join(', ');
 }
 function giveGift(g) {
@@ -69,6 +82,7 @@ function giveGift(g) {
   if (g.seeds) Save.seeds += g.seeds;
   if (g.trail && !Save.unl.trails.includes(g.trail)) { Save.unl.trails.push(g.trail); addBadge('wardrobe'); }
   if (g.title && !Save.unl.titles.includes(g.title)) { Save.unl.titles.push(g.title); addBadge('wardrobe'); }
+  if (g.chips) cas().chips += g.chips;
   Save.write();
 }
 // Reading a letter hands over its gift.
@@ -186,7 +200,7 @@ function drawLetter(l, fresh) {
   rect(x, y + h - 2, 256, 2, 'e');
   text(l.title, VW / 2, y + 8, '1', 0, 1);
   lines.forEach((t, i) => text(t, x + 14, y + 24 + i * 10, '0', 0));
-  text('- MISTER RIBBIT', x + 242, y + 26 + lines.length * 10, '1', 0, 2);
+  text('- ' + (l.from || 'MISTER RIBBIT'), x + 242, y + 26 + lines.length * 10, '1', 0, 2);
   const g = giftText(l.gift);
   text((fresh ? 'GIFT: ' : 'GIFT TAKEN: ') + g, VW / 2, y + h - 14, fresh ? 'R' : '3', 0, 1);
 }

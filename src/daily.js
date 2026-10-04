@@ -2,24 +2,33 @@
 // The Daily Star Run and the Weekly Challenge: one seed for everyone (from the UTC date or
 // ISO week), the same wand, starting items and modifiers, Garden upgrades switched off.
 // The first attempt of the day (or week) is the ranked one; later ones are practice.
-// A daily run is one land and its boss; the weekly is all three lands with two modifiers.
+// A daily run is one land and its boss; the weekly is three lands with two modifiers.
 
 // ---------- What today's and this week's runs are ----------
+// From these keys on the whole Star Road deals the lands (a daily: any land of the road, a
+// weekly: one land from each act); earlier keys keep the three classic lands, so old runs stay the same.
+const DAILY_ROAD_FROM = { daily: '2026-10-05', weekly: '2026-W41' };
+const actLands = (a) => [a.fixed].concat(a.fork, a.finale || []).filter(landLive);
 function dailySpec(kind, key) {
   key = key || (kind === 'weekly' ? utcWeek() : utcDay());
   const seed = hashSeed('star-garden', kind, key);
   return withSeed(seed, () => {
-    const land = kind === 'daily' ? grndi(0, CLASSIC_ROAD.length - 1) : 0;
+    // path: the lands walked; lvl: how far down the road it starts (starting items and hearts)
+    let path = CLASSIC_ROAD.slice(), land = 0, depth = 0, lvl = 0;
+    if (key < DAILY_ROAD_FROM[kind]) { if (kind === 'daily') land = depth = lvl = grndi(0, CLASSIC_ROAD.length - 1); }
+    else if (kind === 'daily') { lvl = grndi(0, ROAD.length - 1); path = [gpick(actLands(ROAD[lvl]))]; }
+    else path = ROAD.map(a => gpick(actLands(a)));
+    if (key >= DAILY_ROAD_FROM[kind]) land = LANDS.indexOf(LAND[path[0]]);
     const wand = gpick(WAND_IDS);
     let mods = gshuffle(Object.keys(MODS).filter(k => !MODS[k].trial && !MODS[k].event)).slice(0, kind === 'daily' ? 1 : 2);
     // the season's featured twist leads the weekly challenge; a full moon joins the daily run
     if (kind === 'weekly') { const f = seasonOfWeek(key).mod; mods = [f].concat(mods.filter(m => m !== f)).slice(0, 2); }
     else if (moonDay(key)) mods.push('moonlit');
     // later lands start a little stronger, since upgrades stay at home
-    const items = kind === 'daily' ? gshuffle(START_ITEMS.slice()).slice(0, 1 + land) : [gpick(START_ITEMS)];
+    const items = kind === 'daily' ? gshuffle(START_ITEMS.slice()).slice(0, 1 + lvl) : [gpick(START_ITEMS)];
     // the day's hero (any hero: a chance to try one before unlocking it)
     const hero = gpick(HERO_IDS);
-    return { kind, key, seed, land, wand, mods, items, hero };
+    return { kind, key, seed, land, path, depth, lvl, wand, mods, items, hero };
   });
 }
 const dailyRec = (kind) => (kind === 'weekly' ? Save.weekly : Save.daily);
@@ -46,11 +55,11 @@ function startDaily(kind, key) {
   Save.write();
   G.diff = 1;
   startRun('adv', [{ pid: 0, wand: D.wand, up: {}, name: Save.name, skin: Save.skin, hero: D.hero, aspect: 0 }], {
-    seed: D.seed, depth: D.land, path: CLASSIC_ROAD.slice(), mods: D.mods, daily: { kind, key: D.key, ranked, spec: D },
+    seed: D.seed, depth: D.depth, path: D.path.slice(), mods: D.mods, daily: { kind, key: D.key, ranked, spec: D },
   });
   const p = G.player;
   for (const id of D.items) giveItemQuiet(id, p);
-  if (kind === 'daily' && D.land) { p.maxHp += 2 * D.land; p.hp = p.maxHp; }
+  if (kind === 'daily' && D.lvl) { p.maxHp += 2 * D.lvl; p.hp = p.maxHp; }
   if (G.floorBanner) G.floorBanner.small = kind === 'weekly' ? 'WEEKLY CHALLENGE' : 'DAILY STAR RUN';
   G.banner = { title: (kind === 'weekly' ? 'WEEKLY CHALLENGE' : 'DAILY STAR RUN') + (ranked ? '' : ': PRACTICE'), sub: D.mods.map(m => MODS[m].name).join(' + ') + ': ' + MODS[D.mods[0]].desc, t: 3.2, icon: null };
   track('daily_start', { kind, key: D.key, ranked });
@@ -158,7 +167,7 @@ function drawDaily() {
   text(kind === 'weekly' ? 'WEEKLY CHALLENGE ' + D.key : 'DAILY STAR RUN ' + D.key, VW / 2, 47, 'c', 1, 1);
   // the run: land, wand, modifiers, starting items
   const x0 = VW / 2 - 138;
-  text(kind === 'weekly' ? 'ALL THREE LANDS' : THEMES[LANDS[D.land].theme].name, x0, 60, 'Y', 1);
+  text(kind === 'weekly' ? (D.key < DAILY_ROAD_FROM.weekly ? 'ALL THREE LANDS' : 'THREE LANDS, ONE FROM EACH ACT') : THEMES[LANDS[D.land].theme].name, x0, 60, 'Y', 1);
   drawS(S('wand_' + D.wand), x0, 70);
   text(WANDS[D.wand].name + '  ' + HEROES[D.hero].name, x0 + 22, 74, 'w', 1);
   let my = 90;

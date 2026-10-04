@@ -184,12 +184,14 @@ const PRIZES = [
   { id: 'back_moon', kind: 'back', v: 'moon', l1: 'MOON', l2: 'CARDS', price: 300, icon: 'cd_back_moon' },
   { id: 'back_frog', kind: 'back', v: 'frog', l1: 'FROG', l2: 'CARDS', price: 800, icon: 'cd_back_frog' },
   { id: 'back_gold', kind: 'back', v: 'gold', l1: 'GOLD', l2: 'CARDS', price: 2000, icon: 'cd_back_gold' },
+  { id: 'back_royal', kind: 'back', v: 'royal', l1: 'ROYAL', l2: 'CARDS', price: -1, icon: 'cd_back_royal' }, // won at Hold'em, never sold
   { id: 'charm', kind: 'charm', l1: 'LUCKY', l2: 'CHARM', price: 400, icon: 'sy_sun' },
   { id: 'title', kind: 'title', l1: 'LUCKY', l2: 'STAR', price: 2500, icon: 'sy_star' },
   { id: 'cab_plum', kind: 'cab', v: 'plum', l1: 'PLUM', l2: 'SLOT', price: 0 },
   { id: 'cab_mint', kind: 'cab', v: 'mint', l1: 'MINT', l2: 'SLOT', price: 600 },
   { id: 'cab_gold', kind: 'cab', v: 'gold', l1: 'GOLD', l2: 'SLOT', price: 1500 },
   { id: 'cat', kind: 'pet', l1: 'LUCKY', l2: 'CAT', price: 1200, icon: 'pet_cat_0' },
+  { id: 'robe', kind: 'robe', l1: 'VELVET', l2: 'ROBE', price: 1800, icon: 'cz_robe' },
   { id: 'minislot', kind: 'decor', l1: 'TOY', l2: 'SLOT', price: 900, icon: 'cz_minislot' },
   { id: 'coinfount', kind: 'decor', l1: 'COIN', l2: 'FOUNTAIN', price: 1500, icon: 'cz_fount' },
 ];
@@ -197,8 +199,10 @@ const PRIZE_DESC = {
   back: 'A NEW BACK FOR EVERY CARD IN THE HOUSE.', cab: 'A NEW COAT OF PAINT FOR THE STAR SLOT.',
   charm: '+25 COINS WHEN YOUR NEXT RUN STARTS.', title: 'A TITLE FOR YOUR NAME: LUCKY STAR.',
   pet: 'A PET THAT FOLLOWS YOU. PICK IT IN THE WARDROBE.', decor: 'A KEEPSAKE FOR YOUR GARDEN.',
+  robe: 'PLUM VELVET WITH GOLD TRIM. WEAR IT ON THE ROAD.',
 };
-const prizeOwned = (P) => P.price === 0 || (P.kind === 'title' ? Save.unl.titles.includes('LUCKY STAR') : P.kind === 'decor' ? Save.decor.includes(P.id) : cas().own.includes(P.id));
+const VELVET = () => ROBES.indexOf('VELVET');
+const prizeOwned = (P) => P.price === 0 || (P.kind === 'title' ? Save.unl.titles.includes('LUCKY STAR') : P.kind === 'decor' ? Save.decor.includes(P.id) : P.kind === 'robe' ? Save.unl.robes.includes(VELVET()) : cas().own.includes(P.id));
 const prizeInUse = (P) => (P.kind === 'back' && cas().back === P.v) || (P.kind === 'cab' && cas().cab === P.v);
 const PZ = { sel: 0, say: '' };
 function prizeUse(P) {
@@ -213,14 +217,16 @@ function prizeBuy(P) {
   if (P.kind === 'charm') c.charm++;
   else if (P.kind === 'title') { Save.unl.titles.push('LUCKY STAR'); addBadge('wardrobe'); }
   else if (P.kind === 'decor') Save.decor.push(P.id);
+  else if (P.kind === 'robe') { Save.unl.robes.push(VELVET()); addBadge('wardrobe'); }
   else c.own.push(P.id);
   if (P.kind === 'back' || P.kind === 'cab') prizeUse(P);
   Save.write();
   Audio_.sfx('item'); haptic('item');
   casBurst(PZ.x || VW / 2, PZ.y || 100, 8);
-  PZ.say = P.kind === 'decor' ? 'IT IS WAITING IN YOUR GARDEN!' : P.kind === 'pet' || P.kind === 'title' ? 'FIND IT IN THE WARDROBE!' : P.kind === 'charm' ? 'CHARMS: ' + c.charm : 'THANK YOU! RIBBIT!';
+  PZ.say = P.kind === 'decor' ? 'IT IS WAITING IN YOUR GARDEN!' : P.kind === 'pet' || P.kind === 'title' || P.kind === 'robe' ? 'FIND IT IN THE WARDROBE!' : P.kind === 'charm' ? 'CHARMS: ' + c.charm : 'THANK YOU! RIBBIT!';
 }
 function prizePick(P) {
+  if (P.price < 0 && !prizeOwned(P)) { openModal({ title: P.l1 + ' ' + P.l2, icon: 'icon_chip', lines: ['NOT FOR SALE: WIN A HOLD\'EM TABLE', 'IN THE VIP LOUNGE AND IT IS YOURS.'], buttons: [{ label: 'OK' }] }); return; }
   if (prizeOwned(P) && P.kind !== 'charm') {
     if (P.kind === 'back' || P.kind === 'cab') { if (!prizeInUse(P)) prizeUse(P); return; }
     Audio_.sfx('deny'); PZ.say = 'YOU HAVE THAT ONE ALREADY!'; return;
@@ -231,7 +237,7 @@ function prizePick(P) {
     buttons: [{ label: 'BUY', col: 'h', fn: () => prizeBuy(P) }, { label: 'NOT NOW' }],
   });
 }
-const prizeAt = (i) => ({ x: 37 + (i % 6) * 52, y: 28 + Math.floor(i / 6) * 74 });
+const prizeAt = (i) => ({ x: 24 + (i % 7) * 48, y: 28 + Math.floor(i / 7) * 74 });
 // A slot cabinet in miniature, in the paint's own colours.
 function drawMiniCab(x, y, v) {
   const [p, P, q] = SLOT_FRAME[v === 'plum' ? 'classic' : v];
@@ -251,7 +257,7 @@ CAS_GAMES.prize = {
     casTop(this, false);
     PRIZES.forEach((P, i) => {
       const { x, y } = prizeAt(i);
-      if (cbtn('pz' + i, x, y, 50, 70, '', { col: prizeInUse(P) ? 'O' : '2', hi: prizeInUse(P) ? 'Y' : '3', lo: prizeInUse(P) ? 'n' : '1' })) { PZ.sel = i; PZ.x = x + 25; PZ.y = y + 30; prizePick(P); }
+      if (cbtn('pz' + i, x, y, 46, 70, '', { col: prizeInUse(P) ? 'O' : '2', hi: prizeInUse(P) ? 'Y' : '3', lo: prizeInUse(P) ? 'n' : '1' })) { PZ.sel = i; PZ.x = x + 23; PZ.y = y + 30; prizePick(P); }
       if (CB.focus === 'pz' + i) PZ.sel = i;
     });
   },
@@ -260,13 +266,13 @@ CAS_GAMES.prize = {
     drawCasTop(this);
     drawBtns();
     PRIZES.forEach((P, i) => {
-      const { x, y } = prizeAt(i), mx = x + 25, own = prizeOwned(P) && P.kind !== 'charm';
+      const { x, y } = prizeAt(i), mx = x + 23, own = prizeOwned(P) && P.kind !== 'charm';
       if (P.icon) { const s = S(P.icon); drawS(s, mx - (s.w >> 1), y + 38 - s.h); }
       else drawMiniCab(mx - 9, y + 11, P.v);
       text(P.l1, mx, y + 42, 'w', 1, 1);
       text(P.l2, mx, y + 51, 'w', 1, 1);
-      text(prizeInUse(P) ? 'IN USE' : own ? 'OWNED' : String(P.price), mx, y + 61, prizeInUse(P) ? 'w' : own ? 'c' : 'Y', own && !prizeInUse(P) ? 0 : 1, 1);
-      if (P.kind === 'charm' && cas().charm) text('X' + cas().charm, x + 46, y + 4, 'Y', 2, 2);
+      text(prizeInUse(P) ? 'IN USE' : own ? 'OWNED' : P.price < 0 ? 'WIN IT' : String(P.price), mx, y + 61, prizeInUse(P) ? 'w' : own ? 'c' : 'Y', own && !prizeInUse(P) ? 0 : 1, 1);
+      if (P.kind === 'charm' && cas().charm) text('X' + cas().charm, x + 42, y + 4, 'Y', 2, 2);
     });
     // the frog behind its counter, with the cat on top
     const t = CAS.t, P = PRIZES[PZ.sel];

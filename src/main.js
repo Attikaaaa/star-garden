@@ -65,7 +65,7 @@ function startRun(mode, roster, opts) {
   if (mode === 'adv' && !NET.role && !G.daily) clearRun();
   if (mode === 'arena' && !NET.role) clearArena();
   G.mode = mode;
-  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), quick: !!opts.quick, span: opts.span || null, bow: opts.bow || null, duel: !!opts.duel, path: opts.path || roadPath() };
+  G.run = { vault: 0, keep: 0, seed: opts.seed || newSeed(), plus: !!opts.plus, quick: !!opts.quick, span: opts.span || null, bow: opts.bow || null, duel: !!opts.duel, path: opts.path || roadPath() };
   // Star Trials stack their twists (solo runs)
   G.trial = G.run.trial = !NET.role && opts.trial ? opts.trial : 0;
   setMods((opts.mods || []).concat(trialMods(G.trial)));
@@ -99,6 +99,8 @@ function loadFloor(depth) {
   enterRoom(G.floor.start, null);
   placeHeroes(192, 128, 'u');
   arriveBoon(depth);
+  for (const p of G.players) if (p.wstar && !p.dead) wishBless(p); // WISH STAR (moon.js)
+  if (G.run.plus) plusAct(depth);
   if (teamHas('starmap')) for (const r of G.floor.rooms) r.seen = true;
   if (depth === 0 && tutNeeded()) startTutorial(G.room);
   saveRun();
@@ -118,6 +120,7 @@ function nextFloor() {
     G.won = true; G.warp = null;
     Audio_.stop(); Audio_.sfx('win');
     saveBest(); noteCoins();
+    if (!G.run.quick) note('actwin', G.stats.time);
     note('end', runSummary(true));
     clearRun();
     setState('win');
@@ -145,6 +148,8 @@ function nextFloor() {
     Audio_.stop(); Audio_.sfx('win');
     noteCoins();
     noteTeam('win', { diff: G.diff, team: G.players.length > 1, time: G.stats.time, mode: G.mode });
+    // the Night Bloom ends the road (solo and couch): its ending, then the Star Well if it is open
+    if (G.floor.land.id === 'moon' && !NET.role && !G.run.span) { startRoadEnding(); return; }
     // seven Big Stars: the way down into the Star Well opens
     if (wellOpen()) { enterWell(); return; }
     noteTeam('end', runSummary(true));
@@ -222,7 +227,7 @@ function startBoss(b) {
   G.bossT = G.stats.time;
   noteTeam('bossstart');
   G.cine = { t: 0, skip: cnt('bt:' + b) > 1 };
-  Audio_.play('boss'); Audio_.sfx('roar'); hapticAll('roar');
+  Audio_.play(G.floor.land.bossSong || 'boss'); Audio_.sfx('roar'); hapticAll('roar');
 }
 
 function stockRoom(room) {
@@ -240,18 +245,18 @@ function stockRoom(room) {
   if (room.type === 'shop') {
     room.props.push({ kind: 'rug', x: 192, y: 132, t: 0 });
     room.props.push({ kind: 'frog', x: 192, y: 78, t: 0 });
-    const ids = itemPool(2);
-    addPedestal(room, 117, 138, 'hp', 4);
+    const ids = itemPool(2), d = G.mode === 'adv' ? powDepth() : 0;
+    addPedestal(room, 117, 138, 'hp', 4 + Math.floor(d / 3));
     addPedestal(room, 167, 138, grand() < 0.3 ? gpick(CHARM_IDS) : gpick(POTION_IDS), 0);
     const pot = room.props[room.props.length - 1];
     pot.price = POTIONS[pot.item].price;
-    ids.forEach((id, i) => addPedestal(room, 217 + i * 50, 138, id, 15));
+    ids.forEach((id, i) => addPedestal(room, 217 + i * 50, 138, id, 15 + d)); // the road pays more further down
   }
 }
 
 // bonus: extra enemies (challenge rooms, later waves). Elites and a rare golden slime spice rooms up.
 function spawnRoomEnemies(room, bonus) {
-  const land = G.floor.land, depth = G.floor.depth, crew = G.players.length, D = DIFF();
+  const land = G.floor.land, depth = powDepth(), crew = G.players.length, D = DIFF();
   const slots = room.slots.filter(s => G.players.every(p => Math.hypot(s[0] - p.x, s[1] - p.y) > 72));
   gshuffle(slots);
   const want = 3 + Math.min(depth, 5) + grndi(0, 1) + (room.dist >= 3 ? 1 : 0) + bonus * 2 + D.count + (crew - 1);
@@ -381,9 +386,10 @@ function giveBossReward() {
   for (let i = 0; i < 4; i++) spawnPickup('coin', 192 + grnd(-10, 10), 120);
   // the first win over each boss always teaches something new
   for (const p of G.players) maybeScroll(192 + grnd(-16, 16), 124, cnt('b:' + (G.floor.boss || G.floor.land.boss)) <= 1 ? 1 : 0.4);
-  if (campHere()) stockCamp(room);
+  const camp = campHere();
+  if (camp) stockCamp(room);
   Audio_.sfx('portal');
-  Audio_.play(G.floor.land.song);
+  Audio_.play(camp ? 'camp' : G.floor.land.song);
   saveRun();
 }
 
@@ -851,6 +857,7 @@ function renderWorld(ox, oy) {
   drawAmbient(ox, oy);
   drawShots(ox, oy);
   drawBolts(ox, oy);
+  drawWellArcs(ox, oy, G.room); // bending bullets show where they go
   drawEBullets(ox, oy);
   drawStarfall(ox, oy);
   drawParts(ox, oy);

@@ -51,7 +51,7 @@ function updateEBullets(dt) {
     }
     const pi = prismAt(room, b.x, b.y + 5);
     if (pi >= 0 && pi !== b.prism && b.prism < 0) { splitBullet(b, pi); continue; }
-    if (pi !== b.prism && solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
+    if ((pi < 0 || pi !== b.prism) && solidPx(room, b.x, b.y + 5, 'shot') || b.x < 8 || b.x > VW - 8) {
       // ECHO: every enemy bullet bounces off the first wall it meets
       if (!b.echo && modOn('echo')) {
         b.echo = true;
@@ -103,8 +103,8 @@ const EDEF = {
 };
 
 function spawnEnemy(type, x, y, opts) {
-  const d = EDEF[type], depth = G.floor.depth;
-  const hpMul = (d.boss ? 1 + depth * 0.3 : 1 + depth * 0.2) * DIFF().hp * crewHp(d.boss) * (d.boss && G.run && G.run.bow ? BOW_HP : 1);
+  const d = EDEF[type];
+  const hpMul = depthHp(d.boss) * DIFF().hp * crewHp(d.boss) * (d.boss && G.run && G.run.bow ? BOW_HP : 1);
   const e = {
     type, x, y, hp: d.hp * hpMul, maxHp: d.hp * hpMul, r: d.r, h: d.h, hw: d.hw, hh: d.hh, sw: d.sw,
     fly: !!d.fly, still: !!d.still, boss: !!d.boss, flash: 0, flashCd: 0, kx: 0, ky: 0, z: 0, vz: 0,
@@ -125,6 +125,7 @@ function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.dead || e.spawnT > 0) return;
   if (affixBlock(e, fx, fy)) return;
   if (e.stag > 0) dmg *= 1.5;
+  if (e.sh) dmg *= 0.25; // the Riddle Sphinx's sun shield
   e.hp -= dmg; e.hurtAt = G.time;
   if (e.boss) addCharge(own, dmg * 0.004 / crewHp(true));
   if (e.type === 'gold' && e.drops < 6 && e.hp > 0) { e.drops++; spawnPickup('coin', e.x, e.y - 4); }
@@ -608,6 +609,7 @@ function lane(e, p, len) { e.la = Math.atan2(p.y - e.y, p.x - e.x); G.markers.pu
 const crabGap = (e) => e.hp < e.maxHp * 0.5 ? 0.6 : 0.85;
 // Falling crystals (golem), rocks and clods (mayor): telegraph ring, then shatter into bullets.
 // kind 'zone' is only a warning ring; fall '' drops nothing (a burst from below).
+const MARK_HOT = new Set(['agolem', 'tongbat', 'hsprite', 'dragon', 'anvil']); // the Ember Forge's: they land in sparks
 function updateMarkers(dt) {
   const m = G.markers;
   for (let i = m.length - 1; i >= 0; i--) {
@@ -631,8 +633,8 @@ function updateMarkers(dt) {
     }
     if (k.t <= 0 && k.kind) { m[i] = m[m.length - 1]; m.pop(); continue; }
     if (k.t <= 0) {
-      ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', pking: 'pseed', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan', whale: 'rain' }[k.src] || 'shard', grand());
-      burst(k.x, k.y - 4, 10, k.src === 'bomber' ? ['P', 'q', 'w'] : k.src === 'castle' ? ['a', 'A', 'e'] : ['c', 'C', 'w'], 90, 0.4, { g: 150 });
+      if (k.n !== 0) ring(k.x, k.y - 4, k.n || 5, 62, { cmoth: 'dust', nmoth: 'nstar', mayor: 'clod', pking: 'pseed', geode: 'geode', bomber: 'pink', castle: 'sand', kiteray: 'cyan', whale: 'rain', snowman: 'snow', cub: 'snow', yeti: 'yball', fqueen: 'ice', agolem: 'spark', tongbat: 'cinder', hsprite: 'spark', dragon: 'ember', manta: 'glow', angler: 'glow', kraken: 'dink', mrabbit: 'mstar', lbunny: 'mstar', nbloom: 'petal' }[k.src] || 'shard', grand());
+      burst(k.x, k.y - 4, 10, k.src === 'bomber' ? ['P', 'q', 'w'] : k.src === 'castle' ? ['a', 'A', 'e'] : MARK_HOT.has(k.src) ? ['O', 'y', 'o'] : ['c', 'C', 'w'], 90, 0.4, { g: 150 });
       G.shake = Math.max(G.shake, 2);
       Audio_.sfx('brk');
       for (const p of G.players) if (alive(p) && Math.hypot(p.x - k.x, (p.y - k.y) * 1.6) < 10) hurtPlayer(p, 1, k.src || 'golem');
@@ -643,7 +645,7 @@ function updateMarkers(dt) {
 // The Geode Spider's web lines (sideways at y, or upright at x when a) and its beam, which
 // rocks stop. Shared with net.js, where a client judges its own hero.
 // a lightning bolt and the charged tile it leaves (the hero's feet in that tile)
-const zapHit = (k, p) => Math.abs(p.x - k.x) < 8 && Math.abs(p.y - 1 - k.y) < 8;
+const zapHit = (k, p) => !(k.h && k.max - k.t < k.h) && !(p.mitts && k.src === 'barrel') && Math.abs(p.x - k.x) < (k.w || 8) && Math.abs(p.y - 1 - k.y) < (k.w || 8); // OVEN MITTS: barrels; w: a wider reach, so no seam between tiles
 const webHit = (k, p) => Math.abs(k.a ? p.x - k.x : p.y - k.y) < 6;
 function beamLen(k) {
   let d = 8;
@@ -688,6 +690,8 @@ function drawMarkers(ox, oy) {
 // blinking out over the last half second.
 function drawZap(k, ox, oy) {
   if (k.c === 'fire') { drawFlame(k, ox, oy); return; }
+  if (k.c === 'crayon') { drawCrayon(k, ox, oy); return; }
+  if (k.c === 'key') { drawKeyTile(k, ox, oy); return; }
   const x = Math.round(ox + k.x), y = Math.round(oy + k.y), age = k.max - k.t;
   if (age < 0.14) {
     // a storm of quiet bolts: only one in seven comes down from the sky, every tile flashes

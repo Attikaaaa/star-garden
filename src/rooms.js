@@ -13,6 +13,20 @@ function addSpecialRooms(list, at, add, depth, land) {
   if (land.id === 'cloud' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'slide'; }
   // the Lantern Woods hold one Firefly Jar
   if (land.id === 'lantern' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'jar'; }
+  // the Toy Attic holds one Dollhouse
+  if (land.id === 'toy' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'doll'; }
+  // the Snowglobe holds one Skating Rink
+  if (land.id === 'snow' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'rink'; }
+  // the Sun Temple holds one Sun Beam
+  if (land.id === 'sun' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'sunbeam'; }
+  // the Story Library holds one Choose Your Path
+  if (land.id === 'library' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'books'; }
+  // the Ember Forge holds one Quench Room
+  if (land.id === 'forge' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'quench'; }
+  // the Glow Deep holds one Pearl Room
+  if (land.id === 'deep' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'pearlroom'; }
+  // the Moon Garden holds one Wishing Pond
+  if (land.id === 'moon' && !G.first) { const s = list.find(r => r.type === 'normal' && r.dist >= 1); if (s) s.type = 'pond'; }
   if (WARDENS[land.id] && !G.first) {
     let w = list.find(r => r.type === 'normal' && Object.keys(r.doors).length === 1 && r.dist >= 2);
     if (!w) {
@@ -78,6 +92,13 @@ function stockSpecial(room) {
   else if (t === 'gamble') room.props.push({ kind: 'gfrog', x: 192, y: 110, t: 0, plays: 0 });
   else if (t === 'slide') slideStock(room);
   else if (t === 'jar') jarStock(room);
+  else if (t === 'doll') dollStock(room);
+  else if (t === 'rink') rinkStock(room);
+  else if (t === 'sunbeam') beamStock(room);
+  else if (t === 'books') booksStock(room);
+  else if (t === 'quench') quenchStock(room);
+  else if (t === 'pearlroom') pearlStock(room);
+  else if (t === 'pond') pondStock(room);
   else if (t === 'rescue') { const [x, y] = freeSpot(room); room.props.push({ kind: 'cage', x, y, t: 0, open: false, critter: nextCritter() }); }
   else if (t === 'vault') {
     const ids = itemPool(Math.min(3, 1 + G.players.length));
@@ -120,7 +141,7 @@ const CRITTERS = { chick: 'CHICK', hedgehog: 'HEDGEHOG', duck: 'DUCKLING' };
 function nextCritter() { const left = Object.keys(CRITTERS).filter(c => !Save.critters.includes(c)); return left.length ? gpick(left) : gpick(Object.keys(CRITTERS)); }
 
 // ---------- Talking to the special props ----------
-const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp', 'slide', 'jar']);
+const ROOM_PROPS = new Set(['bless', 'fountain', 'gfrog', 'cage', 'bigstar', 'camp', 'slide', 'jar', 'dhouse', 'drawer', 'rink', 'sunalt', 'lbook', 'quench', 'gclam', 'wpond']);
 // Returns true when the prop was one of ours.
 function roomInteract(o, p) {
   const room = G.room;
@@ -138,6 +159,13 @@ function roomInteract(o, p) {
   if (o.kind === 'camp') { restAtCamp(o, p); return true; }
   if (o.kind === 'slide') { slideStart(o, p); return true; }
   if (o.kind === 'jar') { jarStart(o, p); return true; }
+  if (o.kind === 'dhouse' || o.kind === 'drawer') { dollInteract(o, p); return true; }
+  if (o.kind === 'rink') { rinkStart(o, p); return true; }
+  if (o.kind === 'sunalt') { say(p, o.open ? 'THE SUN SHINES ON IT' : 'BRING THE SUNBEAM HERE'); return true; }
+  if (o.kind === 'lbook') { bookRead(o, p); return true; }
+  if (o.kind === 'quench') { quenchUse(o, p); return true; }
+  if (o.kind === 'wpond') { pondUse(o, p); return true; }
+  if (o.kind === 'gclam') { say(p, o.done ? 'IT GAVE ITS PEARL' : 'SHOOT IT WHEN IT OPENS!'); return true; }
   if (o.kind === 'fountain') {
     if (o.used) { say(p, 'THE FOUNTAIN IS DRY'); Audio_.sfx('deny'); return true; }
     o.used = true;
@@ -191,6 +219,14 @@ function roomPropTip(o) {
   if (o.kind === 'gfrog') return ['THE LUCKY FROG', o.plays >= 3 ? 'NO MORE GAMES TODAY!' : 'A GAME? 8 COINS!', 'PLAY'];
   if (o.kind === 'slide') return ['A RAINBOW SLIDE', o.done ? 'WHAT A RIDE!' : 'RIDE IT AND GRAB THE COINS', 'RIDE'];
   if (o.kind === 'jar') return ['A FIREFLY JAR', o.done ? (o.got >= JAR_N ? 'THE JAR IS FULL!' : 'THEY GOT AWAY...') : 'CATCH 10 FIREFLIES IN 30 SECONDS', 'OPEN'];
+  if (o.kind === 'dhouse') return ['THE DOLLHOUSE', 'A TINY SHOP, RUN BY A DOLL', 'WAVE'];
+  if (o.kind === 'lbook') return [LIB_STORIES[o.story][0], o.shut ? 'THIS BOOK IS SHUT' : o.done ? 'THE END' : LIB_STORIES[o.story][1], o.shut || o.done ? '' : 'READ'];
+  if (o.kind === 'quench') return [QUENCH[o.q].title, QUENCH[o.q].desc, 'DIP'];
+  if (o.kind === 'wpond') return ['A WISHING POND', o.used ? 'THE POND IS STILL' : 'THROW IN 5 COINS AND MAKE A WISH', o.used ? '' : 'WISH'];
+  if (o.kind === 'gclam') return ['A GIANT CLAM', o.done ? 'IT GAVE ITS PEARL' : 'HIT IT WHILE IT IS OPEN, 4 TIMES IN A ROW', ''];
+  if (o.kind === 'sunalt') return ['A SUN ALTAR', o.open ? 'THE SUN SHINES ON IT' : 'TURN THE MIRRORS: SHOOT THEIR BACKS', ''];
+  if (o.kind === 'rink') return ['A SKATING RINK', o.done ? 'WHAT A SKATE!' : 'GLIDE THROUGH 8 FLAGS IN 25 SECONDS', 'SKATE'];
+  if (o.kind === 'drawer') return ['A LITTLE DRAWER', o.open ? 'EMPTY NOW' : 'SOMETHING RATTLES INSIDE', 'OPEN'];
   if (o.kind === 'cage') return ['A CRITTER IN A CAGE!', G.room.cleared ? 'SET IT FREE' : 'DEFEAT THE GUARDS FIRST', 'OPEN'];
   return ['BIG STAR', 'RETURN A BIG STAR TO THE SKY', 'TAKE'];
 }
@@ -257,6 +293,13 @@ function drawRoomProp(o, ox, oy) {
     return true;
   }
   if (o.kind === 'jar') { drawJar(o, x, y); return true; }
+  if (o.kind === 'dhouse' || o.kind === 'drawer') { drawDoll(o, x, y); return true; }
+  if (o.kind === 'rink') { drawRink(o, x, y); return true; }
+  if (o.kind === 'sunalt') { drawAltar(o, x, y); return true; }
+  if (o.kind === 'lbook') { drawLectern(o, x, y); return true; }
+  if (o.kind === 'quench') { drawQuench(o, x, y); return true; }
+  if (o.kind === 'gclam') { drawGclam(o, x, y); return true; }
+  if (o.kind === 'wpond') { drawPond(o, x, y); return true; }
   if (o.kind === 'bigstar') {
     const bob = Math.round(Math.sin(o.t * 2) * 2);
     shadow(x, y, 14);

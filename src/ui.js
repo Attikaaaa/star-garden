@@ -28,7 +28,7 @@ function drawHUD() {
   const p = G.player;
   hudOn();                           // the corner HUD has its own, finer canvas on desktop
   ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins, meter and belt hug the screen corner
-  const hearts = Math.ceil(p.maxHp / 2);
+  const hearts = Math.min(20, Math.ceil(p.maxHp / 2)); // two rows at most; items cap maxHp at 20 anyway
   const low = p.hp <= 2 && p.maxHp > 2 && alive(p), beat = low && (G.beatT || 0) > 0.95;
   const flash = G.hud.heartT > 0 && Math.floor(G.hud.heartT * 20) % 2 ? 2 : 0;
   for (let i = 0; i < hearts; i++) {
@@ -348,18 +348,16 @@ function titleMenu(items) {
 }
 function drawTitleBg() {
   const t = G.time;
-  const fl = ['floor_0@meadow', 'floor_1@meadow', 'floor_3@meadow', 'floor_2@meadow'];
   const scroll = Math.floor(t * 8) % 16;
   const cx0 = Math.floor(-SCR.ox / 16) - 2, cx1 = Math.ceil((SCR.w - SCR.ox) / 16) + 1;
   for (let y = Math.floor(-SCR.oy / 16) - 1; y < Math.ceil((SCR.h - SCR.oy) / 16) + 1; y++) for (let x = cx0; x < cx1; x++) {
-    const h = hash(x - Math.floor(t * 8 / 16), y, 7) % 100;
-    drawS(S(fl[h < 60 ? 0 : h < 80 ? 1 : h < 90 ? 2 : 3]), x * 16 + scroll, y * 16);
+    drawS(S(floorTile(x - Math.floor(t * 8 / 16), y, 7) + '@meadow'), x * 16 + scroll, y * 16);
   }
   drawAmbient(0, 0);
   dim(0.25);
   for (let x = cx0; x < cx1; x++) {
     for (let y = 8; y > -SCR.oy - 16; y -= 16) drawS(S('cap@meadow'), x * 16, y);
-    drawS(S('face_' + (((x % 5) + 5) % 5 === 2 ? 1 : 0) + '@meadow'), x * 16, 24);
+    drawS(S(faceTile(x, 7) + '@meadow'), x * 16, 24);
   }
   rect(-SCR.ox, 40, SCR.w, 3, SHADOW);
   const logo = S('logo');
@@ -386,8 +384,13 @@ function drawTitle() {
   drawMenu(items, TITLE_Y, TITLE_GAP, undefined, at);
   drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it], at);
   const gi = items.indexOf('THE GARDEN'), vs = String(Save.vault);
-  // THE GARDEN shows its vault on the right, so its NEW sits on the left
-  if (gi >= 0 && hubBadge() && Math.floor(G.time * 3) % 3) text('NEW', titleItemX(items, gi) - textW('THE GARDEN') / 2 - (G.menuSel === gi ? 16 : 8) - textW('NEW'), titleItemY(items, gi), 'P', 2);
+  // THE GARDEN shows its vault on the right, so its NEW sits on the left; when the left column's
+  // item on the same row has its own NEW, the two blink in turn so they never read as NEWNEW
+  if (gi >= 0 && hubBadge()) {
+    const gx = titleItemX(items, gi), gy = titleItemY(items, gi), off = G.menuSel === gi ? 16 : 8, ph = Math.floor(G.time * 3) % 3;
+    const twin = Save.vault && items.some((it, i) => i < titleCols(items) && titleItemY(items, i) === gy && TITLE_BADGE[it] && hasBadge(TITLE_BADGE[it]));
+    if (twin ? ph === 0 : ph) text('NEW', Save.vault ? gx - textW('THE GARDEN') / 2 - off - textW('NEW') : gx + textW('THE GARDEN') / 2 + off, gy, 'P', 2);
+  }
   if (gi >= 0 && Save.vault) {
     const x = titleItemX(items, gi) + textW('THE GARDEN') / 2 + 10 + (G.menuSel === gi ? 6 : 0), y = titleItemY(items, gi);
     drawS(S('coin_0'), x, y - 1);
@@ -421,6 +424,7 @@ function settingsRows() {
   if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
   rows.push(['assist', 'ASSIST MODE', s.assist ? 'ON' : 'OFF'], ['cb', 'BULLET SHAPES', s.cb ? 'ON' : 'OFF']);
   if (Save.flags.woods) rows.push(['bright', 'BRIGHT WOODS', s.bright ? 'ON' : 'OFF']);
+  if (Save.flags.toy) rows.push(['metro', 'BEAT CLICK', s.metro ? 'ON' : 'OFF']);
   if (IS_TOUCH) rows.push(['lefty', 'LEFT-HANDED', s.lefty ? 'ON' : 'OFF']);
   else rows.push(['keys', 'KEYS', '>']);
   if (Save.stats.runs > 0) rows.push(['casino', 'CASINO', s.noCasino ? 'HIDDEN' : 'SHOWN']);
@@ -429,7 +433,7 @@ function settingsRows() {
   return rows;
 }
 const setGap = (rows) => (rows.length > 10 ? 10 : rows.length > 9 ? 11 : rows.length > 7 ? 13 : 16);
-const SET_HELP = { assist: 'A SLOWER GAME, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN', bright: 'LIGHTS UP THE LANTERN WOODS' };
+const SET_HELP = { shake: 'ALSO THE FLASHES AND THE PAGE TURNS', assist: 'A SLOWER GAME AND BEAT, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN', bright: 'LIGHTS UP THE LANTERN WOODS', metro: 'A SOFT TICK ON EVERY BEAT OF THE TOY ATTIC' };
 function updateSettings() {
   const s = Save.settings, rows = settingsRows(), gap = setGap(rows);
   menuNav(rows.length);
@@ -446,7 +450,7 @@ function updateSettings() {
   } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
   else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
-  else if ((id === 'assist' || id === 'cb' || id === 'lefty' || id === 'bright') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
+  else if ((id === 'assist' || id === 'cb' || id === 'lefty' || id === 'bright' || id === 'metro') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
   else if (id === 'casino' && (dir || ok)) { s.noCasino = !s.noCasino; Audio_.sfx('select'); Save.write(); }
   else if (id === 'keys' && ok) { Audio_.sfx('confirm'); setState('keys'); }
   else if (id === 'share' && (dir || ok)) { setShare(!s.share); Audio_.sfx('select'); }

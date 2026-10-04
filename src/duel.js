@@ -5,9 +5,9 @@
 // ---------- Art ----------
 (function grinArt() {
   const o = { flip: true, flash: true };
-  // pose: 'idle' | 'bob' | 'walkA' | 'walkB' | 'grab' | 'throw' | 'hold'
+  // pose: 'idle' | 'bob' | 'walkA' | 'walkB' | 'grab' | 'throw' | 'hold' | 'die'
   const grin = (pose) => {
-    const bob = pose === 'bob' || pose === 'walkB' ? 1 : 0;
+    const bob = pose === 'bob' || pose === 'walkB' || pose === 'die' ? 1 : 0;
     const legs = pose === 'walkA' ? [[15, 38, 5, 8], [21, 37, 5, 8]] : pose === 'walkB' ? [[15, 37, 5, 8], [21, 38, 5, 8]] : [[15, 38, 5, 8], [21, 38, 5, 8]];
     const arms = {
       down: [{ e: [10, 30 + bob, 3, 6], ramp: 'xxXX', hi: false }, { e: [30, 30 + bob, 3, 6], ramp: 'xxXX', hi: false },
@@ -51,8 +51,17 @@
       uunuuunuuuuu
       u.uu.uuu.uu.
       ..u...u.....`);
-    // thick dark brows, squeezed shut laughing eyes, a light moustache, a wide grin
-    r = stamp(r, 14, 14 + y, `
+    // thick dark brows, squeezed shut laughing eyes, a light moustache, a wide grin (beaten: crossed eyes, a small 'o')
+    r = stamp(r, 14, 14 + y, pose === 'die' ? `
+      .0uu....uu0.
+      ............
+      .0.0....0.0.
+      ..0......0..
+      q0.0.kk.0.0q
+      ...nnnnnn...
+      .....00.....
+      ....0rr0....
+      .....00.....` : `
       .0uu....uu0.
       ............
       .000....000.
@@ -76,6 +85,7 @@
   def('grin_grab', grin('grab'), o);
   def('grin_throw', grin('throw'), o);
   def('grin_hold', grin('hold'), o);
+  def('grin_die', grin('die'), o);
   // a flip-flop, flying sole down and sole up
   def('slipper_0', autoOutline([
     '..........',

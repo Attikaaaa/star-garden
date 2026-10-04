@@ -56,8 +56,10 @@ function drawParts(ox, oy) {
 // Up to four heroes. G.player is the one this device controls; the others are driven by
 // the network (p.remote on the host). Each hero reads its controls from p.in.
 // Robes the player picks: sprite suffix, name and the colour of their name tag.
-const ROBES = ['SKY', 'ROSE', 'MINT', 'PLUM', 'SUN', 'CORAL', 'SEA', 'SNOW'].concat(MEME_SKINS.map(m => m.name));
-const SKIN = ROBES.map((r, k) => (k ? '#' + k : '')), TAG_COL = ['c', 'P', 'h', '3', 'Y', 'R', 'T', 'w'].concat(MEME_SKINS.map(m => m.tag));
+const ROBES = ['SKY', 'ROSE', 'MINT', 'PLUM', 'SUN', 'CORAL', 'SEA', 'SNOW'].concat(MEME_SKINS.map(m => m.name), LATE_ROBES.map(r => r.name));
+const SKIN = ROBES.map((r, k) => (k ? '#' + k : '')), TAG_COL = ['c', 'P', 'h', '3', 'Y', 'R', 'T', 'w'].concat(MEME_SKINS.map(m => m.tag), LATE_ROBES.map(r => r.tag));
+// the meme robes are free for everyone; the rest come from constellations or the prize counter
+const robeFree = (i) => i >= 8 && i < 8 + MEME_SKINS.length;
 const newInput = () => ({ mx: 0, my: 0, ax: 0, ay: 0, aim: false, pad: false, dash: false, star: false, belt: -1, use: false });
 function newPlayer(pid) {
   return {
@@ -138,7 +140,7 @@ function movePlayer(p, dt) {
   if (p.moving) { const l = Math.hypot(mx, my); p.dx = mx / l; p.dy = my / l; }
   if (I.dash && p.dashCool <= 0 && p.dashT <= 0 && !(p.hopT > 0)) {
     const mv = heroOf(p).move;
-    p.dashT = mv === 'leap' ? 0.3 : 0.2; p.dashCool = p.dashCd; p.inv = Math.max(p.inv, mv === 'leap' ? 0.4 : 0.28); p.dashN++;
+    p.dashT = (mv === 'leap' ? 0.3 : 0.2) * (p.mboots ? 1.3 : 1); p.dashCool = p.dashCd; // MOON BOOTS p.inv = Math.max(p.inv, mv === 'leap' ? 0.4 : 0.28); p.dashN++;
     if (p === G.player) note('roll');
     dust(p.x, p.y, 6, 8);
     Audio_.sfx(mv === 'blink' ? 'tele' : 'dash'); haptic('dash');
@@ -154,8 +156,11 @@ function movePlayer(p, dt) {
     p.dashT -= dt;
     const k = p.speed * (heroOf(p).move === 'leap' ? 2 : 2.6) * (p.buff.haste > 0 ? 1.15 : 1);
     vx = p.dx * k; vy = p.dy * k;
+    if (p.fins) { const d = driftAt(room, p.x, p.y); if (d.cx * p.dx + d.cy * p.dy > 0) { vx *= 1.5; vy *= 1.5; } } // FINS: with the current
     if (Math.random() < 0.6) part(p.x + rnd(-4, 4), p.y - rnd(0, 3), -vx * 0.1, -vy * 0.1, 0.3, 'w', { size: 2 });
-    p.mvx = p.mvy = 0; // a dash cancels a slide on ice
+    if (p.ctail) cometTail(p); // COMET TAIL (moon.js)
+    const gl = landMech(); // the Moon Garden: a dash glides on after it ends; elsewhere it cancels a slide on ice
+    if (gl && gl.glide) { p.mvx = vx * gl.glide(p); p.mvy = vy * gl.glide(p); } else p.mvx = p.mvy = 0;
   } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1), d = driftMove(room, p, mx * sp, my * sp, dt); vx = d[0]; vy = d[1]; }
 
   // Door assist: pushing into a doorway slides you into its opening.
@@ -278,7 +283,7 @@ function say(p, msg) { p.sayMsg = msg; p.sayT = 1.1; }
 
 const WAND_SFX = { wand: 'shoot', scatter: 'scatter', bubble: 'bubble', boomer: 'swish', chain: 'zap', comet: 'comet' };
 function playerShoot(p, ax, ay) {
-  const base = Math.atan2(ay, ax), dmg = dmgOf(p), w = p.wand;
+  const base = Math.atan2(ay, ax), dmg = dmgOf(p) * (p.wkey && onBeatNow() ? 1.2 : 1), w = p.wand; // WIND-UP KEY: on the beat
   if (w === 'scatter') {
     const n = Math.max(2, p.shots + WANDS.scatter.fan + (p.fanX || 0));
     for (let i = 0; i < n; i++) fireShot(p, base + (i / (n - 1) - 0.5) * 0.62 + grnd(-0.04, 0.04), dmg, grnd(0.85, 1.1));
@@ -297,6 +302,7 @@ function hurtPlayer(p, n, src) {
   if (!alive(p) || G.state === 'over' || G.state === 'win') return;
   if (p.buff.guard > 0) { part(p.x + rnd(-6, 6), p.y - rnd(4, 14), 0, -20, 0.3, null, { spr: 'sparkle', drag: 1 }); return; }
   if (p.inv > 0) return;
+  if (p.tshield && tinShield(p)) return;
   if (p.shieldUp) {
     p.shieldUp = false; p.inv = 0.8;
     burst(p.x, p.y - 8, 14, ['C', 'c', 'w'], 90, 0.5);
@@ -535,7 +541,7 @@ function updateShots(dt) {
     const mi = s.life > 0 && !s.ret ? mirrorAt(room, s.x, s.y + 4) : -1;
     if (mi >= 0) {
       const h = mirrorPass(room, s, mi, 4, px, py + 4);
-      if (h === 1) { Audio_.sfx('mirror'); s.hitList = null; }
+      if (h === 1) { Audio_.sfx('mirror'); s.hitList = null; if (s.own && s.own.bracelet && !s.shine) { s.shine = true; s.dmg *= 1.5; } }
       else if (h === 2) { mirrorTurn(room, mi); burst(s.x, s.y, 4, ['y', 'O'], 60, 0.2); s.life = 0; }
     }
     const pi = prismAt(room, s.x, s.y + 4);
@@ -711,7 +717,7 @@ function breakTile(room, c, r) {
   flowKey = -1;
   const x = c * 16 + 8, y = OY + r * 16 + 10;
   poof(x, y - 2);
-  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : G.floor.theme === 'lantern' ? ['o', 'O', 'y'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
+  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : G.floor.theme === 'lantern' ? ['o', 'O', 'y'] : G.floor.theme === 'toy' ? ['r', 'y', 'B'] : G.floor.theme === 'snow' ? ['r', 'y', 'w'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
   noteTeam('brk');
   if (!(room.fort && room.fort.includes(r * COLS + c)) && grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6); // a warden's sand walls pay nothing
@@ -820,8 +826,9 @@ function updatePickups(dt) {
     for (const p of G.players) {
       if (!alive(p)) continue;
       const d = Math.hypot(p.x - k.x, p.y - 3 - k.y);
-      if (p.magnet && !waits && d < 80 && d > 1) {
-        const pull = (80 - d) * 4 * dt + 40 * dt;
+      const reach = p.tongs ? 200 : p.glure ? 110 : p.magnet ? 80 : 0; // TONGS reach across the room
+      if (reach && (!waits || p.glure) && d < reach && d > 1) { // the GLOW LURE draws hearts and potions too
+        const pull = Math.min(d, (reach - d) * (p.tongs ? 1.6 : 4) * dt + 40 * dt);
         // the pull stops at water and rocks, so it never drags a pickup out of reach
         const nx = k.x + (p.x - k.x) / d * pull, ny = k.y + (p.y - 3 - k.y) / d * pull;
         if (!solidPx(room, nx, ny, 'enemy')) { k.x = nx; k.y = ny; }

@@ -14,7 +14,7 @@
 // broker too) and switch to it when it works, which is faster. If the direct link ever
 // drops, the messages simply go through the broker again.
 
-const NET_PROTO = 3;
+const NET_PROTO = 5; // 4: room tiles travel one char each (codes 10 and up); 5: the nine-land road, clients build rooms' mechanics
 const NET_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I mix-ups
 const NET_RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 const NET_TOPIC = 'stargarden/' + NET_PROTO + '/';
@@ -136,7 +136,7 @@ function mqttOpen(url, topic, onMsg, onState) {
         ws.send(mqPacket(0x82, [new Uint8Array([0, 1]), mqStr(topic), new Uint8Array([0])]));
         ping = setInterval(() => { if (ws.readyState === 1) ws.send(new Uint8Array([0xc0, 0])); }, 20000);
       } else if (type === 9) { clearTimeout(fail); M.up = true; onState(true); }
-      else if (type === 3) { const tl = (body[0] << 8) | body[1]; onMsg(_td.decode(body.subarray(2 + tl))); }
+      else if (type === 3) { const tl = (body[0] << 8) | body[1]; onMsg(_td.decode(body.subarray(2 + tl)), _td.decode(body.subarray(2, 2 + tl))); }
     }
     buf = b.slice(o);
   };
@@ -165,10 +165,15 @@ function hostRelays() {
 }
 function hostRelay(i) {
   const code = NET.code, base = NET_TOPIC + code;
-  const M = mqttOpen(NET_RELAYS[i], base + '/h', (payload) => {
+  // every protocol's topic (+), so a player on an older version hears why they cannot join
+  const M = mqttOpen(NET_RELAYS[i], 'stargarden/+/' + code + '/h', (payload, t) => {
     let d;
     try { d = JSON.parse(payload); } catch (e) { return; }
     if (!d || typeof d.f !== 'string' || !d.m) return;
+    if (t !== base + '/h') {
+      if (d.m.t === 'hello' && +t.split('/')[1] < NET_PROTO) M.pub(t.slice(0, -1) + 'c/' + d.f, JSON.stringify({ t: 'no', why: 'PLEASE RELOAD THE PAGE: NEW VERSION' }));
+      return;
+    }
     let L = NET.peers.find(q => q.cid === d.f);
     if (!L) {
       if (d.m.t !== 'hello' || NET.peers.length >= 8) return;
@@ -372,7 +377,8 @@ function netFloor() { if (NET.role === 'host') hostAll(floorMsg()); }
 function roomMsg(room) {
   const rooms = G.floor.rooms;
   return {
-    i: rooms.indexOf(room), tiles: Array.from(room.tiles).join(''), pits: room.pits, seed: room.seed, lay: room.lay, flip: room.flip,
+    // tiles: one char per tile, since mirrors, ice and lamps are 10 and up
+    i: rooms.indexOf(room), tiles: String.fromCharCode(...room.tiles.map(v => 48 + v)), pits: room.pits, seed: room.seed, lay: room.lay, flip: room.flip,
     sv: rooms.map(r => (r.seen ? 1 : 0) + (r.visited ? 2 : 0) + (r.cleared ? 4 : 0)).join(''),
   };
 }
@@ -466,7 +472,7 @@ function netHostTick(dt) {
     S: SHOTS.map(s => { const a = pack(s, SF); a.push(s.ps && s.own ? s.own.pid : -1); return a; }),
     B: liveBullets().map(b => pack(b, BF)),
     K: room.pickups.map(k => pack(k, KF)),
-    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall, m.len, m.h, m.q, m.r, m.c]),
+    M: G.markers.map(m => [r1(m.x), r1(m.y), r1(m.t), m.max, m.kind, m.a, m.fall, m.len, m.h, m.q, m.r, m.c, m.w]),
     H: G.hazards.map(h => [r1(h.x), r1(h.y), r1(h.life)]),
     T: G.turrets.map(t => [r1(t.x), r1(t.y), r1(t.life), r1(t.flash)]),
     L: BOLTS.map(b => [b.x0, b.y0, b.x1, b.y1, b.mx, b.my, b.t].map(r1)),
@@ -684,8 +690,9 @@ function clientFloor(m) {
 }
 function fillRoom(m) {
   const room = G.floor.rooms[m.i];
-  room.tiles = Uint8Array.from(m.tiles, c => +c);
+  room.tiles = Uint8Array.from(m.tiles, c => c.charCodeAt(0) - 48);
   room.pits = m.pits; room.seed = m.seed; room.lay = m.lay; room.flip = m.flip; room.dirty = true;
+  rebuildMech(room);
   [...m.sv].forEach((c, i) => { const r = G.floor.rooms[i]; r.seen = !!(+c & 1); r.visited = !!(+c & 2); if (r !== room || +c & 4) r.cleared = !!(+c & 4); });
   return room;
 }
@@ -829,7 +836,7 @@ function clientSnap(m) {
     unpack(a, BF, b); b.spr = S(b.key); b.life = 1; b.t = 0;
   }
   G.room.pickups = m.K.map(a => unpack(a, KF, {}));
-  G.markers = m.M.map(([x, y, t, max, kind, a, fall, len, h, q, r, c]) => ({ x, y, t, max, kind, a, fall, len, h, q, r, c }));
+  G.markers = m.M.map(([x, y, t, max, kind, a, fall, len, h, q, r, c, w]) => ({ x, y, t, max, kind, a, fall, len, h, q, r, c, w }));
   G.hazards = m.H.map(([x, y, life]) => ({ x, y, life }));
   G.turrets = m.T.map(([x, y, life, flash]) => ({ x, y, life, flash }));
   BOLTS.length = 0;
@@ -858,6 +865,9 @@ function clientSnap(m) {
       case 's': if (f[2] !== NET.me) Audio_.sfx(f[1]); break; // our own shots and hurts sound here already
       case 't': toast(f[1]); break;
       case 'h': case 'hap': haptic(f[1]); break;
+      case 'curl': if (G.room) pageCurl(G.room, f[1], f[2]); break; // the Story Library's page turns
+      case 'bpop': if (G.room) (G.room.bpop || (G.room.bpop = new Set())).add(f[1]); break; // a Glow Deep bubble was caught
+      case 'fold': if (G.room && PAGE_LAYOUTS[f[2]]) turnPage(G.room, PAGE_LAYOUTS[f[2]], f[1]); break;
     }
   }
 }
@@ -1021,9 +1031,11 @@ function clientHits(me) {
     if (!k.done && k.kind === 'bolt' && k.t <= 0.05 && zapHit(k, me)) { k.done = true; hit = true; break; }
     if (k.kind === 'zap' && zapHit(k, me)) { hit = true; break; }
   }
+  if (!hit) { const m = landMech(); if (m && m.hurts && m.hurts(G.room, me)) hit = true; } // the Ember Forge's runes
   if (!hit) return;
   sendR(NET.host, { t: 'hit', b: bullet });
   if (bullet && me.umbOpen) { me.umbOpen = false; me.inv = 0.5; NET.safeUntil = now + 500; umbrellaFx(me); return; } // the host's umbrella rule
+  if (bullet && me.erOpen) { me.erOpen = false; me.inv = 0.5; NET.safeUntil = now + 500; umbrellaFx(me); return; } // and the eraser's
   me.inv = 1.1; NET.safeUntil = now + 1100; // the host gives the same moment of safety
   if (!me.shieldUp) { NET.localHitT = performance.now(); me.hurtT = 0.35; YOU_FX.hurt(); Audio_.sfx('hurt'); burst(me.x, me.y - 8, 10, ['R', 'r', 'w'], 80, 0.5); }
 }

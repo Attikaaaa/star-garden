@@ -12,6 +12,7 @@ const QUEST_T = {
   nohit: { ns: [2, 3, 4], rew: [12, 16, 20], ev: 'room', ok: (q, a, b) => !!b, text: (q) => 'CLEAR ' + q.n + ' ROOMS WITHOUT GETTING HIT' },
   chal: { ns: [1, 2], rew: [12, 18], ev: 'chal', text: (q) => q.n > 1 ? 'WIN ' + q.n + ' CHALLENGE ROOMS' : 'WIN A CHALLENGE ROOM' },
   boss: { ns: [1, 2], rew: [14, 20], ev: 'boss', text: (q) => q.n > 1 ? 'DEFEAT ' + q.n + ' BOSSES' : 'DEFEAT A BOSS' },
+  nhboss: { ns: [1], rew: [18], ev: 'boss', ok: () => RUNLOG.bossHits === 0, need: () => cnt('b') >= 3, text: () => 'BEAT A BOSS WITHOUT GETTING HIT' },
   chest: { ns: [2, 3, 4], rew: [10, 14, 18], ev: 'chest', text: (q) => 'OPEN ' + q.n + ' CHESTS' },
   brk: { ns: [10, 15, 20], rew: [10, 12, 14], ev: 'brk', text: (q) => 'BREAK ' + q.n + ' BUSHES, BUCKETS OR VASES' },
   coins: { ns: [50, 80, 120], rew: [10, 14, 18], ev: 'coins', add: (a) => a, text: (q) => 'COLLECT ' + q.n + ' COINS' },
@@ -30,6 +31,10 @@ const QUEST_T = {
   win: { ns: [1], rew: [24], ev: 'win', need: () => Save.stats.wins > 0, text: () => 'WIN A RUN' },
   runs: { ns: [2, 3], rew: [10, 12], ev: 'start', text: (q) => 'PLAY ' + q.n + ' RUNS' },
   revive: { ns: [1], rew: [14], ev: 'revive', need: () => cnt('coop') > 0, text: () => 'HELP A FRIEND BACK UP' },
+  // one casino goal at most, and only for players who already visit the casino; nOf: the goal's size
+  casino: { ns: [1], rew: [10], ev: 'cas', need: () => casShown(), arg: () => gpick(['bjwin', 'corner', 'scr']), nOf: (a) => (a === 'bjwin' ? 3 : a === 'scr' ? 2 : 1),
+    ok: (q, a, b) => (q.a === 'scr' ? a === 'scr' && b === 'bet' : b === q.a),
+    text: (q) => (q.a === 'bjwin' ? 'WIN ' + q.n + ' HANDS OF BLACKJACK' : q.a === 'scr' ? 'SCRATCH ' + q.n + ' CARDS AT THE CASINO' : 'WIN A CORNER BET AT ROULETTE') },
 };
 const WEEKLY_T = {
   wk_kill: { n: 400, ev: 'kill', text: 'DEFEAT 400 FOES' },
@@ -60,7 +65,8 @@ function makeDailyQuests(day) {
     for (let tier = 0; out.length < 3 && ids.length; ) {
       const id = ids.shift(), T = QUEST_T[id], k = Math.min(tier, T.ns.length - 1);
       if (T.need && !T.need(T.ns[k])) continue;
-      out.push({ t: id, n: T.ns[k], rew: T.rew[k], a: T.arg ? T.arg() : null, p: 0, done: false });
+      const a = T.arg ? T.arg() : null;
+      out.push({ t: id, n: T.nOf ? T.nOf(a) : T.ns[k], rew: T.rew[k], a, p: 0, done: false });
       tier++;
     }
     return out;
@@ -93,7 +99,8 @@ function swapQuest(i) {
   const pool = Object.keys(QUEST_T).filter(id => !have.includes(id) && (!QUEST_T[id].need || QUEST_T[id].need(QUEST_T[id].ns[0])));
   if (!pool.length) return false;
   const id = pool[Math.floor(Math.random() * pool.length)], T = QUEST_T[id], k = Math.min(i, T.ns.length - 1);
-  Q.list[i] = { t: id, n: T.ns[k], rew: T.rew[k], a: T.arg ? withSeed(newSeed(), T.arg) : null, p: 0, done: false };
+  const a = T.arg ? withSeed(newSeed(), T.arg) : null;
+  Q.list[i] = { t: id, n: T.nOf ? T.nOf(a) : T.ns[k], rew: T.rew[k], a, p: 0, done: false };
   Q.swaps--;
   Save.write();
   return true;

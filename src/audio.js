@@ -91,6 +91,11 @@ const Audio_ = (() => {
     bubble() { const p = 1 + (Math.random() - 0.5) * 0.3; osc('triangle', 500 * p, 1100 * p, 0.05, 0.08); },
     crow() { osc('square', 520, 1180, 0.16, 0.07); osc('square', 1180, 760, 0.34, 0.07, 0.16); osc('triangle', 260, 590, 0.16, 0.06); },
     swish() { noise(0.16, 0.1, 1200, 'bandpass', 0, 3200); },
+    heat() { noise(0.3, 0.14, 700, 'lowpass', 0, 2400); osc('sawtooth', 120, 70, 0.22, 0.05); }, // the Ember Forge's runes erupt
+    anvil() { osc('square', 1760, 1700, 0.05, 0.08); osc('triangle', 2630, 2600, 0.35, 0.09); osc('triangle', 3520, 3500, 0.2, 0.05); noise(0.04, 0.1, 4000, 'highpass'); },
+    bubble() { osc('sine', 300, 900, 0.12, 0.12); osc('sine', 600, 1400, 0.06, 0.05, 0.05); }, // a Glow Deep bubble pops
+    chomp() { osc('square', 220, 60, 0.12, 0.12); noise(0.08, 0.14, 900, 'lowpass'); },
+    page() { noise(0.26, 0.1, 2600, 'bandpass', 0, 900); noise(0.1, 0.07, 4200, 'highpass', 0.16); }, // a page turns
     zap() { osc('square', 1600, 400, 0.07, 0.05); noise(0.05, 0.1, 5000, 'highpass'); },
     comet() { osc('p25', 300, 700, 0.14, 0.1); noise(0.12, 0.08, 900, 'lowpass'); },
     blast() { noise(0.25, 0.22, 700, 'lowpass', 0, 120); osc('triangle', 140, 50, 0.2, 0.2); },
@@ -142,7 +147,7 @@ const Audio_ = (() => {
   const CHORD = {
     C: ['C3', 'G3'], G: ['G2', 'D3'], Am: ['A2', 'E3'], F: ['F2', 'C3'], Em: ['E2', 'B2'], D: ['D3', 'A3'],
     Bm: ['B2', 'F#3'], A: ['A2', 'E3'], 'F#m': ['F#2', 'C#3'], FG: ['F2', 'G2'], CD: ['C3', 'D3'],
-    Dm: ['D3', 'A3'], Gm: ['G2', 'D3'], Bb: ['Bb2', 'F3'], E: ['E2', 'B2'],
+    Dm: ['D3', 'A3'], Gm: ['G2', 'D3'], Bb: ['Bb2', 'F3'], E: ['E2', 'B2'], B: ['B2', 'F#3'],
   };
   const SONGS = {
     meadow: {
@@ -187,6 +192,126 @@ const Audio_ = (() => {
         'C6 - . E6 D6 - C6 - A5 - G5 - E5 - . . D5 - E5 G5 A5 - C6 - D6 - - - . . . . ' +
         'E6 - D6 C6 A5 - C6 - D6 - E6 - G6 - E6 - D6 - C6 - A5 - G5 - A5 - - - . . . .',
     },
+    // the Toy Attic: a music box in C over a woodblock metronome (tick, tock), locked to the land's beat
+    toy: {
+      bpm: 90, wave: 'sine', celesta: true, sync: true, drum: 't . T . t . T .',
+      chords: 'C Am F G C Am Dm G F G Em Am F G C C',
+      lead: 'E5 - G5 - C6 - G5 - A5 - C6 - E6 - C6 - F5 - A5 - C6 - A5 G5 G5 - B5 - D6 - - - ' +
+        'E6 - D6 C6 G5 - E5 - A5 - E5 - C5 - . . D5 F5 A5 - D6 - C6 - B5 - G5 - D5 - . . ' +
+        'A5 - C6 - F6 - E6 D6 D6 - B5 - G5 - B5 - E6 - B5 - G5 - E5 - A5 - C6 - E6 - D6 C6 ' +
+        'C6 - A5 - F5 - A5 - B5 - D6 - G6 - F6 - E6 - C6 - G5 - E5 - C6 - - - . . . .',
+    },
+    // the Music Box Ballerina: a 3/4 waltz (oom-pah-pah), each bar two beats of the attic's clock
+    waltz: {
+      bpm: 135, wave: 'sine', celesta: true, sync: true, waltz: true, drum: 'k . t . t .',
+      chords: 'Am E Am Am Dm Am E Am F C G C Dm Am E Am',
+      lead: 'A5 - C6 - E6 - G#5 - B5 - E6 - A5 - E6 - C6 - A5 - - - . . D6 - F6 - A6 - E6 - C6 - A5 - ' +
+        'B5 - G#5 - E5 - A5 - - - . . A5 - C6 - F6 - G5 - C6 - E6 - D6 - B5 - G5 - E6 - D6 - C6 - ' +
+        'F6 - E6 - D6 - C6 - B5 - A5 - G#5 - B5 - E6 - A5 - - - . .',
+    },
+    // the Snowglobe: sleigh bells and a celesta in G, warm and slow
+    snow: {
+      bpm: 92, wave: 'sine', celesta: true, drum: 'k . j . s . j j',
+      chords: 'G Em C D G Em C D Em C G D C D G G',
+      lead: 'B5 - D6 - G6 - F#6 E6 D6 - B5 - G5 - . . C6 - E6 - G6 - E6 C6 A5 - - - F#5 - A5 - D6 - C6 B5 A5 - F#5 - D5 - . . ' +
+        'G5 - B5 - D6 - B5 G5 E5 - G5 - B5 - . . C6 - B5 - A5 - G5 - E5 - G5 - A5 - - - . . . . ' +
+        'E6 - D6 - B5 - D6 - E6 - G6 - E6 - D6 - C6 - B5 - A5 - C6 - E6 - D6 - C6 - A5 - ' +
+        'C6 - D6 - E6 - D6 - B5 - A5 - F#5 - A5 - G5 - B5 - D6 - B5 - G5 - - - . . . .',
+    },
+    // Yeti Yodel: E minor over a low choir, bells on the off-beats
+    yeti: {
+      bpm: 126, wave: 'triangle', choir: true, drum: 'k j s j k k s j',
+      chords: 'Em C G D Em C D Em',
+      lead: 'E5 - G5 - B5 - E6 - D6 B5 G5 - A5 - C6 - E6 - D6 C6 A5 - B5 - D6 - F#6 - E6 D6 B5 - G5 - E5 - . . E5 . ' +
+        'E6 - D6 - B5 - G5 - A5 - B5 - C6 - B5 - A5 - G5 - F#5 - A5 - B5 - - - E5 - G5 - B5 - E6 - - - . .',
+    },
+    // the Sun Temple: D Dorian (the bright B natural over Dm), a reedy pulse over hand drums
+    sun: {
+      bpm: 112, wave: 'p12', drum: 'k . t k s . t t',
+      chords: 'Dm C Dm G Dm C Am Dm F C G Dm Dm C G Dm',
+      lead: 'D5 - F5 - A5 - B5 A5 G5 - E5 - D5 - . . C5 - E5 - G5 - A5 G5 E5 - C5 - D5 - - - ' +
+        'A5 - C6 - D6 - C6 A5 B5 - G5 - D5 - . . A5 - G5 - F5 - E5 - C5 - E5 - D5 - - - . . ' +
+        'F5 - A5 - C6 - A5 F5 E5 - G5 - C6 - . . D6 - B5 - G5 - B5 D6 A5 - F5 - D5 - . . ' +
+        'D6 - C6 - A5 - G5 A5 E5 - G5 - B5 - . . A5 - F5 - D5 - E5 F5 D5 - - - . . . .',
+    },
+    // the Riddle Sphinx: D minor, fast drums and a low choir
+    sphinx: {
+      bpm: 140, wave: 'p25', choir: true, drum: 'k t s t k k s t',
+      chords: 'Dm Dm C Dm Bm C A Dm',
+      lead: 'D5 - F5 - A5 - D6 - C6 A5 G5 - A5 - . . D6 - C6 - A5 - F5 - G5 - E5 - C5 - E5 - D5 - - - . . ' +
+        'A5 - A5 - C6 - D6 - F6 - E6 D6 C6 - A5 - . . B5 - D6 - F#6 - E6 - C#6 - A5 - D6 - - - . . . .',
+    },
+    // the Story Library: A minor, a plucky harpsichord over pizzicato drums
+    library: {
+      bpm: 120, wave: 'p25', drum: 'k . h . s . h h',
+      chords: 'Am E Am G C G Am E F C Dm E Am G E Am',
+      lead: 'A5 - C6 - E6 - C6 A5 G#5 - B5 - E6 - . . A5 - C6 - E6 - A6 G6 F6 - E6 - D6 - B5 - ' +
+        'C6 - E6 - G6 - E6 C6 B5 - D6 - G6 - . . A5 - C6 - E6 - D6 C6 B5 - G#5 - E5 - - - ' +
+        'F5 - A5 - C6 - A5 F5 E5 - G5 - C6 - . . D5 - F5 - A5 - F5 D5 E5 - G#5 - B5 - . . ' +
+        'A5 - E6 - C6 - A5 E5 G5 - B5 - D6 - B5 G5 G#5 - B5 - E6 - D6 B5 A5 - - - . . . .',
+    },
+    // the Great Bookworm: A minor, driving, the harpsichord in a hurry
+    worm: {
+      bpm: 150, wave: 'p25', drum: 'k h s h k k s h', drive: true,
+      chords: 'Am Am F E Am Am Dm E',
+      lead: 'A5 C6 E6 C6 A5 C6 E6 A6 G6 E6 C6 A5 G5 A5 C6 E6 F5 A5 C6 F6 E6 C6 A5 F5 E5 G#5 B5 E6 D6 B5 G#5 E5 ' +
+        'A5 - C6 - E6 - A6 - G6 E6 C6 A5 E6 - - - D6 - F6 - A6 - F6 D6 B5 - G#5 - E5 - . .',
+    },
+    // the Ember Forge: E minor, a brassy saw lead over anvil hits, locked to the land's beat (the runes erupt on it)
+    forge: {
+      bpm: 140, wave: 'sawtooth', sync: true, drum: 'k a s a k k s a',
+      chords: 'Em Em C D Em Em Am B Em G C D Am C B B',
+      lead: 'E5 - G5 - B5 - G5 E5 F#5 - A5 - B5 - . . E5 - G5 - B5 - E6 - D6 B5 A5 - F#5 - D5 - . . ' +
+        'G5 - B5 - D6 - B5 G5 A5 - C6 - E6 - . . B5 - D#6 - F#6 - D#6 B5 B5 - - - . . . . ' +
+        'E6 - D6 - B5 - G5 E5 F#5 - G5 - A5 - . . C6 - B5 - A5 - G5 F#5 E5 - G5 - B5 - . . ' +
+        'A5 - C6 - E6 - C6 A5 B5 - D#6 - F#6 - D#6 B5 E5 - G5 - B5 - E6 - - - . . . .',
+    },
+    // the Forge Dragonling: E minor, fast and hot, anvils on every beat
+    dragon: {
+      bpm: 156, wave: 'sawtooth', drum: 'k a s a k a s a', drive: true,
+      chords: 'Em Em C B Em Em Am B',
+      lead: 'E5 G5 B5 G5 E5 G5 B5 E6 D6 B5 G5 E5 F#5 G5 A5 B5 C6 B5 A5 G5 C6 E6 D6 C6 B5 A5 G5 F#5 D#5 F#5 B5 D#6 ' +
+        'E6 - B5 - G5 - E5 - E6 D6 B5 G5 E6 - - - A5 - C6 - E6 - C6 A5 B5 - D#6 - B5 - . .',
+    },
+    // the Glow Deep: a glassy marimba over a slow sub, bubbles for hats (synced: the current turns on the bar)
+    deep: {
+      bpm: 100, wave: 'sine', sync: true, marimba: true, choir: true, drum: 'k . b . s . b .',
+      chords: 'Dm Dm Bb C Dm Dm Gm A Dm F Bb C Gm Bb A A',
+      lead: 'D5 . F5 . A5 . D6 . C6 . A5 . F5 . G5 . . . E5 . C5 . D5 . . . . . . . ' +
+        'F5 . A5 . C6 . F6 . E6 . C6 . A5 . Bb5 . . . G5 . E5 . C#5 . . . . . . . ' +
+        'A5 . D6 . F6 . D6 . C6 . A5 . C6 . F6 . D6 . Bb5 . F5 . D6 . C6 . . . E5 . . . ' +
+        'D6 . Bb5 . G5 . Bb5 . A5 . E5 . C#5 . E5 . A5 . . . . . . . D5 . . . . . . .',
+    },
+    // the Grand Anglerfish: the same sea, faster and darker
+    angler: {
+      bpm: 128, wave: 'p25', drum: 'k b s b k k s b', marimba: true,
+      chords: 'Dm Dm Bb A Dm Dm Gm A',
+      lead: 'D5 F5 A5 D6 C6 A5 F5 A5 Bb5 A5 G5 F5 E5 C#5 E5 A5 D6 - A5 - F5 - D5 - G5 Bb5 D6 Bb5 A5 E5 C#5 E5 ' +
+        'F5 - A5 - D6 - F6 - E6 D6 C6 A5 Bb5 - - - G5 - Bb5 - D6 - G6 - F6 E6 D6 C#6 A5 - - -',
+    },
+    // the Moon Garden: a music-box lullaby in three, a soft choir under it
+    moon: {
+      bpm: 108, wave: 'sine', celesta: true, bells: true, choir: true, waltz: true, drum: 'k . . t . .',
+      chords: 'F Dm Bb C F Am Bb C Dm Am Bb F Gm C F F',
+      lead: 'A5 - C6 - F6 - E6 - D6 - C6 - A5 - - - G5 - A5 - Bb5 - D6 - C6 - Bb5 - A5 - G5 - . . ' +
+        'F5 - A5 - C6 - A5 - F6 - E6 - D6 - - - C6 - Bb5 - A5 - G5 - A5 - C6 - F5 - - - . . . . ' +
+        'D6 - F6 - E6 - D6 - C6 - A5 - Bb5 - D6 - F6 - E6 - C6 - - - A5 - C6 - F6 - E6 - D6 - E6 - ' +
+        'C6 - Bb5 - A5 - G5 - F5 - G5 - A5 - - - C6 - Bb5 - G5 - E5 - F5 - - - - - - - . . . .',
+    },
+    // the Night Bloom: the lullaby grown big, bells on every bar
+    bloom: {
+      bpm: 132, wave: 'p25', celesta: true, bells: true, choir: true, drum: 'k t s t k k s t',
+      chords: 'Dm Bb F C Dm Bb Gm A',
+      lead: 'D5 F5 A5 D6 C6 A5 F5 A5 Bb5 D6 F6 D6 C6 A5 G5 E5 F5 A5 C6 F6 E6 C6 A5 C6 D6 - C6 - A5 - G5 - ' +
+        'A5 D6 F6 A6 G6 F6 E6 D6 Bb5 D6 F6 Bb6 A6 F6 D6 Bb5 G5 Bb5 D6 G6 F6 D6 Bb5 G5 A5 - C#6 - E6 - A6 -',
+    },
+    // the campfire between acts: a slow, warm lullaby with the fire crackling
+    camp: {
+      bpm: 76, wave: 'triangle', drum: 'k . . f . . f .',
+      chords: 'G Em C D G Em C G',
+      lead: 'D5 - G5 - B5 - A5 G5 E5 - - - . . . . C5 - E5 - G5 - E5 D5 D5 - - - . . . . ' +
+        'B4 - D5 - G5 - F#5 E5 C5 - E5 - D5 - . . G5 - B5 - A5 - F#5 - G5 - - - . . . .',
+    },
     // the Star Well: slow and starry
     well: {
       bpm: 104, wave: 'p12', drum: 'k . . h s . h .',
@@ -223,7 +348,8 @@ const Audio_ = (() => {
     const bass = [];
     for (const c of s.chords.split(' ')) {
       const [r, f] = CHORD[c];
-      if (s.drive) bass.push(r, r, f, r, r, f, r, f);
+      if (s.waltz) bass.push(r, '.', f, '.', f, '.'); // oom-pah-pah: six steps, three beats
+      else if (s.drive) bass.push(r, r, f, r, r, f, r, f);
       else if (c === 'FG' || c === 'CD') bass.push(r, '.', r, '.', f, '.', f, '.');
       else bass.push(r, '.', f, '.', r, '.', f, '.');
     }
@@ -232,10 +358,15 @@ const Audio_ = (() => {
   }
 
   let song = null, pendingSong = null, step = 0, nextT = 0, timer = null;
+  // A sync song keeps step s at s * dt on the shared clock (skyNow), so what foes march to is
+  // what you hear; it re-anchors when the clocks drift apart (a throttled tab, a new host offset).
+  const sdt = () => 60 / (song.bpm * (song.sync && typeof beatK === 'function' ? beatK() : 1)) / 2; // assist slows the beat (options.js)
+  function anchor(lead) { const dt = sdt(), now = skyNow(); step = Math.ceil((now + lead) / dt); nextT = ac.currentTime + step * dt - now; }
   function schedule() {
     if (!song) return;
-    const dt = 60 / song.bpm / 2;
-    if (nextT < ac.currentTime - 0.2) nextT = ac.currentTime + 0.05; // resumed after a throttled tab
+    const dt = sdt();
+    if (song.sync) { if (Math.abs(nextT - (ac.currentTime + step * dt - skyNow())) > 0.06) anchor(0.05); }
+    else if (nextT < ac.currentTime - 0.2) nextT = ac.currentTime + 0.05; // resumed after a throttled tab
     while (nextT < ac.currentTime + 0.12) {
       const i = step % song.len;
       const at = nextT - ac.currentTime;
@@ -245,17 +376,24 @@ const Audio_ = (() => {
         while (song.leadT[(i + len) % song.len] === '-' && len < 8) len++;
         const f = freq(n);
         osc(song.wave, f, f, dt * len * 0.95, 0.22, at, musBus);
+        if (song.marimba) osc('triangle', f * 4, f * 4, 0.035, 0.05, at, musBus); // the mallet's knock
         if (song.celesta) osc('triangle', f * 2, f * 2, dt * len * 0.6, 0.06, at, musBus); // the celesta's octave shimmer
         if (song.bells && i % 8 === 0) { osc('sine', f * 2, f * 2, 0.8, 0.09, at, musBus); osc('triangle', f * 4, f * 4, 0.2, 0.025, at, musBus); }
       }
       const b = song.bassT[i % song.bassT.length];
-      if (b !== '.') { const f = freq(b); osc('triangle', f, f, dt * 0.9, 0.5, at, musBus); }
+      if (b !== '.') { const f = freq(b); osc('triangle', f, f, dt * 0.9, 0.5, at, musBus); if (song.choir && i % 8 === 0) { osc('sine', f * 2, f * 2, dt * 8, 0.07, at, musBus); osc('sine', f * 3, f * 3, dt * 8, 0.04, at, musBus); } } // choir: a low held pad
       const d = song.drumT[i % song.drumT.length];
       if (d === 'k') { osc('triangle', 150, 45, 0.12, 0.55, at, musBus); }
       else if (d === 's') noise(0.1, 0.22, 2000, 'bandpass', at, 0, musBus);
       else if (d === 'h') noise(0.03, 0.1, 7000, 'highpass', at, 0, musBus);
       else if (d === 'o') { osc('sine', 392, 349, 0.28, 0.16, at, musBus); if (i % 32 === 0) osc('sine', 392, 330, 0.4, 0.12, at + 0.34, musBus); } // hoo, hoo-oo
+      else if (d === 't') osc('triangle', 1900, 1500, 0.03, 0.16, at, musBus); // woodblock tick
+      else if (d === 'T') osc('triangle', 1150, 900, 0.045, 0.16, at, musBus); // and tock
+      else if (d === 'j') for (let j = 0; j < 3; j++) noise(0.025, 0.07, 9000, 'highpass', at + j * 0.03, 0, musBus); // sleigh bells
+      else if (d === 'f') { noise(0.02, 0.07, 2600, 'bandpass', at, 0, musBus); if (i % 3 === 0) noise(0.015, 0.05, 4200, 'bandpass', at + 0.07, 0, musBus); } // the fire crackles
+      else if (d === 'b') osc('sine', 500 + (i % 7) * 60, 1300 + (i % 5) * 90, 0.06, 0.05, at, musBus); // a bubble
       else if (d === 'c') for (let j = 0; j < 3; j++) osc('sine', 4200, 4150, 0.018, 0.025, at + j * 0.04, musBus); // a cricket
+      else if (d === 'a') { osc('square', 1760, 1700, 0.05, 0.05, at, musBus); osc('triangle', 2630, 2600, 0.22, 0.05, at, musBus); osc('triangle', 3520, 3500, 0.12, 0.025, at, musBus); } // an anvil ring
       step++;
       nextT += dt;
     }
@@ -273,6 +411,7 @@ const Audio_ = (() => {
     const had = !!song;
     song = SONGS[name] || null;
     step = 0; nextT = ac.currentTime + (had ? 0.3 : 0.05);
+    if (song && song.sync) anchor(had ? 0.3 : 0.05);
     if (had) { ramp(0, 0.25); musBus.gain.linearRampToValueAtTime(musGain(), ac.currentTime + 0.7); }
     else ramp(musGain(), 0.4);
     if (!timer) timer = setInterval(schedule, 30);
@@ -285,5 +424,5 @@ const Audio_ = (() => {
     if (song) ramp(musGain(), 0.1);
   }
   function toggleMute() { set.muted = !set.muted; Save.write(); applySettings(); }
-  return { unlock, sfx, play, stop, toggleMute, applySettings };
+  return { unlock, sfx, local: sfx, play, stop, toggleMute, applySettings }; // local: never sent to co-op screens
 })();

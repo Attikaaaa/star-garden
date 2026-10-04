@@ -18,7 +18,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
   data → level → entities → enemies → fx → ui → meta → the progress and content files →
-  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → main → qr → net). `net.js` loads last because it wraps a few
+  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → toy → snow → sun → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
@@ -36,16 +36,23 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `audio.js` | `Audio_`: sound effects and 4 songs on a step sequencer, cross-fades, volumes |
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
-| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, land mechanic hooks (`LAND_MECH`), page turns |
+| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
 | `entities.js` | players (input, movement, combat, down/revive, robes), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
 | `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
 | `ui.js` | HUD, minimap, banners, menus, settings, collection, pause, end screens, touch overlay |
 | `meta.js` | the vault, `applyUpgrades`, the Garden (upgrades + wands tabs), the pre-run screen, solo run save / resume |
-| `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`) and the campfire between acts |
+| `road.js` | the Star Road: forks (after a boss the team picks the next land from cards, each with a boon, `G.run.boon`), run lengths (full road, one act, quick; `G.run.span`, vault pay in `applyRunX`, `starterKit`), the difficulty curve (`depthHp`, `powDepth`: a run that starts down the road counts from its kit), ROAD+ (`plusAct`) and the campfire between acts. Until the first win only the first act is open (`openActs` in data.js) |
 | `lands.js` | each land's own rule (`LAND_MECH`) and its art: the Meadow's Bloom Loop (flower patches, seeds, gusts), the Shore's tide and pier, the Crystal Cave's prism pillars and the Crystal Clock, the Cloud Steps' Puff Floor (sunstone, updraft hops); each land's own fight rooms (`LAND_LAYOUTS`, `LAY_RULE`) |
 | `wardens.js` | the wardens, one mid-boss per land (`WARDENS`): Thistle Knight, Sandcastle Crab (with its sand fort, `room.fort`), Chandelier Bat, Weather Vane |
 | `woods.js` | the Lantern Woods: lamp posts (`T_LAMP`, layout `l`, `lampHit`, `lampsBuild`), its light (`woodsLight`), foes' eyes in the dark, its rooms; its foes (Wisp Fox, Stump Sentry, Lamp Moth, Owlet, Mushroom Mime, Pumpkin Hopper), freed fireflies (`ffly` pickups that light dark lamps) and its warden, the Scarecrow |
+| `toy.js` | the Toy Attic: the beat's metronome (`drawMetro`, BEAT CLICK), conveyor belts (layout `< > ^ v`, `room.belt`, a ground-only drift), wind-up keys that run down into a stagger (`EDEF.wind`), crayon lines (`zap` markers with `c: 'crayon'`), its floor, rooms, foes (Tin Soldier, Jack-in-the-Box, Marble Runner, Paper Plane, Teddy Drummer, Crayon Scribbler) and items |
+| `snow.js` | the Snowglobe: ice bridges shot over its ponds (`freeze`, `room.frz`, melting after `FREEZE_T`), the globe's shake from the shared clock (`globe`, `shakeTell` / `shakePush`, mittens and arrows first, then a drift current) and the snowdrifts it piles up (`driftAtTile`, the `slow` hook in `moveBox`), its rooms, foes (Snowman, Sliding Penguin, Icicle Bat, Snow Hare, Bauble, Frost Fairy), the Sled Cub warden, Yeti Yodel, the Frost Queen, the Skating Rink and its items |
+| `sun.js` | the Sun Temple: quicksand (`T_QSAND`, layout `z`: the `slow` and `drift` hooks), sun-glyph plates (`T_PLATE` / `T_PLATEON`, layout `o`) that open the room's gates when all are lit (`openGates`), its rooms, foes (Scarab Roller, Sand Cat, Sun Priest, Mummy Wrap, Canopic Jar, Golden Scarab), the Sun Disc Guardian warden, the Riddle Sphinx (plates in the glyphs' order drop her shield, `e.sh`), the Scarab Pharaoh, the Sun Beam room (`beamPath`) and its items |
+| `library.js` | the Story Library: every fight room is a page of a pair (`PAGE_LAYOUTS`) that turns after a curled-corner tell (`libPage` / `libFold`, `turnPage` in level.js, NET.fx 'curl' / 'fold' for clients), ink puddles that slow (`inkList`), its foes (Ink Blot, Paper Crane, Bookworm, Quill Knight, Bookmark Ghost, the Proofreader elite), the Index Card Clerk warden, the Great Bookworm (three chapters), the Red Pen (`penLead`), the Choose Your Path room (`LIB_STORIES`) and its items |
+| `forge.js` | the Ember Forge: the Heat Beat (runes from the room's seed in `room.rune`, groups erupting every 8 beats of `G.beat`, `forgeHurts` as the `hurts` hook that net.js `clientHits` also asks, lamps on the wall pipe), oil barrels that blow up in chains (`breakTile` wrapper, `room.fuse`, `barrelBlast`, zap `c: 'blast'`), belts (toy.js `beltsBuild`), cooling water (layout `w`, `room.cool`), anvil drops, cooled slag rocks (`room.rk0`, `rockArt` → `slagrock`), its foes (Ember Imp, Anvil Golem, Coal Hound, Tong Bat, Slag Slime, the Bellows Bug elite), the Hammer Sprite warden, the Forge Dragonling (checkerboard `e.hot`, lava flood rows `DR_ROWS`), the Magma Snail, the Quench Room (`QUENCH`, `p.qn` for one floor) and its items (Oven Mitts, Hot Coal, Tongs) |
+| `deep.js` | the Glow Deep: the current (`room.cur` a direction or `'whirl'`, flipping every `CUR_BEATS` beats from `room.cb`, floor chevrons that flash before it turns, the `drift` hook moves heroes, foes and bullets), bubble vents (`bubbles` on the shared clock, `room.bpop`, NET fx `bpop`) and the big bubble shot (`p.bub`, `s.bubT` pops into a ring), its foes (Jelly Drifter with tendril zaps, Lantern Fish whose lure is the hitbox, Urchin Ball, Eel, Giant Clam, the Sea Angel elite as `room.wells`), the Manta Courier warden, the Grand Anglerfish (lure `e.lx/e.ly`, phase 2 darkness via fx.js light, phase 3 whirlpool and `ANG_VENTS`, a swallowed bubble stuns it), the Kraken (zap `c: 'tent'` / `'tsweep'`), the Pearl Room (`gclam` on the beat) and its items (Fins, Pearl Necklace, Glow Lure) |
+| `moon.js` | the Moon Garden: low gravity (`drift` grip `MOON_GRIP`, the `glide` hook keeps dash momentum), gold well rocks (`rock_moonw`, `room.wellIdx` / `room.wells0` pull shots in via `room.wells`), its layouts (`'W'` = well rock), foes (Moon Courier, Moon Rabbit, Comet Pup, Star Petal, Sleepy Wisp, the Night Bloom Bud elite), the Lamp Bunny warden (its lamp is a well), the Night Bloom (moon phases: New, Crescent, Half `e.half` burns one side, Full; pillars `NB_PILLARS` turn to wells; the Eclipse on ROAD+; the Big Stars orbit it), the Wishing Pond (`wpond`, `WISH_COST`) and its items (Moon Boots, Comet Tail, Wishing Star) |
 | `main.js` | `G` state, runs (`startRun`), room flow, the Arena, fixed-step loop, rendering, scaling |
 | `net.js` | online co-op: MQTT broker links, WebRTC upgrade, host snapshots, client sync, rejoin, co-op menu, text entry, lobby |
 | `duel.js` | the secret Boss Fight (co-op lobby mode `duel`, unlocked by a code): Big Grin's art, `AI.grin`, slippers, `duelWon` |
@@ -57,14 +64,15 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `firstrun.js` | the tutorial room, the curated first run, the first gift, naming |
 | `screens.js` | modals (`openModal`), the what's-new list (`NEWS`), title notices, the end screen and its next goal |
 | `quests.js`, `stars.js`, `book.js`, `mail.js` | quests; Constellations (achievements); the Book (items, bestiary, combos, runs, stats); the frog's letters and daily gifts |
-| `hub.js`, `yard.js` | the Garden's menus and cosmetics (trails, pets, titles); the walkable Garden, plants and seed plots |
+| `hub.js`, `yard.js` | the Garden's menus and cosmetics (trails, pets, titles); the walkable Garden, plants and seed plots; the shared walk-to-a-tap helpers (`yardPath` BFS with a cell size, `pathDir`, `slideStep`) the casino uses too |
 | `items2.js`, `loot.js`, `affix.js`, `mods.js` | more items, rarity and sets; door rewards, skull rooms, star scrolls; elite affixes and the nemesis; run modifiers |
 | `foes.js`, `bosses.js`, `rooms.js`, `story.js` | the second wave of foes; alternate bosses, the Star Well and Big Stars; special rooms; the frog's lines and the ending |
 | `heroes.js`, `options.js` | the four heroes; wand aspects, Star Trials, Quick Run, assist, bullet shapes, key remapping, the arena save |
-| `daily.js`, `events.js` | the Daily Star Run, Weekly Challenge and share card; the sky calendar (Star Rain, Moon Night), seasons, Boss of the Week |
+| `daily.js`, `events.js` | the Daily Star Run, Weekly Challenge and share card (from `DAILY_ROAD_FROM` the whole road deals the lands; older keys keep the classic three); the sky calendar (Star Rain, Moon Night), seasons, Boss of the Week |
 | `couch.js`, `cloud.js` | couch co-op (extra controllers); save codes, cloud backup, leaderboards and friend codes, the community goal, bloom reminders |
-| `casino.js` | the Star Casino (`G.state` `casino`, from the title menu): chip wallet `cas()` (in `Save.casino`), house edges (`EDGE`), `CASINO_TUNING` (live-tunable), comp tiers, the walkable hall, `wheelRaster` for both wheels |
+| `casino.js` | the Star Casino (`G.state` `casino`, from the title menu): chip wallet `cas()` (in `Save.casino`), house edges (`EDGE`), `CASINO_TUNING` (live-tunable), comp tiers, the walkable hall and the VIP lounge (`CAS.room`, `casSpots()`, Gold card), life on the floor (critters, the fountain, Star Rain chips, Halloween pumpkins), `wheelRaster` for both wheels. `casShown()` (visited and not hidden) gates everything outside: the casino quest, Cosmo's letter, the LUCKY CHIP constellation (`cas: true`, filtered by `skyList()`) and the Book's CASINO page. Rounds call `note('cas', game, what)` |
 | `slot.js`, `cards.js`, `roulette.js`, `scratch.js`, `lounge.js` | the Star Slot and three land slots (fixed reel strips, jackpot); blackjack and video poker; European roulette and the Big Wheel; scratch cards; the VIP lounge's Sic Bo and the Prize Counter |
+| `holdem.js` | the lounge's Hold'em sit-and-go: hand evaluator, no-limit betting with side pots, three bots (tight frog, odds owl, bluffing fox), the hand log replayed after a reload. The prize is paid flat (no quiet luck) |
 | `art_casino.js` | chips, the hall's furniture, playing cards, dice and prizes |
 | `art_heroes/more/items/foes/bosses/rooms/garden.js` | art for the content added after the first release |
 
@@ -76,7 +84,12 @@ clears a run and reports errors and frame times). Run `layouts` after touching a
 `tools/casino_check.mjs` works out every casino game's return to player from its real
 tables (reel strips, paytables, all 216 Sic Bo rolls); run it after touching any odds. Chips
 are never money. The Prize Counter sells cosmetics, plus the Lucky Charm (+25 coins at the next
-run's start); keep it that small.
+run's start); keep it that small. The browser checks: `qa/_cas_check.mjs` (chip conservation
+over every game, reloads mid-round, determinism, RNG source, cashier caps, every station walked
+to, save size, frame cost), `qa/_cas_input.mjs` (a round of every game by keyboard, pad and
+touch), `qa/_cas_meta.mjs`, `qa/_lang_casino.mjs`, `qa/_robe_check.mjs` (the VELVET robe bought, worn and
+kept through a reload), `qa/_holdem_check.mjs [games]` (whole tournaments: chips never leak, the
+winner alone is paid, a reload mid-hand) and `qa/_cas_shots.mjs [hu|en]`.
 
 `server/server.js` is the optional game server (Node 18+, no dependencies, JSON files in
 `DATA_DIR`): stats, cloud saves and transfer codes, leaderboards with friend codes, the
@@ -247,8 +260,10 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   in `drawShots` / `updateShots` (`s.kind`), and a sound in `WAND_SFX`.
 - **Potion / belt item:** entry in `POTIONS`, a `pot_<id>` sprite, its effect in `useBelt`
   (timed effects live in `p.buff`), a HUD timer if it lasts.
-- **Robe:** a legend in `SKINS` (`art_chars.js`), a name in `ROBES` and a tag colour in
-  `TAG_COL` that exists in `FONT_COLORS` (text in other colours does not render).
+- **Robe:** saves hold the robe's index, so only append: a new colour goes at the end of
+  `LATE_ROBES` (`art_chars.js`: name, legend, tag, `how`), never into `SKINS` (0-7) or between
+  the meme robes. The tag colour must exist in `FONT_COLORS` (text in other colours does not
+  render). Late robes are locked until `Save.unl.robes` holds them (`robeFree` in `entities.js`).
 
 ## Bosses
 

@@ -18,7 +18,14 @@ const SV = {
   land: () => Math.max(cnt('land'), Save.stats.bestDepth),
   streak: () => cnt('streak'),
   stars: () => (Save.story.stars || []).length,
+  bossLands: () => roadLands().filter(id => [LAND[id].boss].concat(LAND[id].alt || []).some(b => cnt('b:' + b) > 0)).length,
+  landsSeen: () => roadLands().filter(id => cnt('l:' + id) > 0).length,
+  nhBosses: () => Object.keys(Save.cnt).filter(k => k.startsWith('nhb:')).length,
+  casGames: () => CAS_FLOOR.filter(g => Save.casino && Save.casino.st[g] && Save.casino.st[g].n > 0).length,
+  casTier: () => (Save.casino ? casTier() : 0),
 };
+// Every land of the Star Road, forks and finale included.
+const roadLands = () => [].concat(...ROAD.map(a => [a.fixed].concat(a.fork, a.finale || []))).filter(landLive);
 // A star: [id, text, source, goal]. source: a counter key, or '=name' for SV[name].
 const CONSTELLATIONS = [
   { id: 'crown', name: 'THE SLIME CROWN', rew: { robe: 2 }, pts: [[6, 24], [10, 8], [22, 18], [34, 8], [46, 18], [50, 24]], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]],
@@ -31,11 +38,15 @@ const CONSTELLATIONS = [
     stars: [['golem1', 'DEFEAT THE CRYSTAL GOLEM', 'b:golem', 1], ['golem5', 'DEFEAT THE CRYSTAL GOLEM 5 TIMES', 'b:golem', 5], ['golemnh', 'BEAT THE GOLEM WITHOUT A HIT', 'nhb:golem', 1],
       ['golemf', 'BEAT THE GOLEM IN 45 SECONDS', 'fb:golem', 1], ['bat100', 'DEFEAT 100 BATS', 'k:bat', 100], ['wisp100', 'DEFEAT 100 WISPS', 'k:wisp', 100]] },
   { id: 'road', name: 'THE WANDERER', rew: { robe: 4 }, pts: [[4, 24], [14, 18], [22, 22], [32, 12], [42, 16], [52, 4]], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
-    stars: [['land2', 'REACH SUNNY SHORE', '=land', 2], ['land3', 'REACH CRYSTAL CAVE', '=land', 3], ['land4', 'REACH LAND 4 IN ENDLESS MODE', '=land', 4],
+    stars: [['land2', 'REACH SUNNY SHORE', '=land', 2], ['land3', 'REACH CRYSTAL CAVE', '=land', 3], ['land4', 'REACH LAND 4', '=land', 4],
       ['land6', 'REACH LAND 6', '=land', 6], ['rooms100', 'CLEAR 100 ROOMS', 'rooms', 100], ['chests25', 'OPEN 25 CHESTS', 'chests', 25]] },
+  { id: 'starroad', name: 'THE STAR ROAD', rew: { title: 'ROADWALKER' }, pts: [[4, 26], [16, 20], [12, 10], [28, 14], [40, 6], [52, 12]], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
+    stars: [['roadend', 'WALK THE STAR ROAD TO THE MOON GARDEN', 'roadend', 1], ['seenall', 'SEE EVERY LAND OF THE ROAD', '=landsSeen', roadLands().length],
+      ['bossland6', 'BEAT THE BOSS OF 6 LANDS', '=bossLands', 6], ['bosslandall', 'BEAT THE BOSS OF EVERY LAND', '=bossLands', roadLands().length],
+      ['nh5', 'BEAT 5 DIFFERENT BOSSES WITHOUT A HIT', '=nhBosses', 5], ['pluswin', 'WALK ROAD+ TO THE END', 'pluswin', 1]] },
   { id: 'champ', name: 'THE CHAMPION', rew: { robe: 5 }, pts: [[12, 4], [44, 4], [18, 16], [38, 16], [28, 22], [28, 28]], edges: [[0, 2], [1, 3], [2, 4], [3, 4], [4, 5], [0, 1]],
     stars: [['win1', 'WIN A RUN', '=wins', 1], ['win5', 'WIN 5 RUNS', '=wins', 5], ['winhard', 'WIN ON HARD', 'win:2', 1],
-      ['winsb', 'WIN ON STARBREAKER', 'win:3', 1], ['win15', 'WIN IN UNDER 15 MINUTES', 'win15', 1], ['win10', 'WIN IN UNDER 10 MINUTES', 'win10', 1]] },
+      ['winsb', 'WIN ON STARBREAKER', 'win:3', 1], ['win15', 'WIN A RUN OR AN ACT IN UNDER 15 MINUTES', 'win15', 1], ['win10', 'WIN A RUN OR AN ACT IN UNDER 10 MINUTES', 'win10', 1]] },
   { id: 'wands', name: 'THE WAND MAKER', rew: { trail: 'spark' }, pts: [[6, 26], [16, 20], [26, 14], [36, 8], [46, 4], [50, 12]], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 3]],
     stars: [['wand2', 'UNLOCK A SECOND WAND', '=wands', 2], ['wand4', 'UNLOCK FOUR WANDS', '=wands', 4], ['wand6', 'UNLOCK ALL SIX WANDS', '=wands', 6],
       ['winw2', 'WIN WITH 2 DIFFERENT WANDS', '=winw', 2], ['winw4', 'WIN WITH 4 DIFFERENT WANDS', '=winw', 4], ['wandk', 'DEFEAT 1000 FOES WITH ONE WAND', '=wandk', 1000]] },
@@ -66,8 +77,15 @@ const CONSTELLATIONS = [
   { id: 'odd', name: 'THE ODDITIES', rew: { pet: 'slime' }, pts: [[18, 6], [28, 2], [38, 8], [30, 16], [28, 22], [28, 28]], edges: [[0, 1], [1, 2], [2, 3], [3, 4]],
     stars: [['rolls', 'ROLL 1000 TIMES', 'rolls', 1000], ['brk100', 'BREAK 100 THINGS', 'brk', 100], ['hearts50', 'PICK UP 50 HEARTS', 'hearts', 50],
       ['deaths10', 'FALL 10 TIMES AND KEEP GOING', 'deaths', 10], ['goldx5', 'LET 5 GOLDEN SLIMES GET AWAY', 'goldx', 5], ['elite10', 'DEFEAT 10 ELITES IN ONE RUN', 'elitesrun', 10]] },
+  // cas: shown only to players who have visited the casino and not hidden it
+  { id: 'casino', cas: true, name: 'THE LUCKY CHIP', rew: { title: 'LUCKY OWL' }, pts: [[28, 2], [42, 8], [48, 20], [28, 28], [8, 20], [14, 8]], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]],
+    stars: [['cas1', 'PLAY A ROUND AT THE STAR CASINO', 'cas', 1], ['casbj', 'GET A BLACKJACK', 'cas:bj', 1], ['casquad', 'GET FOUR OF A KIND IN VIDEO POKER', 'cas:quad', 1],
+      ['casbig', 'WIN 20 TIMES YOUR BET', 'cas:big', 1], ['casall', 'PLAY EVERY GAME ON THE FLOOR', '=casGames', 7], ['cassilver', 'EARN THE SILVER CARD', '=casTier', 1]] },
 ];
-const STAR_TOTAL = CONSTELLATIONS.reduce((n, c) => n + c.stars.length, 0);
+// The constellations this player can see (the casino's hides with the casino).
+const skyList = () => CONSTELLATIONS.filter(c => !c.cas || casShown());
+const starTotal = () => skyList().reduce((n, c) => n + c.stars.length, 0);
+const starGot = () => skyList().reduce((n, c) => n + c.stars.filter(starDone).length, 0);
 const STAR_REWARD = 5;
 function starProg(s) {
   const src = s[2], v = src[0] === '=' ? SV[src.slice(1)]() : cnt(src);
@@ -126,27 +144,27 @@ function checkStars(quiet) {
   return got;
 }
 // Checked at natural pauses (a room cleared, a run over) and when unlocks happen.
-onNote((ev) => { if (ev === 'room' || ev === 'end' || ev === 'boss' || ev === 'wave' || ev === 'garden' || ev === 'wand' || ev === 'item' || ev === 'daily' || ev === 'learn' || ev === 'harvest') checkStars(false); });
+onNote((ev) => { if (ev === 'room' || ev === 'end' || ev === 'boss' || ev === 'wave' || ev === 'garden' || ev === 'wand' || ev === 'item' || ev === 'daily' || ev === 'learn' || ev === 'harvest' || ev === 'cas') checkStars(false); });
 
 // ---------- Screen: the night sky ----------
-const SKY_X = 22, SKY_Y = 44, SKY_W = 68, SKY_H = 42;
+const SKY_COLS = 6, SKY_X = 12, SKY_Y = 44, SKY_W = 60, SKY_H = 42;
 function updateStars() {
-  const n = CONSTELLATIONS.length;
+  const n = skyList().length;
   if (G.starOpen !== null && G.starOpen !== undefined) {
     if (pressed(...K_BACK, ...K_OK) || Input.mouseHit) { G.starOpen = null; Audio_.sfx('select'); }
     return false;
   }
   let s = G.menuSel;
   if (s < n) {
-    if (pressed(...K_RIGHT) && s % 5 < 4) s++;
-    if (pressed(...K_LEFT) && s % 5 > 0) s--;
-    if (pressed(...K_UP) && s >= 5) s -= 5;
+    if (pressed(...K_RIGHT) && s % SKY_COLS < SKY_COLS - 1 && s + 1 < n) s++;
+    if (pressed(...K_LEFT) && s % SKY_COLS > 0) s--;
+    if (pressed(...K_UP) && s >= SKY_COLS) s -= SKY_COLS;
   }
-  if (pressed(...K_DOWN)) s = s + 5 < n ? s + 5 : n;
+  if (pressed(...K_DOWN)) s = s + SKY_COLS < n ? s + SKY_COLS : n;
   if (s === n && pressed(...K_UP)) s = n - 3;
   if (s !== G.menuSel) { G.menuSel = s; Audio_.sfx('select'); }
   let click = -1;
-  for (let i = 0; i < n; i++) if (hoverRow(i, SKY_X + (i % 5) * SKY_W, SKY_Y + Math.floor(i / 5) * SKY_H, SKY_W, SKY_H)) click = i;
+  for (let i = 0; i < n; i++) if (hoverRow(i, SKY_X + (i % SKY_COLS) * SKY_W, SKY_Y + Math.floor(i / SKY_COLS) * SKY_H, SKY_W, SKY_H)) click = i;
   if (hoverRow(n, VW / 2 - 30, 197, 60, 13) && Input.mouseHit) return true;
   if (pressed(...K_BACK) || (pressed(...K_OK) && G.menuSel === n)) return true;
   if ((pressed(...K_OK) && G.menuSel < n) || (click >= 0 && Input.mouseHit)) { G.starOpen = G.menuSel; Audio_.sfx('confirm'); }
@@ -173,24 +191,24 @@ function drawConst(c, x0, y0, sel, big) {
 }
 function drawStars() {
   drawSkyBg();
-  const got = Object.keys(Save.ach).length;
+  const L = skyList();
   text('CONSTELLATIONS', VW / 2, 16, 'Y', 2, 1);
-  text(got + ' / ' + STAR_TOTAL + ' STARS', VW / 2, 28, 'c', 2, 1);
-  CONSTELLATIONS.forEach((c, i) => {
-    const x = SKY_X + (i % 5) * SKY_W, y = SKY_Y + Math.floor(i / 5) * SKY_H, sel = i === G.menuSel;
+  text(starGot() + ' / ' + starTotal() + ' STARS', VW / 2, 28, 'c', 2, 1);
+  L.forEach((c, i) => {
+    const x = SKY_X + (i % SKY_COLS) * SKY_W, y = SKY_Y + Math.floor(i / SKY_COLS) * SKY_H, sel = i === G.menuSel;
     if (sel) { rect(x + 1, y + 1, SKY_W - 2, 1, 'Y'); rect(x + 1, y + SKY_H - 2, SKY_W - 2, 1, 'Y'); rect(x + 1, y + 1, 1, SKY_H - 2, 'Y'); rect(x + SKY_W - 2, y + 1, 1, SKY_H - 2, 'Y'); }
-    drawConst(c, x + 6, y + 7, sel);
+    drawConst(c, x + 4, y + 7, sel);
   });
-  const c = CONSTELLATIONS[G.menuSel];
+  const c = L[G.menuSel];
   if (c) {
     const n = c.stars.filter(starDone).length;
     text(c.name + '   ' + n + '/' + c.stars.length, VW / 2, 176, constDone(c) ? 'Y' : 'w', 2, 1);
     text((constDone(c) ? 'EARNED: ' : 'REWARD: ') + rewardText(c.rew), VW / 2, 187, 'c', 2, 1);
   }
-  const back = G.menuSel === CONSTELLATIONS.length;
+  const back = G.menuSel === L.length;
   text('BACK', VW / 2, 202, back ? 'Y' : 'l', 2, 1);
   if (back) pointer(VW / 2 - textW('BACK') / 2 - 10, 202);
-  if (G.starOpen !== null && G.starOpen !== undefined) drawConstDetail(CONSTELLATIONS[G.starOpen]);
+  if (G.starOpen !== null && G.starOpen !== undefined) drawConstDetail(L[G.starOpen]);
 }
 function drawConstDetail(c) {
   dim(0.6);

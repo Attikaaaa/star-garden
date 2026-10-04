@@ -72,9 +72,8 @@
   // robe colours the player can choose (see ROBES): sprite names get '', '#1', '#2'...
   const SKINS = [null, { c: 'q', B: 'P', b: 'p', q: 'Y', P: 'y', p: 'o' }, { c: 'H', B: 'G', b: 'g' }, { c: '4', B: '3', b: '2' },
     { c: 'Y', B: 'y', b: 'o', q: 'C', P: 'c', p: 'B' }, { c: 'R', B: 'r', b: 'p', q: 'Y', P: 'y', p: 'o' }, { c: 'T', B: 't', b: 'g' }, { c: 'L', B: 'l', b: 'm' }];
-  for (let k = 0; k < SKINS.length; k++) {
-    const sk = k ? '#' + k : '';
-    const o = { flip: true, flash: true, legend: SKINS[k] };
+  const robe = (sk, legend) => {
+    const o = { flip: true, flash: true, legend };
     const def = (name, rows, opts) => window.def(name + sk, rows, opts);
     def('hero_d0', idle(FRONT, LEGS.idle), o);
     def('hero_d1', step(FRONT, LEGS.stepA), o);
@@ -95,10 +94,18 @@
     hurtS[10] = '..0oOOOss0sss0..'; hurtS[12] = '..0oookss0qs00..';
     def('hero_d0h', idle(hurtF, LEGS.idle), o);
     def('hero_s0h', idle(hurtS, LEGS.sideIdle), o);
-  }
+  };
+  SKINS.forEach((lg, k) => robe(k ? '#' + k : '', lg));
   // the other heroes are built on Pip's body (art_heroes.js)
-  window.HERO_ART = { FRONT, BACK, SIDE, LEGS, SKINS };
+  window.HERO_ART = { FRONT, BACK, SIDE, LEGS, SKINS, robe };
 })();
+
+// ---------- Robe colours that came after the meme robes (skins 8 + MEME_SKINS.length + i) ----------
+// Pip's own robe in new colours, bought or earned rather than free.
+const LATE_ROBES = [
+  { name: 'VELVET', tag: 'O', lg: { c: 'P', B: 'V', b: 'v', q: 'Y', P: 'y', p: 'o' }, how: 'THE PRIZE COUNTER' },
+];
+const robeSk = (i) => '#' + (8 + MEME_SKINS.length + i);
 
 // ---------- Meme robes: whole new heads on the hero's body (skins 8+) ----------
 // f / s / b: the 13 head rows seen from the front, the side (facing right) and the back.
@@ -693,6 +700,8 @@ const MEME_SKINS = [
     d('hero_d0b', idle(shut(F, bl.d), LEGS.idle)); d('hero_s0b', idle(shut(Sd, bl.s), LEGS.sideIdle));
     d('hero_d0h', idle(shut(F, bl.d), LEGS.idle)); d('hero_s0h', idle(shut(Sd, bl.s), LEGS.sideIdle));
   });
+  LATE_ROBES.forEach((r, i) => HERO_ART.robe(robeSk(i), r.lg));
+  alias('cz_robe', 'hero_d0' + robeSk(0)); // the prize counter's VELVET robe
 })();
 
 // ---------- Enemies (authored in their base colours; variants use legends) ----------
@@ -756,6 +765,9 @@ const MEME_SKINS = [
     sky: { g: '2', G: '3', h: '4', H: 'w', q: 'P' }, // Cloud Steps
     pumpkin: { g: 'n', G: 'o', h: 'O', H: 'Y', q: 'y' }, // Halloween week
     moss: { g: 't', G: 'T', h: 'h', H: 'H', q: 'O' }, // Lantern Woods
+    ember: { g: 'r', G: 'R', h: 'O', H: 'Y', q: 'y' }, // Ember Forge
+    glow: { g: 't', G: 'T', h: 'C', H: 'w', q: 'H' }, // Glow Deep
+    moon: { g: 'm', G: 'l', h: 'L', H: 'w', q: 'y' }, // Moon Garden
   };
   for (const c in SLIME_COL) for (const f in SLIME) def('slime_' + c + '_' + f, SLIME[f], { flash: true, glow: true, legend: SLIME_COL[c] });
 
@@ -1071,7 +1083,8 @@ function bossFrames(t, make, o) {
       0qPPp0
       .0Pp0.
       ..00..`);
-    return r;
+    // the crystals stick out of the head and the arms: close their outline
+    return autoOutline(r);
   };
   bossFrames('golem', golem, o);
 })();

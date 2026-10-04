@@ -27,13 +27,15 @@
     r = stamp(r, 14 + hx, 16 + dy, f.p ? 'r' : 'q');
     r = stamp(r, 7 + hx, 16 + dy, MOUTH[f.face]);
     // the crown (a Big Star bent to fit) tips over when she is angry
-    r = stamp(r, 4 + hx + (f.p ? 1 : 0), 4 + dy + (f.st ? 2 : 0), f.d ? '.' : f.p ? `
-      ..Y.Y.Y
-      .YyYyY.
-      0yyryy0
-      .00000.` : `
-      .Y.Y.Y.
-      .YyYyY.
+    r = stamp(r, 4 + hx + (f.p ? 1 : 0), 3 + dy + (f.st ? 2 : 0), f.d ? '.' : f.p ? `
+      ..0.0.0.
+      .0Y0Y0Y0
+      0YyYyYY0
+      0yyryy0.
+      .00000..` : `
+      .0.0.0.
+      0Y0Y0Y0
+      0YyYyY0
       0yyryy0
       .00000.`);
     // the stinger comes out to aim and thrusts on the attack
@@ -78,40 +80,40 @@
     r = stamp(r, 7, wy + 3, '.' + gem + gem + '.');
     r = stamp(r, 27, wy + 3, '.' + gem + gem + '.');
     r = bossEyes(r, 13, 6 + dy, 6, f.face);
-    return stamp(r, 15, dy, f.d ? '.' : `
+    return autoOutline(stamp(r, 15, dy + 1, f.d ? '.' : `
       3....3
       .3..3.
-      ..33..`);
+      ..33..`));
   };
   bossFrames('cmoth', cmoth, o);
 
   // ---------- The Night Moth (the Star Well) ----------
   const nmoth = (f) => {
     const up = wingUp(f), dy = f.st || f.d ? 2 : 0;
-    let r = sculpt(44, 32, [
-      { e: [11, up ? 9 : 12 + dy, 11, up ? 9 : 10], ramp: '1223' },
-      { e: [33, up ? 9 : 12 + dy, 11, up ? 9 : 10], ramp: '1223' },
-      { e: [12, 23, 8, 6], ramp: '1122' },
-      { e: [32, 23, 8, 6], ramp: '1122' },
-      { r: [18, 10, 8, 18, 4], ramp: '1234' },
-      { e: [22, 10 + dy, 7, 5], ramp: '1234' },
+    let r = sculpt(40, 32, [
+      { e: [10, up ? 9 : 12 + dy, 10, up ? 9 : 10], ramp: '1223' },
+      { e: [30, up ? 9 : 12 + dy, 10, up ? 9 : 10], ramp: '1223' },
+      { e: [11, 23, 7.5, 6], ramp: '1122' },
+      { e: [29, 23, 7.5, 6], ramp: '1122' },
+      { r: [16, 10, 8, 18, 4], ramp: '1234' },
+      { e: [20, 10 + dy, 7, 5], ramp: '1234' },
     ]);
     r = rim(r, { 1: 'p' });
     // stars stolen from the sky, caught in its wings (they burn pink once it is angry)
-    for (const [x, y] of [[6, 8], [12, 5], [9, 14], [15, 11], [31, 6], [37, 9], [34, 14], [29, 11], [10, 22], [34, 22], [14, 25], [30, 25]]) {
+    for (const [x, y] of [[5, 8], [11, 5], [8, 14], [14, 11], [28, 6], [34, 9], [31, 14], [26, 11], [9, 22], [31, 22], [13, 25], [27, 25]]) {
       r = stamp(r, x, y + (up ? -2 : y < 18 ? dy : 0), f.d ? '3' : y % 2 ? (f.p ? 'P' : 'Y') : 'w');
     }
     // glowing red eyes
     const red = (k) => BOSS_EYE[k].replace(/0w00/, '0Rr0').replace(/\n0000\n/, '\n0rr0\n');
     const two = f.face === 'mad' || f.face === 'squint';
-    r = stamp(r, 16, 8 + dy, red(two ? f.face + 'L' : f.face));
-    r = stamp(r, 24, 8 + dy, red(two ? f.face + 'R' : f.face));
-    r = stamp(r, 20, 9 + dy, f.face === 'mad' || f.a ? '.00.\n0rr0\n.00.' : f.d ? '.00.\n0..0' : '0..0\n.00.');
-    return stamp(r, 18, dy, f.d ? '.' : `
+    r = stamp(r, 14, 8 + dy, red(two ? f.face + 'L' : f.face));
+    r = stamp(r, 22, 8 + dy, red(two ? f.face + 'R' : f.face));
+    r = f.face === 'mad' || f.a ? stamp(r, 18, 11 + dy, '.00.\n0rr0\n.00.') : stamp(r, 18, 9 + dy, f.d ? '.00.\n0..0' : '0..0\n.00.'); // the open mouth sits below the eyes' glow
+    return autoOutline(stamp(r, 16, dy + 1, f.d ? '.' : `
       4......4
       .4....4.
       ..4..4..
-      ...44...`);
+      ...44...`));
   };
   bossFrames('nmoth', nmoth, o);
 
@@ -127,7 +129,7 @@
     0XXXxxxxx0
     .00000000.`;
   const mayor = (f, bare) => {
-    const dy = f.st || f.d ? 3 : f.tl ? 1 : 0, px = f.a ? 1 : 0;
+    const dy = f.st || f.d ? 3 : f.tl || f.b ? 1 : 0, px = f.a ? 1 : 0;
     const py = 21 + dy + (f.tl ? -6 : f.a ? 1 : 0);
     let r = sculpt(36, 32, [
       { e: [18, 20 + dy / 2, 12.5, 11 - dy / 2], ramp: 'nNNa' },
@@ -137,7 +139,7 @@
     ]);
     r = rim(r, { n: 'p' });
     // claws: three pale hooks on each paw
-    for (const [x, y] of [[1 - px, py + (f.m ? 2 : 4)], [28 + px, py + (f.m ? 6 : 4)]]) r = stamp(r, x, y, 'L0L0L\nL0L0L\n0.0.0');
+    for (const [x, y] of [[1, py + (f.m ? 2 : 4)], [27 + px, py + (f.m ? 6 : 4)]]) r = stamp(r, x, y, '0L0L0L0\n0L0L0L0\n.0.0.0.');
     const ey = 14 + dy;
     r = bossEyes(r, 11, ey, 10, f.face);
     // the pink nose, and a wide mouth under it
@@ -147,7 +149,7 @@
     r = stamp(r, 25, ey + 5, f.p ? 'rr' : 'qq');
     // the hat: straight, tipped when angry, lying on the ground once he is beaten
     if (f.d) return stamp(r, 26, 25, HAT);
-    if (bare) return f.st ? r : stamp(stamp(r, 11, ey - 3, 'C\nc'), 25, ey - 2, 'C\nc');
+    if (bare) return f.st ? r : autoOutline(stamp(stamp(r, 11, ey - 3, 'C\nc'), 25, ey - 2, 'C\nc'));
     return stamp(r, f.p ? 14 : 13, 1 + dy - (f.tl ? 1 : 0), HAT);
   };
   bossFrames('mayor', (f) => mayor(f), o);
@@ -190,11 +192,13 @@
       r = stamp(r, 17, 13, PEARL);
       return bossEyes(r, 15, 25, 7, 'daze');
     }
-    const dy = f.d ? 3 : 0, hy = f.tl ? -2 : f.a ? 1 : 0, fl = f.b || f.m ? 1 : 0;
+    // she rears up with both flippers raised before a move, and slams down with them spread
+    const dy = f.d ? 3 : f.tl ? -2 : f.a ? 1 : 0, hy = f.tl ? -2 : f.a ? 1 : 0, fl = f.b || f.m ? 1 : 0;
+    const up = f.tl ? -5 : f.a ? 2 : 0;
     const sh = shell(20, 11 + dy, 0, f.p);
     let r = sculpt(40, 32, [
-      { e: [5, 21 - fl * 2 + dy, 5, 3.5], ramp: 'tTTC' },
-      { e: [35, 21 + fl * 2 - (f.m ? 3 : 0) + dy, 5, 3.5], ramp: 'tTTC' },
+      { e: [5, 21 - fl * 2 + up + dy, 5, 3.5], ramp: 'tTTC' },
+      { e: [35, 21 + fl * 2 - (f.m ? 3 : 0) + up + dy, 5, 3.5], ramp: 'tTTC' },
       { e: [20, 24 + hy + dy, 8, 7], ramp: 'tTTC' },
       { e: [20, 12 + dy, 19, 10], ramp: 'nroR', cut: 20 + dy }, { e: [20, 11 + dy, 15.5, 8.5], ramp: 'roRO' },
     ]);
@@ -202,8 +206,8 @@
     r = sh(r);
     const ey = 22 + hy + dy;
     r = bossEyes(r, 14, ey, 8, f.face);
-    r = stamp(r, 12, ey + 5, f.p ? 'rr' : 'qq');
-    r = stamp(r, 26, ey + 5, f.p ? 'rr' : 'qq');
+    r = stamp(r, 14, ey + 5, f.p ? 'rr' : 'qq');
+    r = stamp(r, 24, ey + 5, f.p ? 'rr' : 'qq');
     return stamp(r, 18, ey + 5, f.a ? '.00.\n0tt0\n.00.' : MOUTH[f.face]);
   };
   bossFrames('turtle', turtle, o);
@@ -219,7 +223,7 @@
   // A dark-purple spider with crystal legs and six eyes, its back a broken geode. In phase 3
   // (the 'geode3' set) the geode has cracked wide open and glows.
   // legs per side, back to front: [hip, knee, tip]; walk frames lift every other leg
-  const LEGS = [[[13, 10], [5, 3], [1, 10]], [[12, 14], [3, 10], [0, 19]], [[12, 19], [4, 18], [1, 27]], [[14, 23], [8, 25], [6, 31]]];
+  const LEGS = [[[13, 10], [5, 3], [1, 10]], [[12, 14], [3, 10], [0, 19]], [[12, 19], [4, 18], [1, 27]], [[14, 23], [8, 25], [6, 30]]];
   const legs = (f) => {
     const g = grid(40, 32);
     LEGS.forEach(([h, k, t], i) => {
@@ -229,7 +233,7 @@
         if (f.tl && i === 3) { kx = 4; ky = 21; tx = 5; ty = 11; } // rears its front legs
         if (f.a) { kx -= 1; tx -= 1; ky += 1; }
         if (f.st || f.d) { kx += 3; ky += 4; tx = kx + 3; ty = ky - 3; } // curled up
-        const X = (x) => (s ? 39 - x : x);
+        const X = (x) => (s ? 39 - Math.max(2, x) : Math.max(1, x)); // 1px free on both edges for the outline
         g.line(X(h[0]) + 1, h[1] + 1, X(kx) + 1, ky + 1, 'B').line(X(kx) + 1, ky + 1, X(tx) + 1, ty, 'B');
         g.line(X(h[0]), h[1], X(kx), ky, 'c').line(X(kx), ky, X(tx), ty, 'c');
         g.px(X(kx), ky, 'C').px(X(tx), ty, 'w');
@@ -245,7 +249,7 @@
     ]);
     r = rim(r, { 1: 'p', 2: 'p' });
     // the geode: a jagged break in the back, crystals inside; wide open and glowing in phase 3
-    r = open ? stamp(r, 14, dy, `
+    r = open ? stamp(r, 14, Math.max(0, dy), `
       ...0...0....
       ..0w0.0C0.0.
       .0CwC0CwC0w0
@@ -287,14 +291,16 @@
   const BOLT = '..00\n.0y0\n0yY0\n0000\n.0y0\n0y0.\n00..';
   const STAR = '..0..\n.0y0.\n0yYy0\n.0y0.\n0.0.0';
   const whale = (f) => {
-    const dy = f.d ? 4 : f.st ? 2 : f.b ? 1 : 0, fin = f.m || f.a ? 2 : 0, tail = f.tl ? -2 : f.m ? 3 : f.d || f.st ? 4 : 0;
+    // the tell is a deep breath: it puffs up round, flukes high, fins flared, before it rises or calls the storm
+    const br = f.tl && !f.st ? 1 : 0;
+    const dy = f.d ? 4 : f.st ? 2 : f.b ? 1 : 0, fin = br ? -2 : f.m || f.a ? 2 : 0, tail = br ? -4 : f.m ? 3 : f.d || f.st ? 4 : 0;
     const cl = f.p ? 'dmml' : 'mlLw';
     let r = sculpt(40, 32, [
-      { e: [33, 14 + dy + tail / 2, 6, 4], ramp: 'bBBc' },
+      { e: [33 + br, 14 + dy + tail / 2, 6, 4], ramp: 'bBBc' },
       { e: [32.5, 8 + dy + tail, 3.5, 3], ramp: 'bBBc' }, { e: [37.5, 9 + dy + tail, 2.5, 3.5], ramp: 'bBBc' },
-      { e: [18, 16 + dy, 16.5, 11], ramp: 'bBcC', cut: 28 },
-      { e: [15, 22 + dy, 12, 5], ramp: 'mlLw', cut: 27 },
-      { e: [23, 25 + dy + fin, 5, 2.5], ramp: 'bBBc' },
+      { e: [18, 16 + dy - br, 16.5 + br * 2, 11 + br * 2], ramp: 'bBcC', cut: 28 },
+      { e: [15, 22 + dy, 12 + br * 2, 5 + br], ramp: 'mlLw', cut: 27 },
+      { e: [23 + br * 4, 25 + dy + fin, 5 + br, 2.5], ramp: 'bBBc' },
     ]);
     // the cloud on its back; it thins away on the corpse
     if (!f.d) r = sculpt(40, 32, [{ e: [14, 7 + dy, 4, 3], ramp: cl }, { e: [20, 5.5 + dy, 4.5, 3.8], ramp: cl }, { e: [26, 7.5 + dy, 3.5, 2.6], ramp: cl }])
@@ -302,7 +308,7 @@
     r = rim(r, { B: '3', c: '4', L: 'l' });
     if (!f.d) r = stamp(r, f.p ? 19 : 18, dy + (f.p ? 1 : 2), f.p ? BOLT : STAR);
     // belly grooves
-    if (!f.d) r = stamp(r, 8, 24 + dy, '.l.l.l.l.l.l.l\n..l.l.l.l.l.l.');
+    if (!f.d) r = stamp(r, 8, 24 + Math.min(dy, 1), '.l.l.l.l.l.l.l\n..l.l.l.l.l.l.');
     // the spout before an attack
     if (f.tl && !f.st) r = autoOutline(stamp(r, 6, 1, 'w.w.w\n.CwC.\n..c..\n..c..'));
     const ey = 14 + dy;
@@ -347,7 +353,7 @@
     r = autoOutline(stamp(r, 6 + hx, 9 + dy + hd, f.p ? '.mm.\nmllm' : '.LL.\nLwwL'));
     // the curled horn over the ear, the angry one crackling
     r = stamp(r, 11 + hx, 8 + dy + hd, HORN);
-    if (f.p && !f.d) r = stamp(r, 17 + hx, 6 + dy + hd, 'Y.\n.y\ny.');
+    if (f.p && !f.d) r = autoOutline(stamp(r, 17 + hx, 6 + dy + hd, 'Y.\n.y\ny.'));
     if (f.tl && !f.st) r = stamp(r, 13 + hx, 7 + dy + hd, 'w');
     const ey = 15 + dy + hd;
     r = bossEyes(r, 3 + hx, ey, 5, f.face);

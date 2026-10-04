@@ -842,7 +842,8 @@ Object.assign(LAY_RULE, {
     // chevrons down the belly, talons, and the lantern hooked on his right wing
     r = stamp(r, 16, 21 + dy, 'e.e.e.e.e\n.e.e.e.e.');
     r = stamp(r, 17, 25 + dy, 'e.e.e.e');
-    if (!f.d) r = stamp(r, 15, 30 + Math.min(dy, 1) - (dy > 1 ? 1 : 0), 'O.O..O.O\n.o....o.');
+    // the talons stay planted while he bobs, with a row free under them for the outline
+    if (!f.d) r = stamp(r, 15, 29, 'O.O..O.O\n.o....o.');
     const glass = f.st || f.d ? 'VvvV\nvvVV' : f.p ? 'RYyr\nrOor' : 'YwyO\nyYOO';
     const [lx, ly] = f.d ? [34, 27] : f.a ? [35, 20] : up ? [34, 14 + (f.tl ? -2 : 0)] : [32, 25];
     if (!f.d) r = stamp(r, lx + 1, ly - 2 + dy, 'n.\n.n');

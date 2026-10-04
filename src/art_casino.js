@@ -281,6 +281,55 @@ const czOutline = (g) => { const r = autoOutline(g.rows().map(s => s)); return r
   for (let i = 5; i < 39; i++) { const s = Math.round(4 * Math.sin((i - 5) / 33 * Math.PI)); rp.px(i, 7 + s, '0').px(i, 8 + s, 'r').px(i, 9 + s, 'p').px(i, 10 + s, '0'); }
   def('cz_rope', rp.rows());
 
+  // the VIP lounge's Sic Bo table (44x30): a round felt top on a wooden rim, and the glass
+  // dome with its three dice in the middle
+  const sb = grid(44, 30), scx = 21.5, scy = 18.5;
+  sb.fill((x, y) => {
+    const nx = (x + 0.5 - scx) / 21.5, ny = (y + 0.5 - scy) / 9.5, d = Math.hypot(nx, ny);
+    if (d <= 1) {
+      if (d > 0.93) return '0';
+      if (d > 0.78) return ny < 0 && nx < 0.3 ? 'N' : 'n';
+      if (d > 0.74) return '0';
+      return Math.abs(d - 0.5) < 0.04 ? 'Y' : 'z';
+    }
+    // the rim's front edge, then the apron down to the floor
+    const top = scy + 9.5 * Math.sqrt(Math.max(0, 1 - ((x + 0.5 - scx) / 21.5) ** 2)) - 0.5;
+    if (y > top && y <= top + 4 && Math.abs(x + 0.5 - scx) < 21) return y > top + 3 ? '0' : y < top + 2 ? 'n' : 'u';
+    return null;
+  });
+  // the dome: a glass bubble (pale outline, a white glint) over three dice
+  for (let y = 0; y < 30; y++) for (let x = 0; x < 44; x++) {
+    const d = Math.hypot(x + 0.5 - scx, (y + 0.5 - 12) * 1.15);
+    if (d < 9.5 && d >= 8.5 && y < 18) sb.px(x, y, y < 8 ? 'C' : 'c');
+  }
+  sb.px(16, 6, 'w').px(17, 5, 'w').px(15, 8, 'w');
+  for (const [dx, dy, pips] of [[12, 15, [[1, 1]]], [19, 12, [[0, 0], [2, 2]]], [26, 15, [[0, 0], [1, 1], [2, 2]]]]) {
+    czBox(sb, dx, dy, 5, 5, 'w', 'w', 'l');
+    for (const [a, b] of pips) sb.px(dx + 1 + a, dy + 1 + b, a === 1 && b === 1 && pips.length === 1 ? 'r' : '0');
+  }
+  def('cz_sic', sb.rows());
+
+  // the lounge's Hold'em table (52x26): a long oval of felt on a wooden rail, the five shared
+  // cards face down in the middle and a little stack of chips at each seat
+  const pk = grid(52, 26), pcx = 25.5, pcy = 10.5;
+  const pkD = (x, y) => { const dx = Math.max(0, Math.abs(x + 0.5 - pcx) - 12) / 13.5, dy = (y + 0.5 - pcy) / 10.5; return Math.hypot(dx, dy); };
+  pk.fill((x, y) => {
+    const d = pkD(x, y);
+    if (d <= 1) {
+      if (d > 0.93) return '0';
+      if (d > 0.72) return y < pcy && x < pcx + 6 ? 'N' : 'n';
+      if (d > 0.66) return '0';
+      return Math.abs(d - 0.42) < 0.05 ? 'Y' : 'z';
+    }
+    // the rail's front edge, then the apron
+    const bot = (() => { let b = -1; for (let j = 0; j < 26; j++) if (pkD(x, j) <= 1) b = j; return b; })();
+    if (bot >= 0 && y > bot && y <= bot + 4) return y > bot + 3 || x === 0 || x === 51 ? '0' : y < bot + 2 ? 'n' : 'u';
+    return null;
+  });
+  for (let i = 0; i < 5; i++) czBox(pk, 14 + i * 5, 8, 4, 5, '2', '3', '1');
+  for (const [x, y, c] of [[8, 9, 'r'], [42, 9, 'B'], [25, 3, 'G']]) { pk.px(x, y, '0').px(x + 1, y, '0').px(x, y + 1, c).px(x + 1, y + 1, c).px(x, y + 2, 'w').px(x + 1, y + 2, 'w').px(x, y + 3, '0').px(x + 1, y + 3, '0'); }
+  def('cz_poker', pk.rows());
+
   def('cz_lock', `
     ..000..
     .0lll0.
@@ -391,6 +440,8 @@ const SUIT_SMALL = [`
     moon: (x, y) => { const u = x % 6, v = y % 8; return (u === 2 && v >= 2 && v <= 4) || (u === 3 && (v === 1 || v === 5)) ? 'Y' : ((x + y) % 2 ? 'B' : 'b'); },
     frog: (x, y) => { const u = x % 6, v = (y + (Math.floor(x / 6) % 2) * 3) % 6; return (u === 1 || u === 4) && v === 1 ? 'w' : (u >= 1 && u <= 4 && v >= 2 && v <= 3) ? 'h' : ((x + y) % 2 ? 'G' : 'g'); },
     gold: (x, y) => { const s = _starAt(x + 3, y + 3, 9); return s === 'y' ? 'w' : s ? 'Y' : ((x ^ y) & 1 ? 'y' : 'O'); },
+    // the Hold'em winner's back: plum velvet in a gold diamond lattice, a jewel in each diamond
+    royal: (x, y) => { const u = (x + y) % 6, v = (x - y + 60) % 6; return u === 0 || v === 0 ? 'y' : u === 3 && v === 3 ? 'P' : (x + y) % 2 ? 'V' : 'v'; },
   };
   for (const k in BACKS) def('cd_back_' + k, back(BACKS[k]));
   // the flip: half-width back, a thin edge, half-width face

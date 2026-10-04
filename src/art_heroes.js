@@ -36,8 +36,9 @@
     const rec = (row) => row.split('').map(c => H.colors[c] || c).join('');
     hurtF[10] = rec('..0o0ssssss0o0..'); hurtF[12] = rec('..0k0ss00ss0k0..');
     hurtS[10] = rec('..0oOOOss0sss0..'); hurtS[12] = rec('..0oookss0qs00..');
-    for (let k = 0; k < SKINS.length; k++) {
-      const sk = k ? '#' + k : '', o = { flip: true, flash: true, legend: SKINS[k] };
+    const robes = SKINS.map((lg, k) => [k ? '#' + k : '', lg]).concat(LATE_ROBES.map((r, i) => [robeSk(i), r.lg]));
+    for (const [sk, legend] of robes) {
+      const o = { flip: true, flash: true, legend };
       const d = (name, rows) => def(id + '_' + name + sk, rows, o);
       d('d0', idle(F, LEGS.idle)); d('d1', step(F, LEGS.stepA)); d('d2', step(F, LEGS.stepB));
       d('u0', idle(B, LEGS.idle)); d('u1', step(B, LEGS.stepA)); d('u2', step(B, LEGS.stepB));

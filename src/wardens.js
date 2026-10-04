@@ -52,21 +52,21 @@ function wardenCleared(room) {
     r = stamp(r, 10, 25 + dy, 'gggggggggg');
     r = stamp(r, 14, 25 + dy, 'HH');
     // the thorn lance: upright at rest, raised for the tell, level while spinning, dropped when dazed
-    if (sp) r = stamp(stamp(r, 20, 19, 'NNNNNNNNlL\nnnnnnnnnn.'), 20, 18, 'hG\nGg');
+    if (sp) r = stamp(stamp(r, 20, 19, 'NNNNNNNlL\nnnnnnnnn.'), 20, 18, 'hG\nGg');
     else if (!f.d && !f.st) {
       const ly = f.tl ? 2 : 5;
       r = stamp(r, 24, ly, '.L\nlL\nlL\nNn');
       for (let y = ly + 4; y < 29; y++) r = stamp(r, 24, y, 'Nn');
       r = stamp(r, 22, 20 + dy, 'hGG\nGgg');
-    } else r = stamp(r, 20, 29, 'nNNNNNNNlL');
+    } else r = stamp(r, 20, 29, 'nNNNNNNlL');
     // the crest: bristling for the tell, drooping when dazed or beaten
     const crest = f.st || f.d ? CREST.droop : f.tl ? CREST.tall : CREST.up;
     r = stamp(r, 11, hy - 6 - crest.length + 1, crest);
     r = autoOutline(r);
     r = bossEyes(r, 9, hy - 2, 8, f.face);
     r = stamp(r, f.face === 'daze' ? 14 : 13, hy + 3, MOUTH[f.face]);
-    r = stamp(r, 8, hy + 3, f.p ? 'rr' : 'qq');
-    r = stamp(r, 20, hy + 3, f.p ? 'rr' : 'qq');
+    r = stamp(r, 10, hy + 3, f.p ? 'rr' : 'qq');
+    r = stamp(r, 18, hy + 3, f.p ? 'rr' : 'qq');
     return rim(r, { g: 't', G: 'g', n: 'u' });
   };
   bossFrames('thistle', thistle, o);
@@ -94,7 +94,7 @@ function wardenCleared(room) {
     // top-left edge light, a crenel notch in each tower, shell windows, brick seams
     r = stamp(r, 7, kt + 1, ['AAAAAAAA', 'A.......', 'A.......', 'A.......']);
     for (const x of [lx, rx]) {
-      r = stamp(r, x + 1, tt + 1, 'AA\nA.\nA.');
+      r = stamp(r, Math.max(1, x + 1), tt + 1, 'AA\nA.\nA.');
       r = stamp(r, x + 3, tt, '0__0\n0__0\n0000');
       r = stamp(r, x + (x === lx ? 2 : 6), tt + 6, '0\n0');
     }
@@ -111,9 +111,8 @@ function wardenCleared(room) {
     const cx = f.d ? 21 : f.st ? 15 : f.p ? 13 : 12, cy = f.d ? 27 : f.st ? kt - 3 : kt - 4;
     r = autoOutline(stamp(r, cx, cy, CR));
     r = bossEyes(r, 10, kt + 5, 8, f.face);
-    r = stamp(r, 13, kt + 11, GATE[f.face]);
-    r = stamp(r, 8, kt + 10, f.p ? 'rr' : 'qq');
-    r = stamp(r, 22, kt + 10, f.p ? 'rr' : 'qq');
+    r = stamp(r, 13, Math.min(kt + 11, bot - 2), GATE[f.face]);
+    if (!f.d) { r = stamp(r, 8, kt + 10, f.p ? 'rr' : 'qq'); r = stamp(r, 22, kt + 10, f.p ? 'rr' : 'qq'); }
     return rim(r, { a: 'O', e: 'O' });
   };
   bossFrames('castle', castle, o);
@@ -313,7 +312,8 @@ BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
   // shoulder up to the wrist, three fingers fan down from it to a scalloped trailing edge
   const inPoly = (pts, x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
   const wing = (dy, lift, spread) => {
-    const W = [2 - spread, 3 - lift + dy], T = [[-0.5 - spread, 13 - lift / 2 + dy], [4, 16.5 - lift / 3 + dy], [9, 17.5 + dy]];
+    // the wrist and outer tip stay 1px inside the canvas, so the outline fits
+    const W = [Math.max(1, 2 - spread), Math.max(1, 3 - lift + dy)], T = [[Math.max(1, -0.5 - spread), 13 - lift / 2 + dy], [4, 16.5 - lift / 3 + dy], [9, 17.5 + dy]];
     const pts = [[11, 8 + dy], W, T[0], [3, 11 - lift / 2 + dy], T[1], [6.5, 13.5 - lift / 4 + dy], T[2], [11.5, 15 + dy]];
     const g = grid(32, 32).fill((x, y) => inPoly(pts, x + 0.5, y + 0.5) ? (inPoly(pts, x + 0.5, y + 1.5) && inPoly(pts, x + 1.5, y + 0.5) ? '2' : '1') : null);
     for (const t of T) g.line(Math.round(W[0]), Math.round(W[1]), Math.round(t[0] * 0.8 + W[0] * 0.2), Math.round(t[1] * 0.8 + W[1] * 0.2), '1');
@@ -338,7 +338,8 @@ BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
     r = stamp(r, 14, 2 + dy, '.mm.\nm..l');
     // crystal drops under the bowl, candles on its rim (unlit when it has fallen)
     const drops = [[9, 'c'], [12, 'C\nc'], [16, 'C\nc\nc'], [19, 'C\nc'], [22, 'c']];
-    for (const [x, d] of drops) r = stamp(r, x, 26 + cy, f.tl ? d.replace(/C/g, 'w') : d);
+    // fallen, only the tips show (and none once it is beaten), so the outline fits under them
+    if (!f.d) for (const [x, d] of drops) r = stamp(r, x, 26 + cy, f.tl ? d.replace(/C/g, 'w') : f.st ? d[0] : d);
     for (const x of [9, 22]) r = stamp(r, x, 18 + cy, f.st || f.d ? '.\nL' : f.tl ? 'w\nL' : 'Y\nL');
     // claws on the rim
     if (!f.d) for (const x of [13, 18]) r = stamp(r, x, 19 + dy, 'mm');
@@ -472,7 +473,7 @@ BEASTS.splice(BEASTS.findIndex(b => b.boss), 0,
     if (!f.d) r = stamp(r, 13, 20 + dy, 'n..n\nN..N');
     // the comb: tall and red for the crow, flopped when dazed
     const comb = f.st || f.d ? '...rR\n.rRRr\nrrr..' : f.tl ? 'R.R.R\nrRrRr\nrrrrr' : '.R.R.\nrRrRr';
-    r = stamp(r, 19, 1 + dy - (f.tl ? 1 : 0), comb);
+    r = stamp(r, 19, Math.max(1, 1 + dy - (f.tl ? 1 : 0)), comb);
     // the beak (open to crow) and the red wattle below it
     r = stamp(r, 27, 8 + dy, BEAK[f.face]);
     r = stamp(r, 26, 11 + dy, f.p ? 'r\nr' : 'R\nr');

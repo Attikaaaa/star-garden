@@ -40,6 +40,27 @@ const LANDS = [
   { id: 'lantern', theme: 'lantern', song: 'lantern', rooms: 11, slime: 'moss', boss: 'hoot', bossName: 'GRAND HOOT',
     rule: 'LANTERN LIGHT', hint: 'SHOOT LAMPS TO LIGHT THEM', danger: 2,
     pool: [['wfox', 1], ['stump', 2], ['lmoth', 2], ['owlet', 2], ['mime', 2], ['wisp', 2]] },
+  { id: 'toy', theme: 'toy', song: 'toy', bossSong: 'waltz', bpm: 90, rooms: 11, slime: 'pink', boss: 'ballerina', bossName: 'MUSIC BOX BALLERINA',
+    rule: 'THE BEAT', hint: 'TOYS MOVE ON THE TICK', danger: 2,
+    pool: [['tin', 3], ['jack', 2], ['marble', 2], ['plane', 1], ['drum', 1]] },
+  { id: 'snow', theme: 'snow', song: 'snow', bossSong: 'yeti', rooms: 11, slime: 'sky', boss: 'yeti', bossName: 'YETI YODEL',
+    rule: 'ICE AND SHAKE', hint: 'SOMEONE SHAKES THE GLOBE', danger: 2,
+    pool: [['snowman', 2], ['penguin', 2], ['icebat', 2], ['hare', 2], ['bauble', 2]] },
+  { id: 'sun', theme: 'sun', song: 'sun', bossSong: 'sphinx', rooms: 11, slime: 'green', boss: 'sphinx', bossName: 'RIDDLE SPHINX',
+    rule: 'MIRRORS AND PLATES', hint: 'LIGHT EVERY PLATE', danger: 2,
+    pool: [['scarab', 2], ['sandcat', 2], ['priest', 2], ['mummy', 2], ['canopic', 1]] },
+  { id: 'library', theme: 'library', song: 'library', bossSong: 'worm', rooms: 11, slime: 'pink', boss: 'gworm', bossName: 'THE GREAT BOOKWORM',
+    rule: 'PAGE TURN', hint: 'THE PAGES TURN', danger: 2,
+    pool: [['blot', 3], ['crane', 2], ['bworm', 2], ['quill', 2], ['bghost', 2], ['proof', 1]] },
+  { id: 'forge', theme: 'forge', song: 'forge', bossSong: 'dragon', bpm: 140, rooms: 11, slime: 'ember', boss: 'dragon', bossName: 'FORGE DRAGONLING',
+    rule: 'HEAT BEAT', hint: 'RUNES ERUPT ON THE BEAT', danger: 3,
+    pool: [['fimp', 3], ['agolem', 1], ['hound', 2], ['tongbat', 2], ['slag', 2]] },
+  { id: 'deep', theme: 'deep', song: 'deep', bossSong: 'angler', bpm: 100, rooms: 11, slime: 'glow', boss: 'angler', bossName: 'GRAND ANGLERFISH',
+    rule: 'CURRENTS', hint: 'THE CURRENT TURNS WHEN THE ARROWS FLASH', danger: 3,
+    pool: [['drifter', 3], ['lfish', 2], ['urchin', 2], ['eel', 2], ['clam', 1]] },
+  { id: 'moon', theme: 'moon', song: 'moon', bossSong: 'bloom', rooms: 12, slime: 'moon', boss: 'nbloom', bossName: 'THE NIGHT BLOOM',
+    rule: 'LOW MOON', hint: 'SHOTS CURVE TOWARD THE GOLD ROCKS', danger: 3,
+    pool: [['mcour', 2], ['mrabbit', 2], ['cpup', 2], ['spetal', 1], ['sleepw', 2]] },
 ];
 const LAND = {};
 for (const l of LANDS) LAND[l.id] = l;
@@ -57,10 +78,13 @@ const ROAD = [
 ];
 // The three lands of the first release: old run saves, daily and weekly runs, the Boss of the Week.
 const CLASSIC_ROAD = ['meadow', 'shore', 'crystal'];
+// The first road stays curated: until the first win only the first act (the three classic
+// lands) is open; the win brings Mister Ribbit's letter and the whole road.
+const openActs = () => ROAD.slice(0, Save.stats.wins > 0 ? ROAD.length : 1);
 // The road walked when nobody chooses: each act's fixed land, the first built lands of its fork, the finale.
 function roadPath() {
   const out = [];
-  for (const a of ROAD) out.push(...[a.fixed].concat(a.fork.filter(landLive).slice(0, a.pick), a.finale || []).filter(landLive));
+  for (const a of openActs()) out.push(...[a.fixed].concat(a.fork.filter(landLive).slice(0, a.pick), a.finale || []).filter(landLive));
   return out;
 }
 const runPath = () => (G.run && G.run.path) || CLASSIC_ROAD;

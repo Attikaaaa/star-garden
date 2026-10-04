@@ -7,6 +7,8 @@ const T_FLOOR = 0, T_WALL = 1, T_ROCK = 2, T_BRK = 3, T_PIT = 4, T_DOOR = 5, T_P
 const T_MIRROR = 10, T_ICE = 14;
 // T_LAMP / T_LAMPON: a Lantern Woods lamp post, dark or lit (layout 'l'; shots light it)
 const T_LAMP = 15, T_LAMPON = 16;
+// T_QSAND: Sun Temple quicksand (slows and drags walkers); T_PLATE / T_PLATEON: a sun-glyph floor plate, dark or lit
+const T_QSAND = 17, T_PLATE = 18, T_PLATEON = 19;
 const MIR_CH = '7931';
 const DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
@@ -115,6 +117,21 @@ function buildRoom(room, land) {
   room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'warden' && room.type !== 'arena';
 }
 
+// A room that arrives without its mechanic state (a co-op client's, a resumed run's): the land's
+// build hook works it out again from the seed (belts, runes, the current, gold wells), on a copy
+// of the tiles, since the tiles it came with win.
+// ponytail: worked out from the tiles as they are now; a room whose rocks changed since (a cooled
+// Forge tile) could differ, send or save the derived state with the room if that ever matters.
+function rebuildMech(room) {
+  const m = landMech();
+  if (room.built || !m || !m.build) return;
+  room.built = true;
+  const t = room.tiles;
+  room.tiles = t.slice();
+  m.build(room);
+  room.tiles = t;
+}
+
 // Writes a 22x10 layout into the interior of tiles t (and its enemy slots into slots).
 function stampLayout(t, layout, flipX, flipY, slots) {
   for (let y = 0; y < 10; y++) for (let x = 0; x < 22; x++) {
@@ -128,13 +145,13 @@ function stampLayout(t, layout, flipX, flipY, slots) {
 }
 
 // Changes a tile of the room in play (sinkholes open and close) and tells co-op clients.
-function setTile(room, c, r, v) {
+function setTile(room, c, r, v, quiet) { // quiet: the caller tells co-op clients itself (a page turn)
   const i = r * COLS + c;
   (room.tAt || (room.tAt = new Map())).set(i, G.time); // when it changed, for animations on every screen
   room.tiles[i] = v; room.dirty = true; flowKey = -1;
   room.pits = room.pits.filter(q => q[0] !== c * 16 || q[1] !== OY + r * 16);
   if (v === T_PIT) room.pits.push([c * 16, OY + r * 16, hash(i, 3, room.seed)]);
-  if (typeof netFx === 'function') netFx('tile', c, r, v);
+  if (!quiet && typeof netFx === 'function') netFx('tile', c, r, v);
 }
 
 // ---------- Land mechanics ----------
@@ -160,10 +177,24 @@ function mechUpdate(dt) { if (mechOn && mechOn.m.update) mechOn.m.update(dt, mec
 function mechKill(e) { if (mechOn && mechOn.m.kill) mechOn.m.kill(e, mechOn.room); }
 function mechEvery(dt) {
   G.wind = G.wind0 || 0;
+  beatStep();
   const m = landMech();
   if (m && m.every && G.room) m.every(dt, G.room);
 }
-function mechDraw(ox, oy, layer) { const m = landMech(); if (m && m.drawLayer) m.drawLayer(ox, oy, G.room, layer); }
+// ---------- The beat ----------
+// A land with a bpm (LANDS[].bpm: the Toy Attic, later the Ember Forge and the Glow Deep) keeps
+// time to one shared beat: G.beat counts beats on the host's clock (skyNow), so every screen
+// agrees, and its songs (sync in SONGS) are locked to the same clock. Beat n is a tick when n is
+// even, a tock when odd; n % 4 === 3 is the fourth beat of the bar. 0 where no land keeps time.
+// A hero with a beat item (Wind-up Key, Tin Shield), or a toy that moves on the beat (EDEF.beat, in
+// the Arena's mixed waves), keeps the Attic's 90 bpm in every land.
+function beatStep() {
+  const l = G.floor && G.floor.land, bpm = l && l.bpm || (G.players.some(p => p.wkey || p.tshield) || G.enemies.some(e => EDEF[e.type] && EDEF[e.type].beat) ? 90 : 0);
+  G.beat = bpm ? skyNow() * bpm * beatK() / 60 : 0;
+}
+// true once each time the beat passes a whole number, for whoever keeps o.lb (a foe, a prop)
+function onBeat(o) { const b = Math.floor(G.beat); if (b === o.lb) return false; const was = o.lb; o.lb = b; return was !== undefined; }
+function mechDraw(ox, oy, layer) { const m = landMech(); if (m && m.drawLayer) m.drawLayer(ox, oy, G.room, layer); if (layer === 0 && G.beat && !(m && m.noMetro)) drawMetro(ox, oy); }
 
 // ---------- Page turn (Story Library) ----------
 // The room's interior becomes another layout (walls and doors stay). Anyone left inside a tile
@@ -171,7 +202,7 @@ function mechDraw(ox, oy, layer) { const m = landMech(); if (m && m.drawLayer) m
 // right, 2 bottom left, 3 bottom right) is where the fold starts; drawPageTurn shows it.
 const PAGE_T = 0.6, CURL_T = 1;
 // The tell before a turn: the corner's dog-ear lifts for CURL_T seconds.
-function pageCurl(room, corner) { room.curl = { at: G.time, corner }; }
+function pageCurl(room, corner, dur) { room.curl = { at: G.time, corner, dur: dur || CURL_T }; }
 function turnPage(room, layout, corner) {
   if (room.dirty) renderRoomStatic(room, G.floor.theme);
   const old = room.turn ? room.turn.cv : document.createElement('canvas');
@@ -179,8 +210,10 @@ function turnPage(room, layout, corner) {
   old.getContext('2d').drawImage(room.canvas, 0, 0);
   const t = room.tiles.slice();
   stampLayout(t, layout, room.flip ? room.flip[0] : false, room.flip ? room.flip[1] : false, null);
-  for (let i = 0; i < t.length; i++) if (t[i] !== room.tiles[i]) setTile(room, i % COLS, (i / COLS) | 0, t[i]);
+  for (let i = 0; i < t.length; i++) if (t[i] !== room.tiles[i]) setTile(room, i % COLS, (i / COLS) | 0, t[i], true);
   room.turn = { cv: old, at: G.time, corner };
+  // a co-op client turns the page itself (the host sends which one) and only moves its own hero
+  if (NET.role === 'client') { if (G.player && !G.player.dead) nudgeOut(room, G.player, heroMoveMode(G.player)); return; }
   for (const p of G.players) if (!p.dead && nudgeOut(room, p, heroMoveMode(p))) p.tpN++;
   for (const e of G.enemies) if (!e.dead) nudgeOut(room, e, e.fly ? 'fly' : 'enemy');
   for (const k of room.pickups) nudgeOut(room, k, 'enemy');
@@ -234,10 +267,28 @@ function driftAt(room, x, y) {
   if (m && m.drift) m.drift(room, x, y, DRIFT);
   return DRIFT;
 }
+// Gravity wells (room.wells: [x, y, pull], at most WELL_MAX, placed by a land's build hook so every
+// screen has the same ones): shots and bullets curve toward them. Only the direction turns, the
+// speed stays, so no bullet ever gets faster than it was fired; the turn is capped, so nothing orbits.
+const WELL_MAX = 4, WELL_K = 5200, WELL_TURN = 2.6; // pull scale; max turn in rad/s
+function wellTurn(wells, x, y, vx, vy) {
+  let ax = 0, ay = 0;
+  for (let i = 0; i < wells.length && i < WELL_MAX; i++) {
+    const w = wells[i], dx = w[0] - x, dy = w[1] - y, d2 = Math.max(dx * dx + dy * dy, 256), k = WELL_K * w[2] / (d2 * Math.sqrt(d2));
+    ax += dx * k; ay += dy * k;
+  }
+  const sp = Math.hypot(vx, vy) || 1;
+  return Math.max(-WELL_TURN, Math.min(WELL_TURN, (vx * ay - vy * ax) / (sp * sp))); // rad/s, + turns clockwise on screen
+}
+function wellPull(wells, o, dt) {
+  const w = wellTurn(wells, o.x, o.y, o.vx, o.vy) * dt, c = Math.cos(w), s = Math.sin(w);
+  const vx = o.vx * c - o.vy * s; o.vy = o.vx * s + o.vy * c; o.vx = vx;
+}
 // a shot or bullet rides the current, at half its strength (only lands with a drift hook)
 function driftShot(room, o, dt) {
+  if (room.wells) wellPull(room.wells, o, dt);
   const m = landMech();
-  if (!m || !m.drift) return;
+  if (!m || !m.drift || m.ground) return; // ground: only what stands on it rides (the Toy Attic's belts)
   const d = driftAt(room, o.x, o.y + 4);
   o.x += d.cx * 0.5 * dt; o.y += d.cy * 0.5 * dt;
 }
@@ -245,6 +296,7 @@ function driftShot(room, o, dt) {
 const DRIFT_V = [0, 0];
 function driftMove(room, p, vx, vy, dt) {
   const d = driftAt(room, p.x, p.y);
+  if (d.grip < 1 && p.skates) { d.grip = 0.6; vx *= 1.25; vy *= 1.25; } // SKATES
   if (d.grip < 1) { const k = Math.min(1, d.grip * 10 * dt); vx = p.mvx = (p.mvx || 0) + (vx - (p.mvx || 0)) * k; vy = p.mvy = (p.mvy || 0) + (vy - (p.mvy || 0)) * k; }
   else { p.mvx = vx; p.mvy = vy; }
   DRIFT_V[0] = vx + d.cx; DRIFT_V[1] = vy + d.cy;
@@ -290,7 +342,7 @@ function solidPx(room, x, y, mode) {
   const c = Math.floor(x / 16), r = Math.floor((y - OY) / 16);
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return true;
   switch (room.tiles[r * COLS + c]) {
-    case T_FLOOR: case T_PUFF: case T_ICE: return false;
+    case T_FLOOR: case T_PUFF: case T_ICE: case T_QSAND: case T_PLATE: case T_PLATEON: return false;
     case T_ROCK: case T_BRK: case T_PRISM: case T_BELL: case T_LAMP: case T_LAMPON: return mode !== 'fly';
     case T_MIRROR: case T_MIRROR + 1: case T_MIRROR + 2: case T_MIRROR + 3: return mode !== 'fly' && mode !== 'shot'; // shots: mirrorPass
     case T_PIT: return (mode === 'player' || mode === 'enemy') && !room.flood; // high tide on the Shore: shallows
@@ -315,6 +367,9 @@ function moveBox(room, e, dx, dy, mode) {
   let blocked = false;
   // wading through the Shore's shallows at high tide
   if (room.flood && (mode === 'player' || mode === 'enemy') && room.tiles[Math.floor((e.y - 1 - OY) / 16) * COLS + Math.floor(e.x / 16)] === T_PIT) { dx *= WADE; dy *= WADE; }
+  // a land's own slow ground (the Snowglobe's drifts)
+  const lm = landMech();
+  if (lm && lm.slow && (mode === 'player' || mode === 'enemy')) { const k = lm.slow(room, e); dx *= k; dy *= k; }
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
   const sx = dx / steps, sy = dy / steps;
   for (let i = 0; i < steps; i++) {
@@ -414,9 +469,7 @@ function renderRoomStatic(room, theme) {
   const capS = T('cap');
   // floor
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
-    const h = hash(c, r, room.seed) % 100;
-    const n = h < 10 ? 'floor_2' : h < 22 ? 'floor_3' : h < 61 ? 'floor_0' : 'floor_1';
-    blit(g, T(n), c * 16, OY + r * 16);
+    blit(g, T(floorTile(c, r, room.seed)), c * 16, OY + r * 16);
   }
   if (th.paint) th.paint(g, room); // a land's own floor (Cloud Steps: clouds and sunstone)
   // walls: caps everywhere, faces on the top wall
@@ -424,7 +477,7 @@ function renderRoomStatic(room, theme) {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = room.tiles[r * COLS + c];
     if (t !== T_WALL && t !== T_DOOR) continue;
-    if (r === 1 && c > 0 && c < COLS - 1) blit(g, T(hash(c, 99, room.seed) % 4 === 0 ? 'face_1' : 'face_0'), c * 16, OY + 16);
+    if (r === 1 && c > 0 && c < COLS - 1) blit(g, T(faceTile(c, room.seed, true)), c * 16, OY + 16);
     else blit(g, capS, c * 16, OY + r * 16);
   }
   // cap rims against the floor
@@ -474,18 +527,20 @@ function renderRoomStatic(room, theme) {
     if (t !== T_ROCK && t !== T_BRK && (t < T_PRISM || t > T_GATE) && (t < T_MIRROR || t > T_MIRROR + 3) && t !== T_LAMP && t !== T_LAMPON) continue;
     const x = c * 16, y = OY + r * 16;
     g.drawImage(ellipseSprite(14, 5, SHADOW), x + 1, y + 12);
-    const sp = S(t >= T_PRISM ? tileArt(room, c, r, t) : (t === T_ROCK ? 'rock_' : 'brk_') + theme);
+    const sp = S(t >= T_PRISM ? tileArt(room, c, r, t) : t === T_ROCK ? rockArt(room, c, r, theme) : 'brk_' + theme);
     blit(g, sp, x, y + 16 - sp.h); // taller art (mirrors) rises over the tile above
   }
   room.dirty = false;
 }
 
+// a rock's sprite (a land can tell some rocks apart: the Ember Forge's cooled slag)
+function rockArt(room, c, r, theme) { return 'rock_' + theme; }
 // Door sprite frame per neighbour type: stone, boss (red) or treasure (gold).
 function doorKind(room, d) {
   const o = room.doors[d];
   if (room.type === 'boss' || o.type === 'boss') return 'b';
   if (room.type === 'challenge' || o.type === 'challenge' || room.type === 'champion' || o.type === 'champion' || room.type === 'warden' || o.type === 'warden') return 'c';
-  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret', 'slide', 'jar'];
+  const T = ['item', 'shop', 'vault', 'shrine', 'altar', 'secret', 'slide', 'jar', 'doll', 'rink', 'sunbeam', 'books', 'quench', 'pearlroom', 'pond'];
   if (T.includes(room.type) || T.includes(o.type)) return 't';
   return 'n';
 }

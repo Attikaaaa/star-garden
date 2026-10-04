@@ -227,7 +227,8 @@ function slotEnd() {
   if (s.jack) {
     Audio_.sfx('bigwin'); hapticAll('item'); casBurst(192, 90, 40);
     G.banner = { title: 'JACKPOT!', sub: '+' + s.jack + ' CHIPS', t: 3.5, icon: 'chip' };
-    big = true;
+    big = true; CAS.spray = 3;
+    note('cas', SL.g, 'jack'); note('cas', SL.g, 'big');
   } else if (paid) { casWin(paid, s.bet, 192, 90); big = paid >= s.bet * 20; }
   else if (!s.trig) Audio_.sfx('rstop');
   if (s.trig) {
@@ -431,11 +432,12 @@ function slotDraw(g) {
   }
   // the machine's rules and the free spins, on the right
   panel(298, 72, 80, 134);
-  const R = [];
-  R.push(['FROG IS WILD', 'h']);
+  // whole sentences, wrapped to the panel (a translation may run longer than the English)
+  const R = [['FROG IS WILD', 'h']];
   if (q.n === 3) R.push(['2 STARS PAY TOO', 'Y'], ['5 LINES', 'l']);
-  else R.push(['3 MOONS:', 'c'], [M.free + ' FREE SPINS', 'c'], ['WINS X' + M.fmult, 'c'], ['MOONS PAY', '3'], ['X TOTAL BET', '3'], ['', ''], ['5 STARS ON A', 'Y'], ['LINE AT BET ' + SLOT_BETS.land[SLOT_BETS.land.length - 1], 'Y'], ['WIN THE JACKPOT', 'Y']);
-  R.forEach(([s, c], i) => s && text(s, 338, 82 + i * 10, c, 0, 1));
+  else R.push(['3 MOONS: ' + M.free + ' FREE SPINS, WINS X' + M.fmult, 'c'], ['MOONS PAY X TOTAL BET', '3'], ['', ''], ['5 STARS ON A LINE AT BET ' + SLOT_BETS.land[SLOT_BETS.land.length - 1] + ' WIN THE JACKPOT', 'Y']);
+  let ry = 82;
+  for (const [s, c] of R) { if (!s) { ry += 6; continue; } for (const w of wrapText(s, 72)) { text(w, 338, ry, c, 0, 1); ry += 10; } }
   if (fsNow) {
     rect(302, 160, 72, 40, '0'); rect(303, 161, 70, 38, 'g');
     text('FREE SPINS', 338, 168, 'H', 0, 1);
