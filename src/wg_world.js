@@ -21,9 +21,11 @@ const WG_SPAWN = [0, 0];
 
 // What the surface is at a world tile: { b: biome id, g: ground index, e, m, t }
 function wgSurface(seed, x, y) {
+  const x0 = x, y0 = y; // domain warp: biome borders wander instead of running straight
+  x = x0 + WGW.n(seed + 30, x0 / 11, y0 / 11) * 7 + WGW.n(seed + 31, x0 / 4, y0 / 4) * 1.5; y = y0 + WGW.n(seed + 32, x0 / 11, y0 / 11) * 7 + WGW.n(seed + 34, x0 / 4, y0 / 4) * 1.5;
   let e = WGW.f(seed + 1, x / 120, y / 120, 4) * 1.15 + WGW.f(seed + 5, x / 380, y / 380, 2) * 0.35;
   let t = WGW.f(seed + 2, x / 260, y / 260, 3) * 1.25, m = WGW.f(seed + 3, x / 190, y / 190, 3) * 1.2;
-  const d = Math.sqrt(x * x + y * y);
+  const d = Math.sqrt(x0 * x0 + y0 * y0);
   if (d < 46) { const k = 1 - d / 46; e = e + (0.18 - e) * k; t = t + (0 - t) * k; m = m + (0.1 - m) * k; }
   // rivers: thin bands where a second noise crosses zero
   const rv = WGW.f(seed + 7, x / 150, y / 150, 3);
@@ -57,10 +59,10 @@ function wgStairPoint(seed, rx, ry) {
   return [rx * 56 + 6 + hash(rx, ry, seed + 32) % 44, ry * 56 + 6 + hash(rx, ry, seed + 33) % 44];
 }
 // Structures of 64x64 regions: kind + origin
-const WG_STRUCTS = ['ruin', 'camp', 'shrine', 'well', 'grave'];
+const WG_STRUCTS = ['ruin', 'camp', 'shrine', 'well', 'grave', 'cottage', 'farm', 'tower', 'cottage', 'farm', 'camp', 'pond'];
 function wgStructPoint(seed, rx, ry) {
   const h = hash(rx, ry, seed + 41);
-  if (h % 100 > 48) return null;
+  if (h % 100 > 62) return null;
   if (rx === 0 && ry === 0) return null;
   return { k: WG_STRUCTS[(h >>> 7) % WG_STRUCTS.length], x: rx * 64 + 8 + (h >>> 11) % 40, y: ry * 64 + 8 + (h >>> 17) % 40, h };
 }
@@ -88,6 +90,9 @@ function wgGenOver(seed, ch) {
     }
     if (!B || !B.veg) continue;
     if (x * x + y * y < 20) continue;
+    // stone ridges and mesas: natural cliff walls with open passes between them
+    const rb = s.b === 'mountain' || s.b === 'highland' ? 0.3 : s.b === 'desert' ? 0.52 : s.b === 'volcano' ? 0.4 : s.b === 'snow' ? 0.62 : 9;
+    if (rb < 9 && WGW.f(seed + 14, x / 10, y / 10, 2) > rb && !s.river) { ch.o[k] = O_ID[s.b === 'desert' ? 'cliff_sand' : s.b === 'highland' || s.b === 'snow' ? 'cliff_ice' : s.b === 'volcano' ? 'cliff_ash' : 'cliff_hi']; continue; }
     const f = (WGW.f(seed + 21, x / 16, y / 16, 2) + 1) / 2, dens = B.dens * (0.35 + 1.5 * f * f);
     if (WGW.r(x, y, seed + 22) < dens) ch.o[k] = O_ID[wgPickVeg(B.veg, hash(x, y, seed + 23))];
     // a berry bush or tree that is not in its home ground is swapped for grass
@@ -129,6 +134,33 @@ function wgStructTiles(st, seed) {
     for (let dx = 0; dx < 5; dx++) for (let dy = 0; dy < 5; dy++) put(dx, dy, 'f_stone', (dx === 2 && dy === 2) ? 'altar' : ((dx === 0 || dx === 4) && (dy === 0 || dy === 4) ? 'ruin_pillar' : null));
   } else if (st.k === 'well') {
     for (let dx = 0; dx < 3; dx++) for (let dy = 0; dy < 3; dy++) put(dx, dy, 'path', dx === 1 && dy === 1 ? 'well' : null);
+  } else if (st.k === 'cottage') { // a little wooden house: bed, table, chest, light, a garden fence out front
+    for (let dx = -1; dx < 8; dx++) for (let dy = -1; dy < 7; dy++) if (dx < 0 || dx > 6 || dy > 5) put(dx, dy, 'path', null);
+    for (let dx = 0; dx < 7; dx++) for (let dy = 0; dy < 6; dy++) {
+      const edge = dx === 0 || dx === 6 || dy === 0 || dy === 5, win = (dx === 0 || dx === 6) && dy === 2 || dy === 0 && dx === 3;
+      put(dx, dy, 'f_wood', edge ? (dx === 3 && dy === 5 ? 'door' : win ? 'w_glass' : 'w_wood') : null);
+    }
+    put(1, 1, 'f_wood', 'bed'); put(5, 1, 'f_wood', 'chest'); put(3, 2, 'f_red', 'table'); put(2, 2, 'f_red', null); put(4, 2, 'f_red', 'chair'); put(5, 4, 'f_wood', 'lantern'); put(1, 4, 'f_wood', 'bookshelf'); put(3, 3, 'f_red', null);
+    for (const dx of [-1, 0, 1, 5, 6, 7]) put(dx, 6, 'path', 'fence'); put(8, 3, 'path', 'sign');
+  } else if (st.k === 'farm') { // a fenced field with rows of crops and a scarecrow
+    for (let dx = 0; dx < 8; dx++) for (let dy = 0; dy < 6; dy++) {
+      const edge = dx === 0 || dx === 7 || dy === 0 || dy === 5;
+      if (edge) put(dx, dy, 'dirt', dx === 3 && dy === 5 ? null : 'fence');
+      else put(dx, dy, 'tilled', dy === 2 && dx === 3 ? 'scarecrow' : ['crop_wheat', 'crop_carrot', 'crop_potato', 'crop_pumpkin'][(dx + dy * 2) % 4]);
+    }
+    put(8, 3, 'dirt', 'barrel');
+  } else if (st.k === 'tower') { // a broken watchtower with a chest inside
+    for (let dx = 0; dx < 5; dx++) for (let dy = 0; dy < 5; dy++) {
+      const edge = dx === 0 || dx === 4 || dy === 0 || dy === 4, gap = dx === 2 && dy === 4 || (dx === 4 && dy === 1 && R(1, 1) % 2);
+      put(dx, dy, 'f_stone', edge && !gap ? (R(dx, dy) % 5 === 0 ? 'ruin_pillar' : 'w_stone') : null);
+    }
+    put(2, 2, 'f_stone', 'ruin_chest'); put(1, 1, null, 'torch'); put(3, 1, null, 'bones'); put(3, 3, null, 'cobweb');
+  } else if (st.k === 'pond') { // a small pond with reeds and lilies
+    for (let dx = 0; dx < 7; dx++) for (let dy = 0; dy < 6; dy++) {
+      const d = Math.hypot(dx - 3, (dy - 2.5) * 1.15);
+      if (d < 2.1) put(dx, dy, d < 1.2 ? 'deep' : 'shallow', d > 1.2 && R(dx, dy) % 3 === 0 ? 'lilypad' : null);
+      else if (d < 3.1 && R(dx, dy) % 2 === 0) put(dx, dy, null, R(dx, dy + 3) % 3 ? 'reeds' : 'flower_y');
+    }
   } else if (st.k === 'grave') {
     for (let dx = 0; dx < 5; dx++) for (let dy = 0; dy < 4; dy++) put(dx, dy, 'dirt', (dy === 1 && dx % 2 === 0) ? 'ruin_pillar' : (dy === 2 && dx === 2 ? 'bones' : null));
     put(2, 3, 'dirt', 'ruin_chest');
@@ -142,7 +174,13 @@ function wgStamp(seed, ch) {
     if (!st) continue;
     const s = wgSurface(seed, st.x + 3, st.y + 3);
     if (GROUND[s.g].liq || s.b === 'ocean' || s.b === 'volcano' || s.b === 'beach') continue;
-    for (const [dx, dy, g, o] of wgStructTiles(st, seed)) {
+    const tl = wgStructTiles(st, seed);
+    let x0 = 99, y0 = 99, x1 = -99, y1 = -99; for (const t of tl) { x0 = Math.min(x0, t[0]); y0 = Math.min(y0, t[1]); x1 = Math.max(x1, t[0]); y1 = Math.max(y1, t[1]); }
+    for (let dy = y0 - 2; dy <= y1 + 2; dy++) for (let dx = x0 - 2; dx <= x1 + 2; dx++) { // a clearing round it
+      const lx = st.x + dx - X0, ly = st.y + dy - Y0; if (lx < 0 || ly < 0 || lx >= CS || ly >= CS) continue;
+      const k = ly * CS + lx, ob = OBJ[ch.o[k]]; if (ob && (ob.kind === 'tree' || ob.kind === 'plant' && ob.solid)) ch.o[k] = 0;
+    }
+    for (const [dx, dy, g, o] of tl) {
       const lx = st.x + dx - X0, ly = st.y + dy - Y0;
       if (lx < 0 || ly < 0 || lx >= CS || ly >= CS) continue;
       const k = ly * CS + lx;

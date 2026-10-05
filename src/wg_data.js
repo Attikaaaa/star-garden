@@ -15,14 +15,14 @@ wgDefGround('sand', { name: 'SAND', pri: 3, ramp: ['e', 'a', 'A', 'w'], step: 's
 wgDefGround('grass', { name: 'GRASS', pri: 6, ramp: ['g', 'G', 'h', 'H'], step: 'grass' });
 wgDefGround('dirt', { name: 'DIRT', pri: 4, ramp: ['u', 'n', 'N', 'k'], step: 'dirt' });
 wgDefGround('snow', { name: 'SNOW', pri: 7, ramp: ['m', 'l', 'L', 'w'], step: 'snow' });
-wgDefGround('rock', { name: 'STONE FLOOR', pri: 5, ramp: ['d', 'm', 'l', 'L'], step: 'stone' });
+wgDefGround('rock', { name: 'STONE FLOOR', pri: 5, ramp: ['X', 'd', 'm', 'l'], step: 'stone' });
 wgDefGround('mud', { name: 'MUD', pri: 4, ramp: ['u', 'n', 't', 'T'], speed: 0.8, step: 'dirt' });
 wgDefGround('jungle', { name: 'JUNGLE FLOOR', pri: 6, ramp: ['z', 'g', 'G', 'h'], step: 'grass' });
-wgDefGround('ash', { name: 'ASH', pri: 5, ramp: ['x', 'X', 'd', 'm'], step: 'stone' });
+wgDefGround('ash', { name: 'ASH', pri: 5, ramp: ['x', 'X', 'X', 'd'], step: 'stone' });
 wgDefGround('lava', { name: 'LAVA', pri: 0, liq: 'lava', hurt: 1, speed: 0.4, ramp: ['r', 'o', 'O', 'y'] });
 wgDefGround('tilled', { name: 'TILLED SOIL', pri: 4, ramp: ['u', 'n', 'N', 'k'], tilled: 1, step: 'dirt' });
 wgDefGround('ice', { name: 'ICE', pri: 5, ramp: ['B', 'c', 'C', 'w'], slip: 1, step: 'snow' });
-wgDefGround('cave', { name: 'CAVE FLOOR', pri: 5, ramp: ['1', '2', '3', 'd'], step: 'stone' });
+wgDefGround('cave', { name: 'CAVE FLOOR', pri: 5, ramp: ['x', 'X', 'd', 'm'], step: 'stone' });
 wgDefGround('moss', { name: 'MOSSY STONE', pri: 5, ramp: ['z', 'g', 'G', 'm'], step: 'stone' });
 wgDefGround('path', { name: 'PATH', pri: 5, ramp: ['n', 'N', 'O', 'a'], step: 'dirt' });
 wgDefGround('f_wood', { name: 'WOOD FLOOR', pri: 8, ramp: ['u', 'n', 'N', 'O'], floor: 1, step: 'wood' });
@@ -149,7 +149,7 @@ for (const [id, name, drop, tool, hp, ramp] of [
   ['w_iron', 'IRON WALL', 'wall_iron', 'pick', 24, ['X', 'm', 'l', 'L']],
 ]) wgObj(id, { name, kind: 'wall', tool, hp, ramp, tier: id === 'w_iron' ? 2 : 0, drops: [DR(drop, 1, 1)], glass: id === 'w_glass' ? 1 : 0 });
 // the natural rock the caves are cut from (drops stone, ores are in it)
-wgObj('cliff', { name: 'ROCK', kind: 'wall', tool: 'pick', hp: 12, ramp: ['1', '2', '3', 'd'], natural: 1, drops: [DR('stone', 1, 2)] });
+wgObj('cliff', { name: 'ROCK', kind: 'wall', tool: 'pick', hp: 12, ramp: ['X', 'd', 'm', 'l'], natural: 1, drops: [DR('stone', 1, 2)] });
 wgObj('cliff_ice', { name: 'FROZEN ROCK', kind: 'wall', tool: 'pick', hp: 12, ramp: ['b', 'B', 'c', 'C'], natural: 1, drops: [DR('stone', 1, 1), DR('ice_shard', 0, 1, 0.4)] });
 wgObj('cliff_sand', { name: 'SANDSTONE', kind: 'wall', tool: 'pick', hp: 10, ramp: ['e', 'a', 'A', 'w'], natural: 1, drops: [DR('sand', 1, 2), DR('stone', 0, 1, 0.5)] });
 wgObj('cliff_ash', { name: 'ASH ROCK', kind: 'wall', tool: 'pick', hp: 14, ramp: ['x', 'X', 'd', 'm'], natural: 1, drops: [DR('stone', 1, 2), DR('coal', 0, 1, 0.4)] });
@@ -284,11 +284,12 @@ function wgItemOf(id) { return WGI[id]; }
 // ore veins inside the caves' rock (appended: ids are saved)
 for (const [id, name, tier, ore, ramp] of [['u_coal', 'COAL SEAM', 0, 'coal', ['x', 'X', 'd', 'm']], ['u_copper', 'COPPER SEAM', 1, 'copper_ore', ['n', 'N', 'O', 'Y']],
   ['u_iron', 'IRON SEAM', 2, 'iron_ore', ['d', 'm', 'R', 'l']], ['u_crystal', 'CRYSTAL SEAM', 3, 'crystal', ['b', 'B', 'c', 'C']], ['u_star', 'STAR SEAM', 4, 'star_ore', ['o', 'y', 'Y', 'w']]])
-  wgObj(id, { name, kind: 'wall', tool: 'pick', hp: 14 + tier * 8, tier, ore: ramp, natural: 1, ramp: ['1', '2', '3', 'd'], drops: [DR(ore, 2, 3), DR('stone', 0, 1, 0.4)], light: tier >= 3 ? 48 : 0 });
+  wgObj(id, { name, kind: 'wall', tool: 'pick', hp: 14 + tier * 8, tier, ore: ramp, natural: 1, ramp: ['X', 'd', 'm', 'l'], drops: [DR(ore, 2, 3), DR('stone', 0, 1, 0.4)], light: tier >= 3 ? 48 : 0 });
 
 // ---------- later additions (append only: ids are saved in worlds) ----------
 wgObj('wild_potato', { name: 'WILD POTATOES', kind: 'plant', hp: 1, solid: 0, drops: [DR('potato', 1, 2), DR('seed_potato', 0, 1, 0.4)] });
 BIOMES.forest.veg.push(['wild_potato', 0.5]); BIOMES.swamp.veg.push(['wild_potato', 0.6]);
+wgObj('cliff_hi', { name: 'ROCK', kind: 'wall', tool: 'pick', hp: 12, ramp: ['x', 'X', 'm', 'l'], natural: 1, drops: [DR('stone', 1, 2)] }); // surface ridges: darker face than the floor
 // coal gives the odd glowing ember, trees give saplings as items
 for (const o of OBJ) { if (!o) continue;
   if (o.id === 'ore_coal' || o.id === 'u_coal') o.drops.push(DR('ember', 0, 1, 0.25));

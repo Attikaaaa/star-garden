@@ -3,11 +3,13 @@
 // entities, the day-night light mask and weather. World pixels map to the play view with the camera at its centre.
 const WGR = { lightCv: null, lights: [], frame: 0 };
 
+const WG_TONED = { grass: 1, jungle: 1, sand: 1, snow: 1, dirt: 1, mud: 1, ash: 1 };
+function wgTone(seed, x, y) { const n = WGW.f(seed + 40, x / 13, y / 13, 2); return n > 0.28 ? 2 : n < -0.3 ? 1 : 0; }
 function wgChunkArt(ch) {
   const CS = WG.CS, [c, g] = wgCv(CS * 16, CS * 16), w = WGS.world, dim = ch.dim, X0 = ch.cx * CS, Y0 = ch.cy * CS;
   for (let j = 0; j < CS; j++) for (let i = 0; i < CS; i++) {
     const tx = X0 + i, ty = Y0 + j, gid = ch.g[j * CS + i], gr = GROUND[gid], v = hash(tx, ty, 77) & 3;
-    if (!gr.liq) g.drawImage(wgGroundTex(gid, v), i * 16, j * 16);
+    if (!gr.liq) g.drawImage(wgGroundTex(gid, v, WG_TONED[gr.id] && dim === 'o' ? wgTone(w.seed, tx, ty) : 0), i * 16, j * 16);
     else if (gid === G_ID.shallow) { g.fillStyle = 'rgba(201,245,255,0.18)'; g.fillRect(i * 16, j * 16, 16, 16); }
     // edges: every higher priority neighbour type grows into this tile
     const ng = new Array(8);
@@ -140,14 +142,14 @@ function wgDrawLight(cx0, cy0) {
   const lights = WGR.lights;
   const p = WGS.p;
   // the hero carries a small glow in the dark; a lit torch in hand makes it bigger
-  if (amb > 0.15 && p) { const h = WGS.inv[WGS.sel]; lights.push({ x: p.x - cx0, y: p.y - 10 - cy0, r: h && (h.id === 'torch' || h.id === 'lantern') ? 78 : 30, f: 1 }); }
+  if (amb > 0.15 && p) { const h = WGS.inv[WGS.sel]; lights.push({ x: p.x - cx0, y: p.y - 10 - cy0, r: h && (h.id === 'torch' || h.id === 'lantern') ? 96 : WGS.dim === 'u' ? 64 : 30, f: 1 }); }
   if (amb < 0.04 && !lights.length) return;
   const W = Math.ceil(SCR.w / 2), H = Math.ceil(SCR.h / 2);
   if (!WGR.lightCv || WGR.lightCv.width !== W || WGR.lightCv.height !== H) { WGR.lightCv = wgCv(W, H)[0]; }
   const L = WGR.lightCv.getContext('2d');
   L.globalCompositeOperation = 'source-over';
   L.clearRect(0, 0, W, H);
-  const night = WGS.dim === 'u' ? 'rgba(14,8,40,' : 'rgba(18,12,56,';
+  const night = WGS.dim === 'u' ? 'rgba(10,8,30,' : 'rgba(18,12,56,';
   L.fillStyle = night + amb + ')'; L.fillRect(0, 0, W, H);
   L.globalCompositeOperation = 'destination-out';
   const punch = (cx, cy, r, a) => {
@@ -175,4 +177,28 @@ function wgDrawSky() { // dawn and dusk colour over the whole surface
   if (c > 0.6 && c < 0.8) a = Math.sin((c - 0.6) / 0.2 * Math.PI) * 0.16;
   else if (c > 0.18 && c < 0.34) { a = Math.sin((c - 0.18) / 0.16 * Math.PI) * 0.12; col = '255,170,120'; }
   if (a > 0.01) fillScreen('rgba(' + col + ',' + a.toFixed(3) + ')');
+}
+
+// ---------- ambient life: butterflies by day, fireflies by night, drifting leaves and desert dust (no entities, nothing saved) ----------
+function wgDrawAmbient(cx0, cy0) {
+  if (WGS.dim !== 'o' || !wgOpt().amb) return;
+  const w = WGS.world, t = WGS.t, night = wgNight(WGS.clock), C = 80, gx0 = Math.floor(cx0 / C) - 1, gy0 = Math.floor(cy0 / C) - 1, gx1 = Math.floor((cx0 + SCR.w) / C) + 1, gy1 = Math.floor((cy0 + SCR.h) / C) + 1;
+  for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+    const h = hash(gx, gy, 4242), ax = gx * C + (h & 63), ay = gy * C + ((h >>> 6) & 63), b = wgSurface(w.seed, Math.floor(ax / 16), Math.floor(ay / 16)).b, ph = (h >>> 12) % 628 / 100;
+    const sx = (n, k) => Math.round(ax + Math.sin(t * 0.5 * k + ph + n) * 22 - cx0), sy = (n, k) => Math.round(ay + Math.cos(t * 0.37 * k + ph * 1.7 + n) * 14 - cy0);
+    if (night < 0.35 && (b === 'meadow' || b === 'forest' || b === 'highland') && h % 3 === 0) {
+      for (let n = 0; n < 2; n++) {
+        const x = sx(n * 2, 1), y = sy(n * 2, 1) - Math.round(Math.abs(Math.sin(t * 3 + n)) * 3), col = ['P', 'y', 'c', 'O', 'w'][(h >>> 20) % 5], f = Math.floor(t * 9 + n) % 2;
+        shadow(x, y + 10, 3); rect(x, y, 1, 1, '0'); rect(x - 1 - f, y - 1, 1 + f, 1 + f, col); rect(x + 1, y - 1, 1 + f, 1 + f, col);
+      }
+    } else if (night > 0.4 && (b === 'forest' || b === 'swamp' || b === 'jungle' || b === 'meadow') && h % 2 === 0) {
+      for (let n = 0; n < 3; n++) { const a = 0.35 + Math.sin(t * 2.2 + n * 2 + ph) * 0.35; if (a > 0.15) { const x = sx(n * 3, 0.8), y = sy(n * 3, 0.8) - 6; ctx.globalAlpha = Math.min(1, a * 0.35); rect(x - 1, y - 1, 3, 3, 'y'); ctx.globalAlpha = Math.min(1, a + 0.3); rect(x, y, 1, 1, 'Y'); ctx.globalAlpha = 1; } }
+    } else if ((b === 'forest' || b === 'jungle') && h % 2 === 1) {
+      const k = (t * 0.25 + ph) % 1, x = Math.round(ax + Math.sin(t * 1.3 + ph) * 8 + k * 30 - cx0), y = Math.round(ay - 40 + k * 90 - cy0);
+      rect(x, y, 2, 1, (h >>> 9) % 2 ? 'O' : 'g'); rect(x + 1, y + 1, 1, 1, 'n');
+    } else if (b === 'desert' && h % 2 === 0) {
+      const k = (t * 0.6 + ph) % 1, x = Math.round(ax - 60 + k * 160 - cx0), y = Math.round(ay + Math.sin(k * 9) * 3 - cy0);
+      ctx.globalAlpha = 0.6; rect(x, y, 3, 1, 'A'); rect(x + 5, y + 1, 2, 1, 'a'); ctx.globalAlpha = 1;
+    }
+  }
 }

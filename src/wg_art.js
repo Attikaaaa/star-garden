@@ -39,8 +39,9 @@ function wgMake(name, w, h, fn, outline) {
 const wgSpr = (n) => WGA.cache[n];
 
 // ---------- Ground textures ----------
-function wgGroundTex(gid, v) {
-  const key = 'g' + gid + '_' + v;
+function wgGroundTex(gid, v, tone) {
+  tone = tone || 0;
+  const key = 'g' + gid + '_' + v + (tone ? 't' + tone : '');
   if (WGA.cache[key]) return WGA.cache[key];
   const gr = GROUND[gid], R = gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16);
   const base = { dirt: 1, mud: 0, snow: 2, ice: 1, cave: 0, path: 1, tilled: 1, ash: 1, moss: 1, rock: 1, sand: 1, grass: 1, jungle: 1, deep: 1, shallow: 1, lava: 1 }[gr.id];
@@ -91,6 +92,10 @@ function wgGroundTex(gid, v) {
       wgRc(g, 2, 2, 12, 1, R[3]); wgRc(g, 2, 13, 12, 1, R[3]); wgRc(g, 2, 2, 1, 12, R[3]); wgRc(g, 13, 2, 1, 12, R[3]);
       wgRc(g, 6, 6, 4, 4, R[2]); wgPx(g, 7, 7, R[3]); sc(4, R[2]); break;
     }
+  }
+  if (tone) { // broad patches of shade (1) and sun (2): a loose pixel dither over the base
+    const col = tone === 1 ? R[0] : R[2];
+    for (let y = 0; y < 16; y += 2) for (let x = 0; x < 16; x += 2) if (((x + y) >> 1) % 2 === 0 && rng() < 0.5) wgRc(g, x + (rng() < 0.3 ? 1 : 0), y, 1, 1, col);
   }
   WGA.cache[key] = c;
   return c;

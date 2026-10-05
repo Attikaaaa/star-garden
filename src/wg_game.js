@@ -19,7 +19,13 @@ function wgNewPlayer(x, y) {
 
 // ---------- inventory ----------
 function wgInvNew() { return new Array(36).fill(null); }
+// ---------- player options (kept with the other settings) ----------
+const WG_KEYS = [['up', 'UP', 'KeyW'], ['down', 'DOWN', 'KeyS'], ['left', 'LEFT', 'KeyA'], ['right', 'RIGHT', 'KeyD'], ['bag', 'BAG', 'KeyE'], ['drop', 'DROP', 'KeyQ'], ['use', 'USE', 'KeyF'], ['run', 'RUN', 'ShiftLeft']];
+function wgOpt() { const S = Save.settings; return S.wg || (S.wg = { part: 2, amb: 1, wx: 1, info: 0, hc: 0, slow: 0, keys: {} }); }
+const wgKey = (n) => wgOpt().keys[n] || WG_KEYS.find(k => k[0] === n)[2];
+const wgKeyName = (c) => c.replace('Key', '').replace('Arrow', '').replace('Left', ' L').replace('Right', ' R').toUpperCase();
 function wgInvAdd(inv, id, n) {
+  if (inv === WGS.inv && WGS.p) (WGS.p.seen || (WGS.p.seen = {}))[id] = 1; // recipe book: an item you have held unlocks its recipes
   const max = WGI[id].stack;
   for (let i = 0; i < inv.length && n > 0; i++) if (inv[i] && inv[i].id === id && inv[i].n < max) { const t = Math.min(n, max - inv[i].n); inv[i].n += t; n -= t; }
   for (let i = 0; i < inv.length && n > 0; i++) if (!inv[i]) { const t = Math.min(n, max); inv[i] = { id, n: t }; n -= t; }
@@ -39,7 +45,7 @@ function wgNight(clock) {
   return wgClamp((d - 0.55) / 0.3, 0, 1);
 }
 function wgAmbient() {
-  if (WGS.dim === 'u') return 0.9;
+  if (WGS.dim === 'u') return 0.66;
   const w = WGS.weather ? WGS.weather.dark : 0;
   return wgClamp(wgNight(WGS.clock) * 0.78 + w, 0, 0.88);
 }
@@ -67,6 +73,7 @@ function wgMoveBox(e, dx, dy, hw, hh) {
 
 // ---------- effects ----------
 function wgPart(x, y, n, o) {
+  const po = wgOpt().part; if (!po) return; if (po === 1) n = Math.ceil(n / 2);
   for (let i = 0; i < n; i++) {
     if (WGS.parts.length > 260) WGS.parts.shift();
     const a = Math.random() * 6.283, s = (o.s || 30) * (0.4 + Math.random() * 0.8);
@@ -274,4 +281,22 @@ function wgGoDim(dim, tx, ty) {
   WGS.p.x = tx * 16 + 8; WGS.p.y = ty * 16 + 26;
   wgToast(dim === 'u' ? 'DOWN INTO THE CAVES' : 'BACK TO THE SURFACE');
   wgSfx('door');
+}
+
+// ---------- stars: things to aim for ----------
+const WG_ACH = [
+  ['wood', 'FIRST WOOD', 'PICK UP SOME WOOD', (c) => c.seen.wood], ['stone', 'STONE AGE', 'MINE SOME STONE', (c) => c.seen.stone], ['bench', 'CRAFTSPERSON', 'MAKE A WORKBENCH', (c) => c.seen.bench],
+  ['torch', 'LET THERE BE LIGHT', 'MAKE A TORCH', (c) => c.seen.torch], ['bed', 'HOME SWEET HOME', 'MAKE A BED', (c) => c.seen.bed], ['farm', 'GREEN THUMB', 'HARVEST A CROP', (c) => c.seen.wheat || c.seen.carrot || c.seen.potato || c.seen.pumpkin],
+  ['bread', 'BAKER', 'BAKE BREAD', (c) => c.seen.bread], ['stew', 'CHEF', 'COOK A STEW', (c) => c.seen.stew], ['fish', 'CATCH OF THE DAY', 'CATCH A FISH', (c) => c.seen.fish], ['wool', 'SHEARER', 'SHEAR A SHEEP', (c) => c.seen.wool],
+  ['copper', 'COPPER TOUCH', 'SMELT A COPPER BAR', (c) => c.seen.copper], ['iron', 'IRON WILL', 'SMELT AN IRON BAR', (c) => c.seen.iron], ['crystal', 'SHINY!', 'FIND A CRYSTAL', (c) => c.seen.crystal], ['starbar', 'STAR FORGED', 'MAKE A STAR BAR', (c) => c.seen.star_bar],
+  ['armor', 'WELL DRESSED', 'WEAR HEAD, BODY AND FEET', (c) => c.p.armor.head && c.p.armor.body && c.p.armor.feet], ['cave', 'DEEP DIVER', 'GO DOWN INTO THE CAVES', (c) => c.st.cave],
+  ['far', 'EXPLORER', 'WALK 600 TILES AWAY', (c) => c.st.far >= 600], ['kills10', 'HUNTER', 'DEFEAT 10 CREATURES', (c) => c.st.kills >= 10], ['kills50', 'SLAYER', 'DEFEAT 50 CREATURES', (c) => c.st.kills >= 50],
+  ['day4', 'SURVIVOR', 'SEE THE FOURTH DAY', (c) => WGS.day >= 3], ['day11', 'VETERAN', 'SEE THE ELEVENTH DAY', (c) => WGS.day >= 10], ['king', 'KING OF SLIME', 'DEFEAT THE SLIME KING', (c) => c.st.slimeking], ['warden', 'STAR WARDEN', 'DEFEAT THE STAR WARDEN', (c) => c.st.starwarden],
+  ['friend', 'BETTER TOGETHER', 'PLAY WITH A FRIEND', () => typeof WGN !== 'undefined' && WGN.role && (WGN.role === 'client' || WGN.peers.some(q => q.pid > 0))],
+];
+function wgAchTick() {
+  const m = WGS.world && WGS.world.meta, p = WGS.p; if (!m || !p || WGS.net) return;
+  const st = m.stats || (m.stats = { kills: 0, far: 0 }), ach = m.ach || (m.ach = {}), c = { seen: p.seen || {}, p, st };
+  st.far = Math.max(st.far, Math.round(Math.hypot(p.x, p.y) / 16)); if (WGS.dim === 'u') st.cave = 1;
+  for (const [id, name, , test] of WG_ACH) if (!ach[id] && test(c)) { ach[id] = WGS.day + 1; wgToast('STAR: ' + name, 3.5); wgSfx('confirm'); wgPart(p.x, p.y - 14, 12, { c: ['y', 'Y', 'w'], s: 40, up: 30, life: 0.8, sz: 2 }); }
 }

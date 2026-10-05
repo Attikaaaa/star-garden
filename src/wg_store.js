@@ -29,7 +29,7 @@ function wgSnapshot() {
   const p = WGS.p;
   w.meta.played = (w.meta.played || 0) + Math.round(WGS.tf || 0); WGS.tf = 0;
   w.meta.last = Date.now(); w.meta.day = WGS.day;
-  return { meta: w.meta, saved, st: { p: { x: p.x, y: p.y, hp: p.hp, food: p.food, sat: p.sat, armor: p.armor, spawn: p.spawn, look: p.look, name: p.name, xp: p.xp }, inv: WGS.inv, sel: WGS.sel, clock: WGS.clock, day: WGS.day, dim: WGS.dim, signs: WGS.signs || {}, spawn: w.spawn, mobs: [] } };
+  return { meta: w.meta, saved, st: { p: { x: p.x, y: p.y, hp: p.hp, food: p.food, sat: p.sat, armor: p.armor, spawn: p.spawn, look: p.look, name: p.name, xp: p.xp, seen: p.seen }, inv: WGS.inv, sel: WGS.sel, clock: WGS.clock, day: WGS.day, dim: WGS.dim, signs: WGS.signs || {}, spawn: w.spawn, mobs: [] } };
 }
 function wgSaveNow() {
   if (!WGS.world || WGS.readonly) return Promise.resolve();
@@ -41,6 +41,7 @@ function wgLoadRecord(rec) {
   WGS.world = w; WGS.dim = rec.st.dim || 'o'; WGS.clock = rec.st.clock; WGS.day = rec.st.day || 0; WGS.signs = rec.st.signs || {};
   const p = wgNewPlayer(rec.st.p.x, rec.st.p.y); Object.assign(p, rec.st.p); WGS.p = p;
   WGS.inv = rec.st.inv; WGS.sel = rec.st.sel || 0; WGS.mobs = []; WGS.drops = []; WGS.parts = []; WGS.tf = 0; WGS.t = 0;
+  for (const s of WGS.inv) if (s) (p.seen || (p.seen = {}))[s.id] = 1; // older saves: what you carry is known
   WGS.cam.x = p.x; WGS.cam.y = p.y;
 }
 // ---------- export / import ----------

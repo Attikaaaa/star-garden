@@ -37,10 +37,11 @@ window.addEventListener('keydown', (e) => {
   const f = WGU.edit; if (!f || G.state !== 'wg') return;
   if (e.key === 'Backspace') f.v = f.v.slice(0, -1);
   else if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') { WGU.edit = null; }
-  else if (e.key.length === 1 && f.v.length < f.max && /[A-Za-z0-9 _\-]/.test(e.key)) f.v += e.key.toUpperCase();
+  else if (e.key.length === 1 && f.v.length < f.max && /[A-Za-z0-9 _\-\/]/.test(e.key)) f.v += e.key.toUpperCase();
   else return;
   e.preventDefault(); e.stopPropagation();
 }, true);
+window.addEventListener('keydown', (e) => { if (WGU.bind && G.state === 'wg') { WGU.bind(e.code); e.preventDefault(); e.stopPropagation(); } }, true); // rebinding a key
 function wgField(label, f, x, y, w) {
   const act = WGU.edit === f, inside = Input.mx >= x && Input.mx < x + w && Input.my >= y && Input.my < y + 14;
   if (Input.mouseHit) WGU.edit = inside ? f : (act ? null : WGU.edit);
@@ -69,7 +70,7 @@ function updateWG(dt) {
   if (s === 'play') return wgPlayUpdate(dt);
   if (s === 'loading') return;
   if (s === 'dead') { WGS.deadT += dt; wgUpdateWorldBg(dt); return; }
-  if (s === 'pause' || s === 'inv' || s === 'chest') { wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed('KeyE', 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
+  if (s === 'pause' || s === 'inv' || s === 'chest') { wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
 }
 function wgUpdateWorldBg(dt) { for (const q of WGS.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.age += dt; } WGS.parts = WGS.parts.filter(q => q.age < q.life); }
 
@@ -168,34 +169,37 @@ function wgStations() {
   return set;
 }
 function wgPlayUpdate(dt) {
+  WGS.achT = (WGS.achT || 0) - dt; if (WGS.achT <= 0) { WGS.achT = 1; wgAchTick(); }
+  dt *= [1, 0.75, 0.5][wgOpt().slow] || 1;
   const p = WGS.p, w = WGS.world;
-  if (WGU.chatOpen && WGU.edit !== WGU.chatF) { if (WGU.chatF.v.trim()) { if (WGN.role === 'host') { const msg = WGU.chatF.v.trim(); WGN.chat.push({ who: p.name, msg, t: 8 }); wgnAll({ t: 'chat', who: p.name, msg }, null); } else wgnSend(WGN.link, { t: 'chat', msg: WGU.chatF.v.trim() }); } WGU.chatOpen = false; Input.hit = Object.create(null); }
+  if (WGU.chatOpen && WGU.edit !== WGU.chatF) { if (WGU.chatF.v.trim()) { if (WGN.role === 'host' && WGU.chatF.v.trim()[0] === '/') { const r = wgnCmd(WGU.chatF.v); if (r) WGN.chat.push({ who: '', msg: r, t: 8 }); } else if (WGN.role === 'host') { const msg = WGU.chatF.v.trim(); WGN.chat.push({ who: p.name, msg, t: 8 }); wgnAll({ t: 'chat', who: p.name, msg }, null); } else wgnSend(WGN.link, { t: 'chat', msg: WGU.chatF.v.trim() }); } WGU.chatOpen = false; Input.hit = Object.create(null); }
   if (WGN.role && !WGU.chatOpen && pressed('Enter')) { WGU.chatF = { v: '', max: 50 }; WGU.edit = WGU.chatF; WGU.chatOpen = true; return wgPlayFrozen(dt); }
   if (WGU.chatOpen) return wgPlayFrozen(dt);
   if (pressed('Escape', 'PadStart')) { WGS.scr = 'pause'; WGS.ui = {}; Audio_.sfx('select'); return; }
-  if (pressed('KeyE', 'PadY', 'Tab')) { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; Audio_.sfx('select'); return; }
+  if (pressed(wgKey('bag'), 'PadY', 'Tab')) { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; Audio_.sfx('select'); return; }
   if (WGS.photo === 2) { WGS.photo = 0; cv.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'wildgrove-' + Date.now() + '.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); wgToast('PHOTO SAVED', 2); }); }
   else if (WGS.photo === 1) WGS.photo = 2;
   if (pressed('F2')) WGS.photo = 1;
   for (let i = 0; i < 9; i++) if (pressed('Digit' + (i + 1))) WGS.sel = i;
   if (Input.wheel) { WGS.sel = (WGS.sel + (Input.wheel > 0 ? 1 : 8)) % 9; Input.wheel = 0; }
-  if (pressed('KeyQ')) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); } }
+  if (pressed(wgKey('drop'))) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); } }
   // time
-  WGS.clock += dt / wgDayLen(); if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast('DAY ' + (WGS.day + 1), 2.5); }
+  if (!(WGS.world.meta.rules || {}).noCycle) WGS.clock += dt / wgDayLen(); if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast('DAY ' + (WGS.day + 1), 2.5); }
   const Tt = Input.touch;
   if (Input.lastAim === 'touch') { WGS.touch = { mx: Tt.mx, my: Tt.my, act: !!Tt.aim, use: WGS.tapUse }; if (Tt.aim) { Input.mx = Tt.aim.x; Input.my = Tt.aim.y; } else if (WGS.tapAt) { Input.mx = WGS.tapAt[0]; Input.my = WGS.tapAt[1]; } WGS.tapUse = false; WGS.tapAt = null; } else WGS.touch = null;
   // movement
-  let mx = (Input.down.KeyD || Input.down.ArrowRight ? 1 : 0) - (Input.down.KeyA || Input.down.ArrowLeft ? 1 : 0), my = (Input.down.KeyS || Input.down.ArrowDown ? 1 : 0) - (Input.down.KeyW || Input.down.ArrowUp ? 1 : 0);
+  const kd = (n, arrow) => Input.down[wgKey(n)] || Input.down[arrow];
+  let mx = (kd('right', 'ArrowRight') ? 1 : 0) - (kd('left', 'ArrowLeft') ? 1 : 0), my = (kd('down', 'ArrowDown') ? 1 : 0) - (kd('up', 'ArrowUp') ? 1 : 0);
   if (WGS.touch) { mx += WGS.touch.mx; my += WGS.touch.my; }
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
   const g = GROUND[wgGround(w, WGS.dim, Math.floor(p.x / 16), Math.floor(p.y / 16))];
-  const run = (Input.down.ShiftLeft || Input.down.ShiftRight) && p.food > 3;
+  const run = (Input.down[wgKey('run')] || (wgKey('run') === 'ShiftLeft' && Input.down.ShiftRight)) && p.food > 3;
   let sp = 58 * (run ? 1.55 : 1) * g.speed * (p.buff.speed ? 1.3 : 1);
   if (g.slip) { p.vx += mx * sp * dt * 3; p.vy += my * sp * dt * 3; p.vx *= 0.985; p.vy *= 0.985; } else { p.vx *= 0.8; p.vy *= 0.8; }
   const kx = g.slip ? p.vx : mx * sp + p.vx, ky = g.slip ? p.vy : my * sp + p.vy;
   p.moving = !!(mx || my);
   wgMoveBox(p, kx * dt, 0, 4, 2); wgMoveBox(p, 0, ky * dt, 4, 2);
-  if (p.moving) { p.walkT += dt * (run ? 11 : 8); if (Math.abs(mx) > Math.abs(my)) { p.face = mx > 0 ? 'r' : 'l'; } else if (my) p.face = my > 0 ? 'd' : 'u'; if (Math.floor(p.walkT) % 4 === 0 && WGS.stepT !== Math.floor(p.walkT)) { WGS.stepT = Math.floor(p.walkT); if (g.liq) wgPart(p.x, p.y, 1, { c: ['c', 'C', 'w'], s: 12, up: 8, life: 0.4 }); } }
+  if (p.moving) { p.walkT += dt * (run ? 11 : 8); if (Math.abs(mx) > Math.abs(my)) { p.face = mx > 0 ? 'r' : 'l'; } else if (my) p.face = my > 0 ? 'd' : 'u'; if (Math.floor(p.walkT) % 4 === 0 && WGS.stepT !== Math.floor(p.walkT)) { WGS.stepT = Math.floor(p.walkT); if (g.liq) wgPart(p.x, p.y, 1, { c: ['c', 'C', 'w'], s: 12, up: 8, life: 0.4 }); else { const dc = { grass: ['G', 'h', 'H'], jungle: ['g', 'G', 'h'], sand: ['a', 'A', 'e'], snow: ['w', 'l', 'L'], ice: ['C', 'w'], dirt: ['n', 'N', 'O'], path: ['n', 'N', 'O'], mud: ['u', 'n', 'N'], tilled: ['u', 'n', 'N'], rock: ['m', 'l', 'd'], ash: ['X', 'm', 'd'], cave: ['X', 'm', 'd'], moss: ['g', 'G', 'm'] }[g.id]; if (dc) wgPart(p.x, p.y, run ? 3 : 2, { c: dc, s: 16, up: 7, life: 0.35 }); } } }
   // aim: mouse (or the facing tile with keys)
   const cam = WGS.cam, cx0 = Math.round(cam.x) - VW / 2, cy0 = Math.round(cam.y) - VH / 2;
   let ax, ay;
@@ -207,7 +211,7 @@ function wgPlayUpdate(dt) {
   WGS.target = d <= WG_REACH ? { tx: ttx, ty: tty } : null;
   // act
   const lmb = Input.mouseDown && Input.lastAim === 'mouse' || Input.down.Space || Input.down.KeyJ || WGS.touch && WGS.touch.act;
-  const rmb = Input.rHit || pressed('KeyF', 'KeyK') || (WGS.touch && WGS.touch.use);
+  const rmb = Input.rHit || pressed(wgKey('use'), 'KeyK') || (WGS.touch && WGS.touch.use);
   p.swingCd = Math.max(0, (p.swingCd || 0) - dt); p.swing = Math.max(0, p.swing - dt); p.hurt = Math.max(0, p.hurt - dt); p.inv = Math.max(0, p.inv - dt);
   const held = wgHeld();
   if (lmb) {
@@ -252,7 +256,7 @@ function wgGrowTick(dt) {
       const k = Math.floor(Math.random() * CS * CS), id = ch.o[k]; if (!id) continue;
       const o = OBJ[id]; if (!o) continue;
       const tx = ch.cx * CS + k % CS, ty = ch.cy * CS + Math.floor(k / CS);
-      if (o.kind === 'crop' && ch.m[k] < 3) { const wet = WGS.weather || (WGS.wet && WGS.wet.has(WGS.dim + tx + ',' + ty)); if (Math.random() < (wet ? 2 : 1) / CROP[o.crop] * CS * CS / 6) { ch.o[k] = id; ch.m[k]++; ch.mod = ch.artDirty = true; } }
+      if (o.kind === 'crop' && ch.m[k] < 3) { const wet = WGS.weather || (WGS.wet && WGS.wet.has(WGS.dim + tx + ',' + ty)); if (Math.random() < (wet ? 2 : 1) * ([0.5, 1, 2][(WGS.world.meta.rules || {}).grow === undefined ? 1 : WGS.world.meta.rules.grow]) / CROP[o.crop] * CS * CS / 6) { ch.o[k] = id; ch.m[k]++; ch.mod = ch.artDirty = true; } }
       else if (o.ripe && Math.random() < 0.02) { wgSetObj(w, WGS.dim, tx, ty, O_ID[o.ripe]); }
       else if (o.kind === 'sapling' && Math.random() < 0.01) { const t = O_ID[o.grow === 'oak' ? 'oak' : o.grow]; if (t) wgSetObj(w, WGS.dim, tx, ty, t); }
     }
@@ -274,7 +278,7 @@ function wgDrawPlayer(e, cx0, cy0) {
   if (p.inv > 0 && Math.floor(WGS.t * 20) % 2) return;
   const spr = wgPlayerSpr(face, fr, p.look || { skin: 0, hair: 0, shirt: 0 });
   ctx.save(); ctx.translate(sx, sy - 24); if (p.face === 'r') ctx.scale(-1, 1);
-  ctx.drawImage(spr, -9, 0, 18, 26, -9, 0, 18, wade ? 18 : 26);
+  ctx.drawImage(spr, 0, 0, 18, 26, -9, 0, 18, wade ? 18 : 26);
   ctx.restore();
   if (wade) { const t = Math.floor(WGS.t * 4) % 2; rect(sx - 8, sy - 7, 16, 1, 'C'); rect(sx - 9 + t, sy - 6, 18 - t * 2, 2, 'c'); }
   // the held tool, swinging
@@ -318,10 +322,11 @@ function wgDrawJoin() {
   const ui = WGS.ui; wgUiBegin(ui);
   wtext('JOIN A WORLD', VW / 2, 14, 'Y', 3, 1);
   panel(72, 40, 240, 110);
-  wgField('FRIEND CODE (5 LETTERS)', WGU.code, 84, 66, 216);
-  wtext(WGN.status || WGN.err || 'ASK YOUR FRIEND FOR THEIR CODE', VW / 2, 92, WGN.err ? 'R' : 'L', 1, 1);
+  WGU.pw = WGU.pw || { v: '', max: 12 };
+  wgField('FRIEND CODE (5 LETTERS)', WGU.code, 84, 62, 100); wgField('PASSWORD (IF ANY)', WGU.pw, 196, 62, 104);
+  wtext(WGN.status || WGN.err || 'ASK YOUR FRIEND FOR THEIR CODE', VW / 2, 90, WGN.err ? 'R' : 'L', 1, 1);
   const c = WGU.code.v.trim();
-  if (wgButton(ui, 'CONNECT', 84, 108, 104, { off: c.length < 5 || !!WGN.status }) || (c.length === 5 && pressed('Enter') && !WGN.status && !WGU.edit && ui.armed)) { WGU.edit = null; wgnJoin(c); }
+  if (wgButton(ui, 'CONNECT', 84, 108, 104, { off: c.length < 5 || !!WGN.status }) || (c.length === 5 && pressed('Enter') && !WGN.status && !WGU.edit && ui.armed)) { WGU.edit = null; WGN.pw = WGU.pw.v.trim(); wgnJoin(c); }
   ui.armed = true;
   if (wgButton(ui, 'BACK', 196, 108, 104)) { wgnStop(); WGN.err = ''; WGN.status = ''; WGS.scr = 'worlds'; WGS.ui = {}; return; }
   wgUiEnd(ui);
@@ -335,9 +340,9 @@ function wgDrawBrowse() {
   if (!L.length) wtext(WGN.listing ? 'LOOKING FOR OPEN WORLDS...' : 'NO OPEN WORLDS RIGHT NOW', VW / 2, 90, 'L', 1, 1);
   for (let k = 0; k < Math.min(5, L.length); k++) {
     const d = L[k], y = 40 + k * 22;
-    if (wgButton(ui, '', 58, y, 268, { h: 20 })) { wgnJoin(d.c); WGU.code = { v: d.c, max: 5 }; WGS.scr = 'join'; WGS.ui = {}; return; }
+    if (wgButton(ui, '', 58, y, 268, { h: 20 })) { WGU.code = { v: d.c, max: 5 }; WGS.scr = 'join'; WGS.ui = {}; return; }
     wtext(d.n, 66, y + 4, 'w', 1); wtext('HOST ' + (d.h || '?') + '  ' + (d.d === 'peaceful' ? 'PEACEFUL' : 'SURVIVAL'), 66, y + 12, 'L', 0);
-    wtext(d.p + '/' + d.x, 318, y + 7, 'h', 1, 2);
+    wtext(d.p + '/' + d.x + (d.k ? ' LOCKED' : ''), 318, y + 7, d.k ? 'Y' : 'h', 1, 2);
   }
   if (wgButton(ui, 'REFRESH', 52, 164, 84, { off: WGN.listing })) wgnBrowse();
   if (wgButton(ui, 'BACK', 248, 164, 84)) { WGS.scr = 'worlds'; WGS.ui = {}; return; }
@@ -345,6 +350,7 @@ function wgDrawBrowse() {
 }
 function wgDrawChat() {
   const L = -SCR.ox, B = -SCR.oy + SCR.h;
+  if (WGN.role === 'client' && WGN.ping !== undefined) wtext('PING ' + WGN.ping, -SCR.ox + SCR.w - 4, -SCR.oy + SCR.h - 10, WGN.ping < 150 ? 'h' : 'Y', 0, 2);
   let y = B - 60 - (WGU.chatOpen ? 0 : 0);
   for (const c of WGN.chat) { wtext((c.who ? c.who + ': ' : '') + c.msg, L + 6, y, c.who ? 'w' : 'Y', 2, 0); y += 9; }
   if (WGU.chatOpen) { const f = WGU.chatF; rect(L + 4, B - 14, 150, 11, '0'); rect(L + 5, B - 13, 148, 9, '1'); wtext(f.v + (Math.floor(WGS.t * 2) % 2 ? '_' : ''), L + 8, B - 12, 'w', 0); }
@@ -361,7 +367,7 @@ function wgWeatherTick(dt) {
   }
 }
 function wgDrawWeatherFX() {
-  const W = WGS.weather; if (!W || WGS.dim !== 'o') return;
+  const W = WGS.weather; if (!W || WGS.dim !== 'o' || !wgOpt().wx) return;
   const p = WGS.p, g = GROUND[wgGround(WGS.world, 'o', Math.floor(p.x / 16), Math.floor(p.y / 16))], snow = g.id === 'snow' || g.id === 'ice', l = -SCR.ox, t = -SCR.oy, w = SCR.w, h = SCR.h, T = WGS.t;
   const n = IS_TOUCH ? 40 : 70;
   for (let i = 0; i < n; i++) {

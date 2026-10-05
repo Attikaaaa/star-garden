@@ -45,16 +45,21 @@ function wgnRelay(i) {
   });
   return M;
 }
+function wgnPerm() { const mt = WGS.world.meta; return mt.perm || (mt.perm = { pass: '', white: 0, wl: [], ban: [], ops: [] }); }
 function wgnHostMsg(L, m) {
   L.heard = performance.now();
   const w = WGS.world;
   if (m.t === 'hello') {
     if (L.pid > 0) { wgnSend(L, { t: 'hi', pid: L.pid, w: wgnWelcome(L) }); return; }
     if (m.v !== WGN_PROTO) { wgnSend(L, { t: 'no', why: 'PLEASE RELOAD THE PAGE: NEW VERSION' }); return; }
+    const pm = wgnPerm(), nm = wgnClean(m.name), rj0 = String(m.rj || '').slice(0, 24);
+    if (pm.ban.includes(rj0) || pm.ban.includes(nm)) { wgnSend(L, { t: 'no', why: 'YOU ARE BANNED FROM THIS WORLD' }); return; }
+    if (pm.white && !pm.wl.includes(nm)) { wgnSend(L, { t: 'no', why: 'NOT ON THE WHITELIST' }); return; }
+    if (pm.pass && wgnClean(m.pw) !== pm.pass) { wgnSend(L, { t: 'no', why: m.pw ? 'WRONG PASSWORD' : 'THIS WORLD NEEDS A PASSWORD' }); return; }
     const old = WGN.peers.find(q => q !== L && q.rj && q.rj === m.rj && q.pid > 0); if (old) wgnDrop(old, true);
     const used = new Set(WGN.peers.map(q => q.pid)); let pid = 1; while (used.has(pid)) pid++;
     if (pid >= WGN.max) { wgnSend(L, { t: 'no', why: 'THAT WORLD IS FULL' }); return; }
-    L.pid = pid; L.rj = String(m.rj || '').slice(0, 24); L.name = wgnClean(m.name) || 'FRIEND' + pid; L.look = m.look || { skin: 0, hair: 0, shirt: 0 };
+    L.pid = pid; L.rj = String(m.rj || '').slice(0, 24); L.name = wgnClean(m.name) || 'FRIEND' + pid; L.ping = 0; L.look = m.look || { skin: 0, hair: 0, shirt: 0 };
     const st = (w.guests || {})[L.rj]; L.guest = st || null;
     const sp = st ? { x: st.x, y: st.y } : w.spawn; L.x = sp.x; L.y = sp.y; L.dim = st && st.dim || 'o'; L.hp = st ? st.hp : 20; L.face = 'd'; L.moving = false; L.walkT = 0;
     wgnSend(L, { t: 'hi', pid, w: wgnWelcome(L) });
@@ -67,8 +72,33 @@ function wgnHostMsg(L, m) {
   else if (m.t === 'hit') { const mob = WGS.mobs.find(q => q.id === m.id); if (mob && !mob.dead) { WGS.lootTo = L.pid; wgHurtMob(mob, Math.min(40, +m.dmg || 1), L.x, L.y); WGS.lootTo = 0; if (mob.hp > 0) mob.fear = 3; } }
   else if (m.t === 'cset') { const ch = wgCont(w, m.d, m.x, m.y, true); ch.length = 0; for (const s of m.a) ch.push(s); wgChunkAt(w, m.d, m.x, m.y).mod = true; wgnAll(m, L); }
   else if (m.t === 'me') { w.guests = w.guests || {}; w.guests[L.rj] = { x: L.x, y: L.y, dim: L.dim, hp: m.hp, food: m.food, inv: m.inv, armor: m.armor, sel: m.sel }; }
+  else if (m.t === 'ping') wgnSend(L, { t: 'pong', s: m.s });
+  else if (m.t === 'chat' && String(m.msg || '')[0] === '/') { const r = wgnPerm().ops.includes(L.rj) ? wgnCmd(m.msg, L) : 'ONLY OPERATORS CAN DO THAT'; wgnSend(L, { t: 'chat', who: '', msg: r }); }
   else if (m.t === 'chat') { const msg = String(m.msg || '').slice(0, 60); wgnAll({ t: 'chat', who: L.name, msg }, null); WGN.chat.push({ who: L.name, msg, t: 8 }); }
   else if (m.t === 'bye') wgnDrop(L, false);
+}
+// host / operator commands, typed in chat: /KICK name, /BAN name, /UNBAN name, /OP name, /WHITE ON|OFF|ADD name|DEL name, /PASS word|OFF, /TIME DAY|NIGHT, /LIST, /SAY text
+function wgnCmd(txt, by) {
+  const a = String(txt).trim().replace(/^\//, '').toUpperCase().split(/\s+/), c = a[0], arg = wgnClean(a[1]), pm = wgnPerm();
+  const peer = (n) => WGN.peers.find(q => q.pid > 0 && q.name === n);
+  if (c === 'KICK' || c === 'BAN') {
+    const q = peer(arg); if (!q) return 'NO PLAYER ' + arg;
+    if (c === 'BAN') { pm.ban.push(q.rj, q.name); }
+    wgnSend(q, { t: 'no', why: c === 'BAN' ? 'YOU WERE BANNED' : 'YOU WERE KICKED' }); wgnDrop(q, false); return (c === 'BAN' ? 'BANNED ' : 'KICKED ') + arg;
+  }
+  if (c === 'UNBAN') { pm.ban = pm.ban.filter(x => x !== arg); return 'UNBANNED ' + arg; }
+  if (c === 'OP') { const q = peer(arg); if (!q) return 'NO PLAYER ' + arg; if (!pm.ops.includes(q.rj)) pm.ops.push(q.rj); return arg + ' IS AN OPERATOR'; }
+  if (c === 'WHITE') {
+    if (a[1] === 'ON' || a[1] === 'OFF') { pm.white = a[1] === 'ON' ? 1 : 0; return 'WHITELIST ' + a[1]; }
+    const n = wgnClean(a[2]); if (a[1] === 'ADD' && n) { if (!pm.wl.includes(n)) pm.wl.push(n); return 'ADDED ' + n; }
+    if (a[1] === 'DEL' && n) { pm.wl = pm.wl.filter(x => x !== n); return 'REMOVED ' + n; }
+    return 'WHITE ON|OFF|ADD NAME|DEL NAME';
+  }
+  if (c === 'PASS') { pm.pass = arg === 'OFF' ? '' : arg; return pm.pass ? 'PASSWORD SET' : 'PASSWORD OFF'; }
+  if (c === 'TIME') { WGS.clock = arg === 'NIGHT' ? 0.85 : 0.3; return 'TIME SET'; }
+  if (c === 'LIST') return 'PLAYERS: ' + [WGS.p.name].concat(WGN.peers.filter(q => q.pid > 0).map(q => q.name)).join(' ');
+  if (c === 'SAY') { const msg = a.slice(1).join(' '); wgnAll({ t: 'chat', who: 'SERVER', msg }, null); WGN.chat.push({ who: 'SERVER', msg, t: 8 }); return ''; }
+  return 'KICK BAN UNBAN OP WHITE PASS TIME LIST SAY';
 }
 function wgnClean(n) { return String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10); }
 function wgnWelcome(L) {
@@ -111,7 +141,7 @@ function wgnJoin(code) {
   L.send = (str) => { const out = '{"f":"' + cid + '","q":' + (++L.sq) + ',"m":' + str + '}'; for (const M of L.conns) if (M.up) M.pub(base + '/h', out); };
   const look = (typeof WGU !== 'undefined' && WGU.look) || { skin: 0, hair: 0, shirt: 0 };
   let name = ''; try { name = localStorage.wgName || ''; } catch (e) { /* */ }
-  const hello = () => wgnSend(L, { t: 'hello', v: WGN_PROTO, rj, name: name || 'FRIEND', look });
+  const hello = () => wgnSend(L, { t: 'hello', v: WGN_PROTO, rj, name: name || 'FRIEND', look, pw: WGN.pw || '' });
   L.conns = NET_RELAYS.map(u => mqttOpen(u, base + '/c/' + cid, (payload) => {
     let d; try { d = JSON.parse(payload); } catch (e) { return; }
     if (!d || !d.m) return;
@@ -121,7 +151,8 @@ function wgnJoin(code) {
   setTimeout(() => { if (WGN.link === L && !L.open && WGN.role === 'client') { WGN.err = 'NO ONE ANSWERED. CHECK THE CODE.'; WGN.status = ''; wgnStop(); } }, 14000);
 }
 function wgnClientMsg(L, m) {
-  if (m.t === 'no') { WGN.err = m.why; WGN.status = ''; wgnStop(); return; }
+  if (m.t === 'pong') { WGN.ping = Math.round(performance.now() - m.s); return; }
+  if (m.t === 'no') { const was = L.open; WGN.err = m.why; WGN.status = ''; wgnStop(); if (was) wgnLeaveGame(); return; }
   if (m.t === 'hi' && !L.open) {
     L.open = true; clearInterval(L.helloT); WGN.pid = m.pid; WGN.status = '';
     wgnEnter(m.w);
@@ -144,7 +175,7 @@ function wgnClientMsg(L, m) {
   else if (m.t === 'dmg') wgHurtPlayer(m.dmg, m.fx, m.fy);
   else if (m.t === 'clk') { WGS.clock = m.c; WGS.day = m.d; WGS.wk = m.wk; }
   else if (m.t === 'chat') WGN.chat.push({ who: m.who, msg: m.msg, t: 8 });
-  else if (m.t === 'kick') { WGN.err = 'THE HOST CLOSED THE WORLD'; wgnStop(); wgnLeaveGame(); }
+  else if (m.t === 'kick' || (m.t === 'no' && L.open)) { WGN.err = 'THE HOST CLOSED THE WORLD'; wgnStop(); wgnLeaveGame(); }
 }
 function wgnEnter(wl) { // we are in: build the host's world around us
   const meta = { id: 'net', name: wl.name, seed: wl.seed, diff: wl.diff, created: 0, last: 0, played: 0, day: wl.day };
@@ -199,6 +230,7 @@ function wgnUpdate(dt) {
   } else if (WGN.link && WGN.link.open) {
     WGN.sendT -= dt;
     if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0 }, true); }
+    WGN.pgT = (WGN.pgT || 0) - dt; if (WGN.pgT <= 0) { WGN.pgT = 3; wgnSend(WGN.link, { t: 'ping', s: performance.now() }); }
     WGN.meT = (WGN.meT || 0) - dt; if (WGN.meT <= 0) { WGN.meT = 5; wgnSend(WGN.link, { t: 'me', hp: p.hp, food: p.food, inv: WGS.inv, armor: p.armor, sel: WGS.sel }); }
     // glide the mobs towards their last reported spot
     for (const m of WGS.mobs) if (m.tx !== undefined) { const k = Math.min(1, dt * 12); m.x += (m.tx - m.x) * k; m.y += (m.ty - m.y) * k; if (m.hurt > 0) m.hurt = Math.max(0, m.hurt - dt); }
@@ -208,7 +240,7 @@ function wgnUpdate(dt) {
 // ---------- the public list ----------
 function wgnAnnounce() {
   if (!WGN.pub || WGN.role !== 'host') return;
-  const m = JSON.stringify({ c: WGN.code, n: WGS.world.meta.name, h: WGS.p.name, p: 1 + WGN.peers.filter(q => q.pid > 0).length, x: WGN.max, d: WGS.world.meta.diff, v: WGN_PROTO });
+  const m = JSON.stringify({ c: WGN.code, n: WGS.world.meta.name, h: WGS.p.name, p: 1 + WGN.peers.filter(q => q.pid > 0).length, x: WGN.max, d: WGS.world.meta.diff, v: WGN_PROTO, k: wgnPerm().pass ? 1 : 0 });
   for (const M of WGN.relays) if (M && M.up) M.pub(WGN_PUB, m);
 }
 function wgnBrowse() {
