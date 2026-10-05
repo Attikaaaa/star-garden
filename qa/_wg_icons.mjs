@@ -1,0 +1,10 @@
+import { open, waitFor, sleep } from './lib.mjs';
+import fs from 'node:fs';
+const g = await open({ w: 1152, h: 648 });
+await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
+await g.ev(`enterWG()`); await sleep(300);
+const ids = (process.argv[2] || 'pick,axe,shovel,hoe,sword,spear').split(',');
+const tiers = ['wood','stone','copper','iron','crystal','star'];
+const url = await g.ev(`(() => { const ids = ${JSON.stringify(ids)}, tiers = ${JSON.stringify(tiers)}; const S = 8, c = document.createElement('canvas'); c.width = tiers.length * 16 * S + 8; c.height = ids.length * 16 * S + 8; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.fillStyle = '#4a2f7a'; x.fillRect(0,0,c.width,c.height);
+  ids.forEach((k, j) => tiers.forEach((t, i) => { const id = k + '_' + t; if (WGI[id]) x.drawImage(wgIcon(id), i * 16 * S + 4, j * 16 * S + 4, 16 * S, 16 * S); })); return c.toDataURL('image/png'); })()`);
+fs.writeFileSync('/tmp/icons.png', Buffer.from(url.split(',')[1], 'base64')); console.log('ok'); process.exit(0);

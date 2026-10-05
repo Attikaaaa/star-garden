@@ -113,10 +113,26 @@ function wgIcon(id) {
   const handle = (x0, y0, x1, y1) => { line(x0, y0, x1, y1, 'n'); line(x0 + 1, y0, x1 + 1, y1, 'u'); line(x0, y0 - 1, x1, y1 - 1, 'N'); };
   const done = (o) => { if (o !== false) wgOutline(c); WGA.cache[key] = c; return c; };
   const blob = (x, y, rx, ry, r) => wgBlob(g, x, y, rx, ry, r);
-  if (it.kind === 'tool' && it.tool === 'pick') { handle(3, 14, 11, 6); for (const [x, y] of [[3, 7], [4, 5], [6, 3], [8, 3], [10, 4], [12, 6], [13, 8]]) { wgPx(g, x, y, R[2]); wgPx(g, x, y + 1, R[1]); } wgPx(g, 6, 3, R[3]); wgPx(g, 8, 3, R[3]); wgPx(g, 3, 8, R[0]); wgPx(g, 13, 9, R[0]); return done(); }
-  if (it.kind === 'tool' && it.tool === 'axe') { handle(3, 14, 10, 5); blob(11, 5, 3.4, 4, R); wgRc(g, 9, 3, 1, 5, R[3]); wgPx(g, 14, 4, R[0]); wgPx(g, 14, 6, R[0]); return done(); }
-  if (it.kind === 'tool' && it.tool === 'shovel') { handle(3, 14, 10, 6); blob(12, 4, 2.8, 3.6, R); wgPx(g, 11, 2, R[3]); wgRc(g, 12, 6, 1, 2, R[0]); return done(); }
-  if (it.kind === 'tool' && it.tool === 'hoe') { handle(3, 14, 11, 5); wgRc(g, 9, 3, 6, 2, R[2]); wgRc(g, 9, 3, 6, 1, R[3]); wgRc(g, 14, 5, 2, 3, R[1]); wgPx(g, 15, 7, R[0]); return done(); }
+  if (it.kind === 'tool') { // pickaxe, axe, shovel, hoe: a brown shaft rising to the right and a head in the tier's metal
+    const H = it.tier === 0 ? ['u', 'e', 'a', 'A'] : R, px = (x, y, k) => { if (x >= 0 && x < 16 && y >= 0 && y < 16) wgPx(g, Math.round(x), Math.round(y), k); };
+    const shaft = (x0, y0, x1, y1) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; px(x, y, 'N'); px(x + 1, y, 'n'); px(x, y + 1, 'n'); } px(x0, y0, 'u'); px(x0 + 1, y0, 'u'); };
+    if (it.tool === 'pick') {
+      shaft(1, 14, 9, 5);
+      for (let x = 2; x <= 15; x++) { const t = (x - 8.5) / 6.5, y = Math.round(2 + 5 * t * t); px(x, y, H[3]); px(x, y + 1, Math.abs(t) > 0.8 ? H[0] : H[2]); px(x, y + 2, H[1]); if (Math.abs(t) < 0.5) px(x, y + 3, H[0]); }
+      px(8, 2, 'w'); px(9, 2, H[3]);
+    } else if (it.tool === 'axe') {
+      shaft(1, 14, 8, 4);
+      for (let y = 1; y <= 9; y++) { const xr = 9 + Math.round(5.2 * Math.sin((y - 1) / 8 * Math.PI)); for (let x = 8; x <= xr; x++) px(x, y, x >= xr - 1 ? H[3] : y <= 3 ? H[2] : y >= 8 ? H[0] : H[1]); }
+      px(9, 2, H[3]); px(10, 2, H[3]); px(8, 5, 'u'); px(8, 6, 'u');
+    } else if (it.tool === 'shovel') {
+      shaft(1, 14, 9, 7); px(9, 6, 'u'); px(10, 6, 'u'); px(9, 5, 'u'); // a T grip at the bottom
+      for (let i = 0; i <= 8; i++) { const w = i < 2 ? 1 : i < 6 ? 2.6 : i < 8 ? 1.6 : 0.6, x0 = 9 + i * 0.8, y0 = 7 - i * 0.8; for (let u = -Math.ceil(w); u <= Math.ceil(w); u++) { if (Math.abs(u) > w) continue; px(x0 + u * 0.7, y0 + u * 0.7, u < -0.5 ? H[3] : u > 0.5 ? H[0] : H[2]); px(x0 + u * 0.7 + 1, y0 + u * 0.7, u > 0.5 ? H[0] : H[1]); } }
+    } else { // hoe
+      shaft(1, 14, 10, 5);
+      for (let i = 0; i < 6; i++) { px(10 + i, 3 + i * 0.7, H[3]); px(10 + i, 4 + i * 0.7, H[2]); px(10 + i, 5 + i * 0.7, H[1]); } px(9, 3, H[3]); px(9, 4, H[2]); px(15, 7, H[0]); px(15, 8, H[0]);
+    }
+    return done();
+  }
   if (it.kind === 'weapon' && it.weapon === 'sword') { line(3, 13, 5, 11, 'n'); wgRc(g, 4, 10, 4, 2, 'N'); wgPx(g, 3, 13, 'u'); for (let i = 0; i < 8; i++) { wgPx(g, 6 + i, 10 - i, R[2]); wgPx(g, 7 + i, 10 - i, R[1]); wgPx(g, 6 + i, 9 - i, R[3]); } wgPx(g, 14, 2, R[3]); wgPx(g, 5, 9, 'N'); return done(); }
   if (it.kind === 'weapon' && it.weapon === 'spear') { line(2, 14, 11, 5, 'n'); line(2, 13, 11, 4, 'N'); for (const [x, y] of [[12, 3], [13, 2], [12, 4], [11, 3], [14, 1], [13, 3], [12, 2]]) wgPx(g, x, y, R[2]); wgPx(g, 14, 1, R[3]); wgPx(g, 12, 4, R[1]); wgPx(g, 13, 3, R[1]); return done(); }
   if (it.kind === 'weapon' && it.weapon === 'bow') { const lg = id === 'longbow'; for (let i = 0; i < 12; i++) { const x = 11 - Math.round(Math.sin(i / 11 * 3.14) * 6), y = 2 + i; wgPx(g, x, y, lg ? 'y' : 'n'); wgPx(g, x + 1, y, lg ? 'Y' : 'N'); } line(11, 2, 11, 13, 'L'); line(4, 8, 13, 8, 'u'); wgPx(g, 13, 8, 'l'); wgPx(g, 12, 7, 'l'); wgPx(g, 12, 9, 'l'); return done(); }

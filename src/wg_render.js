@@ -73,7 +73,7 @@ function wgDrawObj(id, tx, ty, sx, sy) {
   const mine = WGS.mine && WGS.mine.tx === tx && WGS.mine.ty === ty && WGS.mine.shake > 0 ? Math.round(Math.sin(t * 60) * 1) : 0;
   if (o.kind === 'tree' || o.kind === 'rock' && c.height > 12) shadow(sx + 8, sy + 14, o.kind === 'tree' ? (c.width > 30 ? 20 : 14) : 14);
   const x = sx + sp.ox + mine, y = sy + sp.oy;
-  if ((o.kind === 'tree' && o.tall >= 2) || o.id === 'tallgrass' || o.id === 'fern' || o.id === 'reeds' || o.kind === 'plant' && c.height >= 10) {
+  if ((o.kind === 'tree' && o.tall >= 2) || o.id === 'tallgrass' || o.id === 'fern' || o.id === 'reeds' || o.id === 'wild_wheat' || o.id === 'beachgrass') { // only what really bends in the wind: not pumpkins, mushrooms or bushes
     // wind: the upper part leans a pixel back and forth, the roots stay put
     const sway = Math.round(Math.sin(t * 1.6 + tx * 0.7 + ty * 0.3) * (o.kind === 'tree' ? 0.9 : 1.1) + (WGS.weather && WGS.weather.wind ? WGS.weather.wind * Math.sin(t * 5 + tx) : 0));
     const cut = Math.floor(c.height * (o.kind === 'tree' ? 0.55 : 0.5));
