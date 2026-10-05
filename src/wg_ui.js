@@ -246,10 +246,11 @@ function wgDrawFriends(ui) {
     if (wgButton(ui, 'OPEN PUBLIC (LISTED)', 60, 126, 264)) open(true);
     if (wgButton(ui, 'CLOSE', 60, 150, 264)) ui.mp = false;
   } else {
-    const pm = wgnPerm(), ps = WGN.peers.filter(q => q.pid > 0);
+    const pm = wgnPerm(), ps = WGN.peers.filter(q => q.pid > 0), up = WGN.relays.filter(M => M && M.up).length; // how many meeting servers the host is reachable on
     wtext('CODE', VW / 2, 36, 'l', 1, 1); wtext(WGN.code, VW / 2, 45, 'Y', 3, 1);
-    wtext((WGN.pub ? 'LISTED IN PUBLIC WORLDS' : 'PRIVATE: ONLY WITH THE CODE') + (pm.pass ? '  PASSWORD' : ''), VW / 2, 62, 'l', 1, 1);
-    wtext('PLAYERS: YOU' + ps.map(q => ', ' + q.name).join(''), VW / 2, 74, 'w', 1, 1);
+    wtext((WGN.pub ? 'LISTED IN PUBLIC WORLDS' : 'PRIVATE: ONLY WITH THE CODE') + (pm.pass ? '  PASSWORD' : ''), VW / 2, 60, 'l', 1, 1);
+    if (up) wtext(up + '/' + WGN.relays.length + ' SERVERS', VW / 2, 69, 'h', 0, 1); else wtext('NO CONNECTION: FRIENDS CANNOT FIND YOU', VW / 2, 69, 'R', 0, 1);
+    wtext('PLAYERS: YOU' + ps.map(q => ', ' + q.name).join(''), VW / 2, 77, 'w', 1, 1);
     for (let k = 0; k < 2; k++) { const q = ps[k]; if (wgButton(ui, q ? 'KICK ' + q.name : '-', 60 + k * 136, 88, 128, { off: !q })) wgnCmd('/KICK ' + q.name); }
     if (wgButton(ui, WGN.pub ? 'MAKE PRIVATE' : 'MAKE PUBLIC', 60, 106, 128)) { WGN.pub = !WGN.pub; }
     if (wgButton(ui, pm.white ? 'WHITELIST: ON' : 'WHITELIST: OFF', 196, 106, 128)) { pm.white = pm.white ? 0 : 1; if (pm.white) for (const q of ps) if (!pm.wl.includes(q.name)) pm.wl.push(q.name); }
