@@ -161,7 +161,7 @@ function wgDrawLight(cx0, cy0) {
   for (const l of lights) {
     const fl = l.f ? 1 + Math.sin(WGS.t * 9 + l.x * 0.3) * 0.04 : 1;
     const cx = Math.round((l.x + SCR.ox) / 2), cy = Math.round((l.y + SCR.oy) / 2), R = Math.round(l.r / 2 * fl);
-    for (const [k, a] of [[1, 0.2], [0.88, 0.2], [0.74, 0.21], [0.6, 0.22], [0.46, 0.24], [0.3, 0.3]]) punch(cx, cy, Math.round(R * k), a);
+    for (const [k, a] of [[1, 0.12], [0.88, 0.12], [0.76, 0.13], [0.64, 0.14], [0.52, 0.15], [0.4, 0.18], [0.28, 0.22], [0.16, 0.3]]) punch(cx, cy, Math.round(R * k), a);
   }
   L.globalCompositeOperation = 'source-over';
   const prev = ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled = false;
