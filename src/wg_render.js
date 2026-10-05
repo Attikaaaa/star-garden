@@ -31,7 +31,7 @@ function wgChunkArt(ch) {
       if (bits) g.drawImage(wgOverlay(q, bits, hash(tx, ty, 91) & 3, !!gr.liq && gr.liq === 'water'), i * 16, j * 16);
     }
   }
-  ch.art = c; ch.artDirty = false;
+  ch.art = c; ch.artDirty = false; ch.artSe = wgSeason();
   return c;
 }
 
@@ -95,7 +95,7 @@ function wgDrawWorld() {
   for (let cy = Math.floor(y0 / CS); cy <= Math.floor(y1 / CS); cy++) for (let cx = Math.floor(x0 / CS); cx <= Math.floor(x1 / CS); cx++) {
     const ch = wgChunk(w, dim, cx, cy);
     ch.used = WGS.t;
-    ctx.drawImage(ch.art && !ch.artDirty ? ch.art : wgChunkArt(ch), cx * CS * T - cx0, cy * CS * T - cy0);
+    ctx.drawImage(ch.art && !ch.artDirty && ch.artSe === wgSeason() ? ch.art : wgChunkArt(ch), cx * CS * T - cx0, cy * CS * T - cy0);
   }
   // wet soil is darker
   if (WGS.wet) for (const [k, until] of WGS.wet) {
@@ -185,6 +185,8 @@ function wgDrawSky() { // dawn and dusk colour over the whole surface
   if (c > 0.6 && c < 0.8) a = Math.sin((c - 0.6) / 0.2 * Math.PI) * 0.16;
   else if (c > 0.18 && c < 0.34) { a = Math.sin((c - 0.18) / 0.16 * Math.PI) * 0.12; col = '255,170,120'; }
   if (a > 0.01) fillScreen('rgba(' + col + ',' + a.toFixed(3) + ')');
+  const s = wgSeason(); // a faint wash of the season: warm gold autumn, cold blue winter
+  if (s === 2) fillScreen('rgba(255,140,30,0.15)'); else if (s === 3) fillScreen('rgba(200,225,255,0.2)'); else if (s === 0) fillScreen('rgba(255,170,220,0.05)');
 }
 
 // ---------- ambient life: butterflies by day, fireflies by night, drifting leaves and desert dust (no entities, nothing saved) ----------
@@ -194,6 +196,12 @@ function wgDrawAmbient(cx0, cy0) {
   for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
     const h = hash(gx, gy, 4242), ax = gx * C + (h & 63), ay = gy * C + ((h >>> 6) & 63), b = wgSurface(w.seed, Math.floor(ax / 16), Math.floor(ay / 16)).b, ph = (h >>> 12) % 628 / 100;
     const sx = (n, k) => Math.round(ax + Math.sin(t * 0.5 * k + ph + n) * 22 - cx0), sy = (n, k) => Math.round(ay + Math.cos(t * 0.37 * k + ph * 1.7 + n) * 14 - cy0);
+    const se = wgSeason();
+    if (se !== 1 && h % 2 === 0 && b !== 'desert' && b !== 'volcano' && b !== 'beach' && !(se === 3 && b === 'jungle')) { // petals, falling leaves, snowflakes
+      const k = (t * (se === 3 ? 0.3 : 0.2) + ph) % 1, x = Math.round(ax + Math.sin(t * 1.1 + ph) * 9 + k * 26 - cx0), y = Math.round(ay - 36 + k * 84 - cy0);
+      if (se === 3) { rect(x, y, 2, 2, 'w'); rect(x + 14, y + 20, 1, 1, 'w'); rect(x - 20, y + 9, 2, 2, 'w'); }
+      else if (b === 'meadow' || b === 'forest' || b === 'highland' || b === 'swamp' || b === 'jungle') { rect(x, y, 2, 1, se === 0 ? 'P' : (h >>> 9) % 2 ? 'O' : 'o'); rect(x + 1, y + 1, 1, 1, se === 0 ? 'p' : 'n'); }
+    }
     if (night < 0.35 && (b === 'meadow' || b === 'forest' || b === 'highland') && h % 3 === 0) {
       for (let n = 0; n < 2; n++) {
         const x = sx(n * 2, 1), y = sy(n * 2, 1) - Math.round(Math.abs(Math.sin(t * 3 + n)) * 3), col = ['P', 'y', 'c', 'O', 'w'][(h >>> 20) % 5], f = Math.floor(t * 9 + n) % 2;

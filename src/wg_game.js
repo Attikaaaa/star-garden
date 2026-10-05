@@ -8,6 +8,8 @@ const WGS = {
   target: null, mine: null, mid: 0, remote: [], net: false, readonly: false, toast: null, tf: 0, acc: 0, autosave: 0, ui: {},
 };
 const WG_DAY = 840;            // seconds per full day (a world can change it: meta.rules.dayLen)
+const WG_SEASONS = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
+const wgSeason = () => Math.floor((WGS.day || 0) / 8) % 4; // 8 days each; visual only, so every player sees the same one
 const wgDayLen = () => (WGS.world && WGS.world.meta.rules && WGS.world.meta.rules.dayLen) || WG_DAY;
 const WG_REACH = 56;           // px
 const wgClamp = (v, a, b) => Math.max(a, Math.min(b, v));

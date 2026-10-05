@@ -196,7 +196,7 @@ function wgPlayUpdate(dt) {
   if (Input.wheel) { WGS.sel = (WGS.sel + (Input.wheel > 0 ? 1 : 8)) % 9; Input.wheel = 0; }
   if (pressed(wgKey('drop'))) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); } }
   // time
-  if (!(WGS.world.meta.rules || {}).noCycle) WGS.clock += dt / wgDayLen(); if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast('DAY ' + (WGS.day + 1), 2.5); }
+  if (!(WGS.world.meta.rules || {}).noCycle) WGS.clock += dt / wgDayLen(); if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast(WGS.day % 8 === 0 ? WG_SEASONS[wgSeason()] + ' BEGINS' : 'DAY ' + (WGS.day + 1), 2.5); }
   const Tt = Input.touch;
   if (Input.lastAim === 'touch') { WGS.touch = { mx: Tt.mx, my: Tt.my, act: !!Tt.aim, use: WGS.tapUse }; if (Tt.aim) { Input.mx = Tt.aim.x; Input.my = Tt.aim.y; } else if (WGS.tapAt) { Input.mx = WGS.tapAt[0]; Input.my = WGS.tapAt[1]; } WGS.tapUse = false; WGS.tapAt = null; } else WGS.touch = null;
   // movement

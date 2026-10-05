@@ -41,9 +41,10 @@ const wgSpr = (n) => WGA.cache[n];
 // ---------- Ground textures ----------
 function wgGroundTex(gid, v, tone) {
   tone = tone || 0;
-  const key = 'g' + gid + '_' + v + (tone ? 't' + tone : '');
+  const se0 = (GROUND[gid].id === 'grass' || GROUND[gid].id === 'jungle') && WGS.dim === 'o' ? wgSeason() : 0; // autumn and winter recolour the leaves of the ground
+  const key = 'g' + gid + '_' + v + (tone ? 't' + tone : '') + (se0 > 1 ? 's' + se0 : '');
   if (WGA.cache[key]) return WGA.cache[key];
-  const gr = GROUND[gid], R = gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16);
+  const gr = GROUND[gid], R = se0 === 2 ? ['#6f7a2a', '#98932f', '#b8a23a', '#d9892b'] : se0 === 3 ? ['#5f8f78', '#a4c9b8', '#d3e8e2', '#ffffff'] : gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16);
   const base = { cloud: 1, dirt: 1, mud: 0, snow: 2, ice: 1, cave: 0, path: 1, tilled: 1, ash: 1, moss: 1, rock: 1, sand: 1, grass: 1, jungle: 1, deep: 1, shallow: 1, lava: 1 }[gr.id];
   const sc = (n, col, w, h) => { for (let i = 0; i < n; i++) wgRc(g, Math.floor(rng() * 16), Math.floor(rng() * 16), w || 1, h || 1, col); };
   const b = base === undefined ? 1 : base;
