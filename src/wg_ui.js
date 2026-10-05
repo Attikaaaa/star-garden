@@ -38,7 +38,7 @@ function wgFood(x, y, full) {
 }
 function wgSlot(x, y, s, sel, big) {
   rect(x, y, 18, 18, '0'); rect(x + 1, y + 1, 16, 16, sel ? 'Y' : '3'); rect(x + 2, y + 2, 14, 14, sel ? 'y' : '1');
-  if (s) { ctx.drawImage(wgIcon(s.id), x + 1, y + 1); if (s.n > 1) wtext(String(s.n), x + 17, y + 11, 'w', 2, 2); const it = WGI[s.id]; if (it.dur) { /* reserved */ } }
+  if (s) { ctx.drawImage(wgIcon(s.id), x + 1, y + 1); if (s.n > 1) wtext(String(s.n), x + 17, y + 11, 'w', 2, 2); const it = WGI[s.id], mx = wgDurMax(it); if (s.d && mx) { const f = 1 - s.d / mx; rect(x + 2, y + 13, 14, 3, '0'); rect(x + 3, y + 14, Math.max(1, Math.round(12 * f)), 1, f > 0.5 ? 'G' : f > 0.2 ? 'y' : 'r'); } }
 }
 function wgDrawHud() {
   const p = WGS.p, L = -SCR.ox, B = -SCR.oy + SCR.h, R = -SCR.ox + SCR.w, T0 = -SCR.oy;
@@ -208,7 +208,8 @@ function wgDrawSettings(ui, client) {
       row('DAY AND NIGHT', onoff(!m.rules.noCycle), y, () => { m.rules.noCycle = !m.rules.noCycle; }); y += 15;
       const g = m.rules.grow === undefined ? 1 : m.rules.grow; row('CROP GROWTH', ['SLOW', 'NORMAL', 'FAST'][g], y, () => { m.rules.grow = (g + 1) % 3; }); y += 15;
     }
-    row('HINTS', onoff(!m.hintDone), 144, () => { m.hintDone = !m.hintDone; });
+    if (!client) row('TOOL WEAR', onoff(!m.rules.noWear), 144, () => { m.rules.noWear = !m.rules.noWear; });
+    row('HINTS', onoff(!m.hintDone), client ? 144 : 159, () => { m.hintDone = !m.hintDone; });
   } else if (ui.tab === 'VIDEO') {
     row('PARTICLES', ['OFF', 'FEW', 'FULL'][O.part], y, () => { O.part = (O.part + 1) % 3; Save.write(); }); y += 15;
     row('AMBIENT LIFE', onoff(O.amb), y, () => { O.amb = O.amb ? 0 : 1; Save.write(); }); y += 15;

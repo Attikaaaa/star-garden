@@ -256,7 +256,7 @@ function wgPlayerAttack() {
   if (wp && wp.weapon === 'bow') { if (wgInvTake(WGS.inv, 'arrow', 1)) { WGS.parr = WGS.parr || []; const a = WGS.aim; WGS.parr.push({ x: p.x, y: p.y - 8, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190, life: 1.2, dmg: dmg + 2, dim: WGS.dim }); wgSfx('shoot'); } else wgToast('NO ARROWS'); return; }
   if (wp && wp.weapon === 'wand') { WGS.parr = WGS.parr || []; const a = WGS.aim; WGS.parr.push({ x: p.x, y: p.y - 8, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, life: 1, dmg: dmg + 1, dim: WGS.dim, magic: wp.id }); wgSfx('shoot'); return; }
   const reach = wp && wp.weapon === 'spear' ? 30 : 22;
-  for (const m of WGS.mobs) { if (m.dim !== WGS.dim) continue; const d = WG_MOBS[m.type]; const rx = m.x - p.x, ry = m.y - 6 - p.y; if (Math.hypot(rx, ry) < reach + d.w && (rx * fx[0] + ry * fx[1]) > -4) { wgHitMob(m, dmg, p.x, p.y); m.fear = 3; } }
+  for (const m of WGS.mobs) { if (m.dim !== WGS.dim) continue; const d = WG_MOBS[m.type]; const rx = m.x - p.x, ry = m.y - 6 - p.y; if (Math.hypot(rx, ry) < reach + d.w && (rx * fx[0] + ry * fx[1]) > -4) { wgHitMob(m, dmg, p.x, p.y); m.fear = 3; if (wp) wgWear(); } }
   wgSfx('swing');
 }
 function wgUpdateShots(dt) {

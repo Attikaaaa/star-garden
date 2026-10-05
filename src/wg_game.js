@@ -144,6 +144,15 @@ function wgBreak(tx, ty, byPlayer) {
   else wgPart(cx, cy, 6, { c: ['G', 'h', 'H'], s: 30, up: 20, life: 0.5 });
   wgSfx(o.kind === 'rock' || o.kind === 'wall' ? 'break' : 'pickup');
 }
+// tools and blades wear out: every block broken or blow struck costs a use, and the slot's bar shows what is left
+const WG_DUR = [30, 50, 90, 160, 260, 500];
+const wgDurMax = (it) => it && ((it.kind === 'tool' && (it.tool === 'pick' || it.tool === 'axe' || it.tool === 'shovel')) || (it.kind === 'weapon' && (it.weapon === 'sword' || it.weapon === 'spear'))) ? WG_DUR[it.tier || 0] : 0;
+function wgWear() {
+  const s = WGS.inv[WGS.sel], it = s && WGI[s.id], mx = wgDurMax(it); if (!mx || (WGS.world.meta.rules || {}).noWear) return;
+  s.d = (s.d || 0) + 1;
+  if (s.d >= mx) { WGS.inv[WGS.sel] = null; wgToast(it.name + ' BROKE', 2.5); wgSfx('hurt'); wgPart(WGS.p.x, WGS.p.y - 12, 8, { c: ['w', 'L', 'm'], s: 40, up: 30, life: 0.5 }); }
+  else if (s.d === Math.floor(mx * 0.9)) wgToast(it.name + ' IS ABOUT TO BREAK', 2);
+}
 function wgMineStep(dt, tx, ty) {
   const w = WGS.world, dim = WGS.dim, id = wgObjAt(w, dim, tx, ty);
   if (!id) { WGS.mine = null; return; }
@@ -164,7 +173,7 @@ function wgMineStep(dt, tx, ty) {
     const cx = tx * 16 + 8, cy = ty * 16 + 8;
     wgPart(cx, cy, 3, { c: o.ramp || (o.kind === 'tree' ? ['n', 'N', 'u'] : ['d', 'm', 'l']), s: 26, up: 14, life: 0.35 });
     wgSfx(o.kind === 'tree' ? 'select' : 'select');
-    if (m.hp <= 0) { wgBreak(tx, ty, true); WGS.mine = null; }
+    if (m.hp <= 0) { wgBreak(tx, ty, true); WGS.mine = null; if (it && it.tool === o.tool) wgWear(); }
   }
 }
 
