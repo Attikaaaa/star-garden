@@ -28,6 +28,12 @@ const DECALS = {
   coal: { sh: 1, art: ['.000.', '0XXx0', '0xxx0', '.000.'] },
   crack: { art: ['o..', '.oO', '..o'] },
   crater: { art: ['.dmm.', 'dm..m', '.mdd.'] },
+  wisp: { art: ['.cc..cc.', 'cwwccwwc', '.CCCCCC.'] },
+  feather: { art: ['..qP', '.qPP', 'qPq.', 'C...'] },
+  twinkle: { art: ['.y.', 'yOy', '.y.'] },
+  block: { sh: 1, art: ['0000000', '0BBrrR0', '0BbyyR0', '0bbyyr0', '0000000'] },
+  jack: { sh: 1, art: ['.0.0.', '0y0y0', '.0y0.', '0y0y0'] },
+  button: { sh: 1, art: ['.000.', '0RrR0', '0rRr0', '.000.'] },
   weed: { art: ['.g.g.', 'gTgTg', '.g.g.'] },
 };
 const DRESS = {
@@ -40,12 +46,14 @@ const DRESS = {
   library: { n: 6, decals: ['scrap', 'scrap', 'crayon'] },
   forge: { n: 6, decals: ['coal', 'coal', 'crack', 'crack'] },
   deep: { n: 6, decals: ['weed', 'weed', 'shell', 'stone'] },
+  cloud: { n: 7, decals: ['wisp', 'wisp', 'feather', 'twinkle', 'twinkle'] },
+  toy: { n: 7, decals: ['block', 'block', 'jack', 'button', 'button', 'crayon'] },
   moon: { tuft: 1, path: ['d', 'm', 'l'], n: 6, decals: ['crater', 'crater', 'tuft', 'star'] },
 };
 
 function dressFloor(g, room, theme) {
   const D = DRESS[theme], th = THEMES[theme];
-  if (!D || room.type === 'boss' && !D.tone) return;
+  if (!D) return;
   let n = 0;
   const R = (lo, hi) => lo + hash(n++, 0x6d2b, room.seed) % (hi - lo + 1);
   const free = (px, py) => {
