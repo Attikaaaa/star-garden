@@ -9,4 +9,4 @@ const r = await g.ev(`JSON.stringify({ g: WGS.p.grave, drops: WGS.drops.length, 
 console.log(r); await g.shot('wg_grave.png');
 await g.ev(`WGS.p.x = WGS.p.grave.x; WGS.p.y = WGS.p.grave.y; 0`); await sleep(800);
 const ok = await g.ev(`!WGS.p.grave && WGS.inv.some(Boolean)`);
-console.log('recovered', ok, JSON.stringify(g.realErrors())); process.exit(ok ? 0 : 1);
+console.log(ok && !g.realErrors().length ? 'GRAVE OK' : 'GRAVE FAIL', JSON.stringify(g.realErrors())); process.exit(ok ? 0 : 1);
