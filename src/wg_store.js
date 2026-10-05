@@ -29,7 +29,7 @@ function wgSnapshot() {
   const p = WGS.p;
   w.meta.played = (w.meta.played || 0) + Math.round(WGS.tf || 0); WGS.tf = 0;
   w.meta.last = Date.now(); w.meta.day = WGS.day;
-  return { meta: w.meta, saved, st: { p: { x: p.x, y: p.y, hp: p.hp, food: p.food, sat: p.sat, armor: p.armor, spawn: p.spawn, look: p.look, name: p.name, xp: p.xp, seen: p.seen }, inv: WGS.inv, sel: WGS.sel, clock: WGS.clock, day: WGS.day, dim: WGS.dim, signs: WGS.signs || {}, spawn: w.spawn, mobs: [] } };
+  return { meta: w.meta, saved, st: { p: { x: p.x, y: p.y, hp: p.hp, food: p.food, sat: p.sat, armor: p.armor, spawn: p.spawn, look: p.look, grave: p.grave, name: p.name, xp: p.xp, seen: p.seen }, inv: WGS.inv, sel: WGS.sel, clock: WGS.clock, day: WGS.day, dim: WGS.dim, signs: WGS.signs || {}, spawn: w.spawn, mobs: [] } };
 }
 function wgSaveNow() {
   if (!WGS.world || WGS.readonly) return Promise.resolve();

@@ -219,8 +219,9 @@ function wgHurtPlayer(dmg, fx, fy) {
 function wgDie() {
   const p = WGS.p; p.hp = 0; WGS.scr = 'dead'; WGS.deadT = 0;
   // the pack spills where the hero fell; with KEEP INVENTORY on the pack stays; otherwise it spills and the drops wait
-  const keep = WGS.world.meta.rules && WGS.world.meta.rules.keepInv;
+  const keep = WGS.world.meta.rules && WGS.world.meta.rules.keepInv, had = WGS.inv.some(Boolean);
   for (let i = 0; i < WGS.inv.length && !keep; i++) { const s = WGS.inv[i]; if (s) { wgDrop(p.x + (Math.random() - 0.5) * 20, p.y + (Math.random() - 0.5) * 12, s.id, s.n, { keep: 1 }); WGS.inv[i] = null; } }
+  if (!keep && had) p.grave = { x: p.x, y: p.y, dim: WGS.dim };
   wgSfx('death');
 }
 function wgRespawn() {

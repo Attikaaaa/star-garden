@@ -46,6 +46,14 @@ function wgDrawHud() {
   const bx = Math.round((L + R) / 2 - 9 * 19 / 2), by = B - 22;
   for (let i = 0; i < 9; i++) wgSlot(bx + i * 19, by, WGS.inv[i], i === WGS.sel);
   if (Input.mouseHit && Input.my >= by && Input.my < by + 18) { const i = Math.floor((Input.mx - bx) / 19); if (i >= 0 && i < 9 && WGS.scr === 'play') { WGS.sel = i; Input.mouseHit = false; } }
+  { const g = p.grave; // an arrow toward the pack you dropped when you fell, gone once you are back at it
+    if (g && g.dim === WGS.dim) {
+      const dx = g.x - p.x, dy = g.y - p.y, d = Math.hypot(dx, dy);
+      if (d < 24) p.grave = null;
+      else if (d > 60 && WGS.scr === 'play') { const a = Math.atan2(dy, dx), ax = Math.round((L + R) / 2 + Math.cos(a) * 52), ay = Math.round((T0 + B) / 2 - 8 + Math.sin(a) * 40);
+        rect(ax - 3, ay - 3, 7, 7, '0'); rect(ax - 2, ay - 2, 5, 5, 'r'); rect(ax + Math.round(Math.cos(a) * 2) - 1, ay + Math.round(Math.sin(a) * 2) - 1, 2, 2, 'w');
+        wtext(Math.round(d / 16) + 'M', ax, ay + 5, 'L', 2, 1); }
+    } }
   // hearts above the left half, food above the right
   for (let i = 0; i < 10; i++) wgHeart(bx + i * 8, by - 11, wgClamp(p.hp - i * 2, 0, 2));
   for (let i = 0; i < 10; i++) wgFood(bx + 9 * 19 - 7 - i * 8 + 0, by - 11, wgClamp(Math.round(p.food) - i * 2, 0, 2));

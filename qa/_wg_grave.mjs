@@ -1,0 +1,12 @@
+import { open, waitFor, sleep } from './lib.mjs';
+const g = await open({ w: 1152, h: 648 });
+await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
+await g.ev(`enterWG()`); await sleep(300);
+await g.ev(`wgCreateWorld({ name: { v: 'GV' }, seed: { v: '12' }, look: { skin: 1, hair: 4, shirt: 3 }, peace: true })`); await sleep(800);
+await g.ev(`WGS.scr='play'; WGS.hint=null; wgInvAdd(WGS.inv,'wood',5); 0`);
+await g.ev(`wgDie(); wgRespawn(); WGS.p.x += 160; 0`); await sleep(700);
+const r = await g.ev(`JSON.stringify({ g: WGS.p.grave, drops: WGS.drops.length, d: Math.round(Math.hypot(WGS.p.grave.x-WGS.p.x, WGS.p.grave.y-WGS.p.y)) })`);
+console.log(r); await g.shot('wg_grave.png');
+await g.ev(`WGS.p.x = WGS.p.grave.x; WGS.p.y = WGS.p.grave.y; 0`); await sleep(800);
+const ok = await g.ev(`!WGS.p.grave && WGS.inv.some(Boolean)`);
+console.log('recovered', ok, JSON.stringify(g.realErrors())); process.exit(ok ? 0 : 1);
