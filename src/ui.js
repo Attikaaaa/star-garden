@@ -368,6 +368,7 @@ function drawTitleBg() {
     drawS(S(floorTile(x - Math.floor(t * 8 / 16), y, 7) + '@meadow'), x * 16 + scroll, y * 16);
   }
   drawAmbient(0, 0);
+  if (!G.titleScene) { dim(0.66); return; } // every other menu gets a calm dark field: no logo, no wall, nothing behind the panels to read
   dim(0.25);
   for (let x = cx0; x < cx1; x++) {
     for (let y = 8; y > -SCR.oy - 16; y -= 16) drawS(S('cap@meadow'), x * 16, y);
@@ -382,7 +383,7 @@ function drawTitleBg() {
 }
 function drawTitle() {
   const t = G.time;
-  drawTitleBg();
+  G.titleScene = true; drawTitleBg(); G.titleScene = false;
   const tag = 'THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', tw = textW(tag) + 16;
   rect(VW / 2 - tw / 2 + 1, 46, tw - 2, 13, 'rgba(43,26,71,0.6)'); rect(VW / 2 - tw / 2, 47, tw, 11, 'rgba(43,26,71,0.6)');
   text(tag, VW / 2, 52, 'Y', 2, 1);

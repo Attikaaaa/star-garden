@@ -177,7 +177,7 @@ function drawDaily() {
     my += 3;
   }
   D.items.forEach((id, i) => drawS(S('icon_' + id), x0 + i * 18, my));
-  text('NO GARDEN UPGRADES: A FAIR RACE', VW / 2, dailyBtns().length > 3 ? 142 : 147, 'l', 1, 1);
+  text('NO GARDEN UPGRADES: A FAIR RACE', x0, my + 22, 'l', 1);
   // records
   const rx = VW / 2 + 60;
   text(R.ranked >= 0 ? 'YOUR SCORE' : R.tries ? 'IN PROGRESS' : 'NOT PLAYED YET', rx, 60, 'c', 1, 1);

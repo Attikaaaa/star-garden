@@ -1,0 +1,20 @@
+// Join through the public list the way a player does: browse, tap an entry, press CONNECT. node qa/_wg_list_join.mjs
+import { open, waitFor, sleep } from './lib.mjs';
+const A = await open({ w: 900, h: 506 }), B = await open({ w: 900, h: 506 });
+for (const g of [A, B]) await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
+await A.ev(`enterWG()`); await sleep(300);
+await A.ev(`wgCreateWorld({ name: { v: 'LISTTEST' }, seed: { v: '5' }, look: { skin: 0, hair: 0, shirt: 0 }, peace: false })`); await sleep(500);
+await A.ev(`WGS.p.name = 'HOSTY'; WGU.look = WGS.p.look; wgnHost(true)`);
+const code = await A.ev(`WGN.code`); console.log('host code', code);
+await sleep(1500);
+await B.ev(`enterWG()`); await sleep(300);
+const t0 = Date.now();
+await B.ev(`wgnBrowse(); WGS.scr = 'browse'; WGS.ui = {}; 0`);
+const listed = await waitFor(B.ev, `WGN.list.some(d => d.c === '${code}')`, 12000).then(() => true, () => false);
+console.log('listed', listed, Date.now() - t0, 'ms', await B.ev(`JSON.stringify(WGN.list.map(d => d.c + ':' + d.n))`));
+await B.ev(`WGU.code = { v: '${code}', max: 5 }; WGS.scr = 'join'; WGS.ui = {}; 0`); await sleep(500);
+const t1 = Date.now();
+await B.ev(`WGU.pw = { v: '', max: 12 }; WGN.pw = ''; wgnJoin(WGU.code.v)`);
+const joined = await waitFor(B.ev, `WGS.scr === 'play' && WGS.net === true`, 20000).then(() => true, () => false);
+console.log('joined', joined, Date.now() - t1, 'ms', await B.ev(`WGN.err + '|' + WGN.status`), JSON.stringify(A.realErrors()), JSON.stringify(B.realErrors()));
+console.log(joined ? 'LISTJOIN OK' : 'LISTJOIN FAIL'); process.exit(joined ? 0 : 1);

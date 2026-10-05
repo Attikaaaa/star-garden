@@ -142,13 +142,16 @@ function wgnJoin(code) {
   const look = (typeof WGU !== 'undefined' && WGU.look) || { skin: 0, hair: 0, shirt: 0 };
   let name = ''; try { name = localStorage.wgName || ''; } catch (e) { /* */ }
   const hello = () => wgnSend(L, { t: 'hello', v: WGN_PROTO, rj, name: name || 'FRIEND', look, pw: WGN.pw || '' });
-  L.conns = NET_RELAYS.map(u => mqttOpen(u, base + '/c/' + cid, (payload) => {
+  const open = () => NET_RELAYS.map(u => mqttOpen(u, base + '/c/' + cid, (payload) => {
     let d; try { d = JSON.parse(payload); } catch (e) { return; }
     if (!d || !d.m) return;
     if (typeof fresh === 'function' ? fresh(L, d.q) : true) WGN.q.push([L, d.m]);
   }, (up) => { if (up) hello(); }));
-  L.helloT = setInterval(() => { if (!L.open && WGN.link === L) hello(); else clearInterval(L.helloT); }, 1800);
-  setTimeout(() => { if (WGN.link === L && !L.open && WGN.role === 'client') { WGN.err = 'NO ONE ANSWERED. CHECK THE CODE.'; WGN.status = ''; wgnStop(); } }, 14000);
+  L.conns = open();
+  L.helloT = setInterval(() => { if (!L.open && WGN.link === L) { hello(); const n = L.conns.filter(M => M.up).length; WGN.status = 'CONNECTING... ' + n + '/' + NET_RELAYS.length + ' SERVERS'; } else clearInterval(L.helloT); }, 1800);
+  // a broker that quietly lost our subscription never answers: after a few seconds start the connections over once
+  setTimeout(() => { if (WGN.link === L && !L.open && WGN.role === 'client') { for (const M of L.conns) M.close(); L.conns = open(); } }, 9000);
+  setTimeout(() => { if (WGN.link === L && !L.open && WGN.role === 'client') { const n = L.conns.filter(M => M.up).length; WGN.err = n ? 'NO ONE ANSWERED. THE HOST MAY HAVE LEFT: REFRESH THE LIST.' : 'CANNOT REACH THE SERVERS. CHECK YOUR CONNECTION.'; WGN.status = ''; wgnStop(); } }, 24000);
 }
 function wgnClientMsg(L, m) {
   if (m.t === 'pong') { WGN.ping = Math.round(performance.now() - m.s); return; }

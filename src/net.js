@@ -1064,12 +1064,12 @@ function updateCoop() {
 function drawCoop() {
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 150, 46, 300, 116);
-  text('CO-OP', VW / 2, 54, 'Y', 2, 1);
-  text('PLAY TOGETHER ONLINE, UP TO FOUR HEROES', VW / 2, 70, 'w', 1, 1);
-  text('THE HOST SHARES A CODE, FRIENDS JOIN WITH IT', VW / 2, 81, 'c', 1, 1);
-  text('MORE HEROES, TOUGHER FOES: HELP FALLEN FRIENDS UP!', VW / 2, 92, 'c', 1, 1);
-  drawMenu(coopItems(), 110, 16);
+  panel(VW / 2 - 150, 34, 300, 148);
+  text('CO-OP', VW / 2, 44, 'Y', 2, 1);
+  text('PLAY TOGETHER ONLINE, UP TO FOUR HEROES', VW / 2, 66, 'w', 1, 1);
+  text('THE HOST SHARES A CODE, FRIENDS JOIN WITH IT', VW / 2, 80, 'c', 1, 1);
+  text('MORE HEROES, TOUGHER FOES: HELP FALLEN FRIENDS UP!', VW / 2, 94, 'c', 1, 1);
+  drawMenu(coopItems(), 118, 20);
 }
 
 // Text entry: type on a keyboard, or tap / pick letters on the pixel keypad.
