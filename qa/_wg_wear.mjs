@@ -11,5 +11,11 @@ const r = await g.ev(`(() => {
   for (let i = 0; i < 80; i++) wgWear(); const kept = !!WGS.inv[WGS.sel] && !WGS.inv[WGS.sel].d;
   return JSON.stringify({ broke, n, kept });
 })()`);
+const rep = await g.ev(`(() => {
+  WGS.world.meta.rules = {}; wgInvAdd(WGS.inv,'pick_copper',1); wgInvAdd(WGS.inv,'copper',2); WGS.sel = WGS.inv.findIndex(s => s && s.id==='pick_copper'); WGS.inv[WGS.sel].d = 50;
+  const tx = Math.floor(WGS.p.x/16) + 2, ty = Math.floor(WGS.p.y/16); wgSetObj(WGS.world, 'o', tx, ty, O_ID.anvil);
+  wgUse(tx, ty); return JSON.stringify({ d: WGS.inv[WGS.sel].d, bars: WGS.inv.filter(s => s && s.id==='copper').reduce((a, s) => a + s.n, 0) });
+})()`);
+console.log(rep); const rp = JSON.parse(rep);
 await g.shot('wg_wear.png');
-const o = JSON.parse(r); const ok = o.broke && o.kept; console.log(ok ? 'WEAR OK' : 'WEAR FAIL', r, JSON.stringify(g.realErrors())); process.exit(ok ? 0 : 1);
+const o = JSON.parse(r); const ok = o.broke && o.kept && rp.d === 0 && rp.bars === 1; console.log(ok ? 'WEAR OK' : 'WEAR FAIL', r, JSON.stringify(g.realErrors())); process.exit(ok ? 0 : 1);

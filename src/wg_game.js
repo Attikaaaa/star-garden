@@ -218,6 +218,12 @@ function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, e
   if (o) {
     if (o.kind === 'door') { wgSetObj(w, dim, tx, ty, O_ID[o.open ? o.id.replace('_open', '') : o.id + '_open']); wgSfx('door'); return true; }
     if (o.kind === 'storage') { WGS.chest = { tx, ty, dim }; WGS.scr = 'chest'; WGS.ui = {}; wgSfx('select'); return true; }
+    if (o.kind === 'station' && (o.st === 'anvil' || o.st === 'bench') && s && s.d && wgDurMax(it)) { // a worn tool is mended with one unit of what it is made of
+      const mat = ['wood', 'stone', 'copper', 'iron', 'crystal', 'star_bar'][it.tier || 0], low = (it.tier || 0) < 2;
+      if (o.st === 'bench' && !low) { wgToast('MEND IT AT AN ANVIL'); return true; }
+      if (wgInvTake(WGS.inv, mat, 1)) { s.d = 0; wgToast('MENDED!'); wgSfx('confirm'); wgPart(tx * 16 + 8, ty * 16, 6, { c: ['y', 'Y', 'w'], s: 30, up: 24, life: 0.5 }); } else wgToast('NEEDS ' + WGI[mat].name);
+      return true;
+    }
     if (o.kind === 'station') { if (o.st === 'fire' || o.st === 'furnace' || o.st === 'bench' || o.st === 'anvil' || o.st === 'alch' || o.st === 'loom') { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; return true; } }
     if (o.kind === 'bed') { WGS.p.spawn = { x: tx * 16 + 8, y: ty * 16 + 20, dim }; wgToast('SPAWN POINT SET'); if (wgNight(WGS.clock) > 0.5 && dim === 'o') { WGS.clock = 0.27; WGS.day++; wgToast('GOOD MORNING'); } return true; }
     if (o.kind === 'stairs') { if (o.sky) wgGoSky(tx, ty); else if (o.skyup) wgLeaveSky(); else wgGoDim(o.down ? 'u' : 'o', tx, ty); return true; }
