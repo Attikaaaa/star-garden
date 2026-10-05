@@ -45,6 +45,7 @@ function wgDrawHud() {
   // hotbar, centred at the bottom
   const bx = Math.round((L + R) / 2 - 9 * 19 / 2), by = B - 22;
   for (let i = 0; i < 9; i++) wgSlot(bx + i * 19, by, WGS.inv[i], i === WGS.sel);
+  ctx.globalAlpha = 0.7; for (let i = 0; i < 9; i++) if (!WGS.inv[i]) wtext(String(i + 1), bx + i * 19 + 9, by + 5, i === WGS.sel ? 'n' : 'm', 0, 1); ctx.globalAlpha = 1; // the key that picks each empty slot
   if (Input.mouseHit && Input.my >= by && Input.my < by + 18) { const i = Math.floor((Input.mx - bx) / 19); if (i >= 0 && i < 9 && WGS.scr === 'play') { WGS.sel = i; Input.mouseHit = false; } }
   { const g = p.grave; // an arrow toward the pack you dropped when you fell, gone once you are back at it
     if (g && g.dim === WGS.dim) {
