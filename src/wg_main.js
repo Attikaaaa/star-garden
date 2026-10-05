@@ -360,6 +360,7 @@ function wgDrawBrowse() {
   const ui = WGS.ui; wgUiBegin(ui);
   wtext('PUBLIC WORLDS', VW / 2, 14, 'Y', 3, 1);
   panel(52, 34, 280, 124);
+  if (!WGN.listing && (!WGN.listT || performance.now() - WGN.listT > 14000)) wgnBrowse(); // keeps looking while you are on this screen
   const L = WGN.list;
   if (!L.length) wtext(WGN.listing ? 'LOOKING FOR OPEN WORLDS...' : 'NO OPEN WORLDS RIGHT NOW', VW / 2, 90, 'L', 1, 1);
   for (let k = 0; k < Math.min(5, L.length); k++) {
@@ -368,7 +369,7 @@ function wgDrawBrowse() {
     wtext(d.n, 66, y + 4, 'w', 1); wtext('HOST ' + (d.h || '?') + '  ' + (d.d === 'peaceful' ? 'PEACEFUL' : 'SURVIVAL'), 66, y + 12, 'L', 0);
     wtext(d.p + '/' + d.x + (d.k ? ' LOCKED' : ''), 318, y + 7, d.k ? 'Y' : 'h', 1, 2);
   }
-  if (wgButton(ui, 'REFRESH', 52, 164, 84, { off: WGN.listing })) wgnBrowse();
+  if (wgButton(ui, 'REFRESH', 52, 164, 84, { off: WGN.listing })) { WGN.seen = new Map(); wgnBrowse(); }
   if (wgButton(ui, 'BACK', 248, 164, 84)) { WGS.scr = 'worlds'; WGS.ui = {}; return; }
   wgUiEnd(ui);
 }

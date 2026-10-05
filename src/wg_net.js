@@ -246,8 +246,9 @@ function wgnAnnounce() {
   const m = JSON.stringify({ c: WGN.code, n: WGS.world.meta.name, h: WGS.p.name, p: 1 + WGN.peers.filter(q => q.pid > 0).length, x: WGN.max, d: WGS.world.meta.diff, v: WGN_PROTO, k: wgnPerm().pass ? 1 : 0 });
   for (const M of WGN.relays) if (M && M.up) M.pub(WGN_PUB, m);
 }
-function wgnBrowse() {
-  WGN.listing = true; WGN.list = [];
-  const seen = new Map(), Ms = NET_RELAYS.map(u => mqttOpen(u, WGN_PUB, (payload) => { try { const d = JSON.parse(payload); if (d && d.c && d.v === WGN_PROTO) { d.seen = performance.now(); seen.set(d.c, d); WGN.list = [...seen.values()]; } } catch (e) { /* */ } }, () => {}));
-  setTimeout(() => { for (const M of Ms) M.close(); WGN.listing = false; }, 9000);
+function wgnBrowse() { // listens for announcements for 12 s; what was heard in the last 25 s stays on the list, so a quiet broker does not empty it
+  WGN.listing = true; WGN.listT = performance.now(); WGN.seen = WGN.seen || new Map();
+  const upd = () => { const now = performance.now(); for (const [c, d] of WGN.seen) if (now - d.seen > 25000) WGN.seen.delete(c); WGN.list = [...WGN.seen.values()]; };
+  const Ms = NET_RELAYS.map(u => mqttOpen(u, WGN_PUB, (payload) => { try { const d = JSON.parse(payload); if (d && d.c && d.v === WGN_PROTO) { d.seen = performance.now(); WGN.seen.set(d.c, d); upd(); } } catch (e) { /* */ } }, () => {}));
+  setTimeout(() => { for (const M of Ms) M.close(); WGN.listing = false; upd(); }, 12000);
 }
