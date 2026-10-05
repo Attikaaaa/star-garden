@@ -7,7 +7,7 @@ const bs = process.argv.slice(2).length ? process.argv.slice(2) : ['forest','swa
 for (const b of bs) {
   const pos = await g.ev(`(() => { const s = WGS.world.seed; for (let r = 4; r < 400; r += 4) for (let a = 0; a < 16; a++) { const x = Math.round(Math.cos(a) * r * 3), y = Math.round(Math.sin(a) * r * 3); const q = wgSurface(s, x, y); if (q.b === '${b}' && [[8,0],[-8,0],[0,6],[0,-6]].every(([a,c]) => wgSurface(s, x+a, y+c).b === '${b}')) return [x, y]; } return null; })()`);
   if (!pos) { console.log(b, 'none'); continue; }
-  await g.ev(`WGS.scr='play'; WGS.hint=null; WGS.clock=0.4; WGS.day=0; WGS.p.x=${pos[0]*16+8}; WGS.p.y=${pos[1]*16+8}; WGS.cam.x=WGS.p.x; WGS.cam.y=WGS.p.y; 0`); await sleep(1500);
+  await g.ev(`WGS.scr='play'; WGS.hint=null; WGS.clock=${process.env.CLOCK || 0.4}; WGS.day=0; WGS.p.x=${pos[0]*16+8}; WGS.p.y=${pos[1]*16+8}; WGS.cam.x=WGS.p.x; WGS.cam.y=WGS.p.y; 0`); await sleep(1500);
   console.log(b, await g.shot('wg_tour_' + b + '.png'));
 }
 console.log(JSON.stringify(g.realErrors())); process.exit(0);
