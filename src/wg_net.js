@@ -103,7 +103,7 @@ function wgnCmd(txt, by) {
 function wgnClean(n) { return String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10); }
 function wgnWelcome(L) {
   const w = WGS.world;
-  return { name: w.meta.name, seed: w.seed, diff: w.meta.diff, spawn: w.spawn, clock: WGS.clock, day: WGS.day, st: L.guest, pid: L.pid, host: WGS.p.name };
+  return { name: w.meta.name, seed: w.seed, diff: w.meta.diff, spawn: w.spawn, clock: WGS.clock, day: WGS.day, st: L.guest, pid: L.pid, host: WGS.p.name, hd: WGS.dim };
 }
 function wgnDrop(L, quiet) {
   const i = WGN.peers.indexOf(L); if (i < 0) return;
@@ -167,19 +167,19 @@ function wgnClientMsg(L, m) {
   L.heard = performance.now();
   const w = WGS.world;
   if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], inv: 0 })); }
-  else if (m.t === 'mobs') wgnMobs(m.l);
+  else if (m.t === 'mobs') { if (WGS.dim === WGN.hd) wgnMobs(m.l); }
   else if (m.t === 'set') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; }
   else if (m.t === 'chunk') { const ch = wgChunk(w, m.d, m.cx, m.cy); if (m.pk) { WGN.applying = true; wgReadChunk(ch, m.pk); ch.artDirty = true; WGN.applying = false; for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const n = wgChunk(w, m.d, m.cx + dx, m.cy + dy, false); if (n) n.artDirty = true; } } }
   else if (m.t === 'cset') { const c = wgCont(w, m.d, m.x, m.y, true); c.length = 0; for (const s of m.a) c.push(s); }
   else if (m.t === 'loot') wgDrop(m.x, m.y, m.id, m.n);
   else if (m.t === 'dmg') wgHurtPlayer(m.dmg, m.fx, m.fy);
-  else if (m.t === 'clk') { WGS.clock = m.c; WGS.day = m.d; WGS.wk = m.wk; }
+  else if (m.t === 'clk') { WGS.clock = m.c; WGS.day = m.d; WGS.wk = m.wk; WGN.hd = m.hd || 'o'; }
   else if (m.t === 'chat') WGN.chat.push({ who: m.who, msg: m.msg, t: 8 });
   else if (m.t === 'kick' || (m.t === 'no' && L.open)) { WGN.err = 'THE HOST CLOSED THE WORLD'; wgnStop(); wgnLeaveGame(); }
 }
 function wgnEnter(wl) { // we are in: build the host's world around us
   const meta = { id: 'net', name: wl.name, seed: wl.seed, diff: wl.diff, created: 0, last: 0, played: 0, day: wl.day };
-  const w = wgNewWorld(meta); w.spawn = wl.spawn; WGS.world = w; WGS.readonly = true; WGS.net = true;
+  WGN.hd = wl.hd || 'o'; const w = wgNewWorld(meta); w.spawn = wl.spawn; WGS.world = w; WGS.readonly = true; WGS.net = true;
   WGS.dim = 'o'; WGS.clock = wl.clock; WGS.day = wl.day; WGS.signs = {}; WGS.mobs = []; WGS.drops = []; WGS.parts = []; WGS.remote = []; WGS.t = 0; WGS.tf = 0;
   const p = wgNewPlayer(wl.spawn.x, wl.spawn.y); WGS.p = p; WGS.inv = wgInvNew(); WGS.sel = 0;
   const lk = (typeof WGU !== 'undefined' && WGU.look) || { skin: 0, hair: 0, shirt: 0 }; p.look = lk;
@@ -225,7 +225,7 @@ function wgnUpdate(dt) {
         wgnSend(L, { t: 'mobs', l: ms }, true);
       }
     }
-    WGN.clkT -= dt; if (WGN.clkT <= 0) { WGN.clkT = 2; wgnAll({ t: 'clk', c: WGS.clock, d: WGS.day, wk: WGS.wk || null }, null); }
+    WGN.clkT -= dt; if (WGN.clkT <= 0) { WGN.clkT = 2; wgnAll({ t: 'clk', c: WGS.clock, d: WGS.day, wk: WGS.wk || null, hd: WGS.dim }, null); }
     WGN.annT -= dt; if (WGN.annT <= 0) { WGN.annT = 6; wgnAnnounce(); }
   } else if (WGN.link && WGN.link.open) {
     WGN.sendT -= dt;

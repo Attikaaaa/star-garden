@@ -54,7 +54,7 @@ function wgDrawHud() {
   const cx = R - 20, cy = T0 + 20, a = (WGS.clock - 0.25) * 6.283, night = wgNight(WGS.clock) > 0.5;
   rect(cx - 10, cy - 10, 20, 20, '0'); rect(cx - 9, cy - 9, 18, 18, night ? '1' : 'c'); rect(cx - 9, cy - 9, 18, 1, night ? '2' : 'C');
   const ox = Math.round(Math.cos(a) * 6), oy = Math.round(-Math.sin(a) * 6);
-  if (WGS.dim === 'o') { rect(cx + ox - 2, cy + oy - 2, 4, 4, night ? 'L' : 'Y'); rect(cx + ox - 1, cy + oy - 1, 2, 2, night ? 'w' : 'w'); }
+  if (WGS.dim !== 'u') { rect(cx + ox - 2, cy + oy - 2, 4, 4, night ? 'L' : 'Y'); rect(cx + ox - 1, cy + oy - 1, 2, 2, night ? 'w' : 'w'); }
   else wtext('CAVE', cx, cy - 3, 'L', 0, 1);
   wtext('DAY ' + (WGS.day + 1), cx, cy + 13, 'w', 2, 1);
   if (WGN.role) wtext((WGN.role === 'host' ? 'CODE ' + WGN.code + (WGN.pub ? ' PUBLIC' : '') : 'ONLINE') + '  ' + (1 + (WGN.role === 'host' ? WGN.peers.filter(q => q.pid > 0).length : WGS.remote.length + 0)) + ' IN WORLD', L + 4, T0 + 4, 'Y', 2, 0);
@@ -247,4 +247,20 @@ function wgDrawFriends(ui) {
     if (wgButton(ui, 'CLOSE TO FRIENDS', 60, 136, 128)) { wgnStop(); ui.mp = false; }
     if (wgButton(ui, 'BACK', 196, 136, 128)) ui.mp = false;
   }
+}
+
+function wgDrawTrade() {
+  dim(0.6); const ui = WGS.ui; wgUiBegin(ui);
+  const tm = WGS.mobs.find(m => m.id === WGS.trade);
+  if (!tm || Math.hypot(tm.x - WGS.p.x, tm.y - WGS.p.y) > 90 || pressed('Escape', wgKey('bag'))) { WGS.scr = 'play'; return; }
+  panel(70, 24, 244, 160); wtext('TRADER', VW / 2, 31, 'Y', 3, 1); wtext('GIVE THIS, GET THAT', VW / 2, 45, 'l', 0, 1);
+  wgTradesOf(tm.id).forEach(([a, an, b, bn], i) => {
+    const y = 56 + i * 24, can = wgInvCount(WGS.inv, a) >= an;
+    if (wgButton(ui, '', 80, y, 224, { h: 22, off: !can })) {
+      wgInvTake(WGS.inv, a, an); const left = wgInvAdd(WGS.inv, b, bn); if (left) wgDrop(WGS.p.x, WGS.p.y, b, left); wgSfx('confirm'); wgToast('TRADED'); wgPart(tm.x, tm.y - 14, 6, { c: ['y', 'Y'], s: 24, up: 18 });
+    }
+    ctx.globalAlpha = can ? 1 : 0.5; ctx.drawImage(wgIcon(a), 90, y + 3); wtext(String(an), 107, y + 13, can ? 'w' : 'R', 2, 2); wtext('>', 160, y + 8, 'Y', 1, 1); ctx.drawImage(wgIcon(b), 200, y + 3); wtext(String(bn), 217, y + 13, 'w', 2, 2);
+    wtext(tr(WGI[b].name), 232, y + 8, can ? 'w' : 'L', 0); ctx.globalAlpha = 1;
+  });
+  wgUiEnd(ui);
 }

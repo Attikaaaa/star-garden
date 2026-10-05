@@ -1,6 +1,7 @@
 // A Wildgrove dedicated server without a single dependency: it runs the game itself in a headless Chromium
 // that keeps its own profile (so the world is saved between runs). Friends join with the printed code.
-//   node tools/wg-server.mjs "MY WORLD" [--public] [--seed 42] [--code ABCDE] [--peaceful]
+//   node tools/wg-server.mjs "MY WORLD" [--public] [--seed 42] [--code ABCDE] [--peaceful] [--pass WORD] [--white NAME,NAME]
+// While it runs, type commands: kick NAME, ban NAME, unban NAME, white add NAME, pass WORD, time day, list, say TEXT ...
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,6 +24,7 @@ fs.mkdirSync(profile, { recursive: true });
 const port = 9300 + Math.floor(Math.random() * 500);
 const q = new URLSearchParams({ wgserver: name });
 if (args.includes('--public')) q.set('pub', '1'); if (args.includes('--peaceful')) q.set('peaceful', '1');
+if (opt('pass')) q.set('pass', opt('pass')); if (opt('white')) q.set('white', opt('white'));
 if (opt('seed')) q.set('seed', opt('seed')); if (opt('code')) q.set('code', opt('code'));
 const url = 'file://' + path.join(root, 'index.html') + '?' + q;
 const proc = spawn(chrome(), ['--headless=new', '--remote-debugging-port=' + port, '--user-data-dir=' + profile, '--allow-file-access-from-files', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=640,360', url], { stdio: 'ignore' });
@@ -35,6 +37,8 @@ let id = 0; const wait = new Map(); ws.onmessage = (m) => { const d = JSON.parse
 await new Promise(r => { ws.onopen = r; });
 const ev = (expression) => new Promise(r => { const i = ++id; wait.set(i, r); ws.send(JSON.stringify({ id: i, method: 'Runtime.evaluate', params: { expression, returnByValue: true } })); });
 console.log('Starting', name, '...');
+import readline from 'node:readline';
+readline.createInterface({ input: process.stdin }).on('line', async (l) => { l = l.trim(); if (!l) return; const r = await ev('wgnCmd(' + JSON.stringify('/' + l) + ')'); const v = r.result && r.result.result && r.result.result.value; if (v) console.log(v); });
 let last = '';
 for (;;) {
   await sleep(5000);

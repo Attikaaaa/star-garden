@@ -60,8 +60,19 @@ function wgDrawBackdrop() {
   for (let i = 0; i < 9; i++) { if (i > 1 && i < 7) continue; const x = 20 + i * 45 + (i * 13) % 17; const l = wgObjSpr('oak', 0); if (l) ctx.drawImage(l, x, 150 - l.height + 14); }
 }
 function wgObjSpr(id, i) { const l = WGA.obj[id]; return l && l[i] ? l[i].c : null; }
+// the music follows where you are: one tune per kind of place, a calmer one at night, a driving one for a boss
+const WG_SONG = { meadow: 'meadow', forest: 'bloom', beach: 'beach', jungle: 'lantern', swamp: 'waltz', snow: 'snow', highland: 'snow', desert: 'sun', mountain: 'camp', volcano: 'forge', ocean: 'beach' };
+function wgSong() {
+  if (!WGS.world || ['worlds', 'create', 'join', 'browse'].includes(WGS.scr)) return 'meadow';
+  if (WGS.mobs.some(m => WG_MOBS[m.type].boss && Math.hypot(m.x - WGS.p.x, m.y - WGS.p.y) < 220)) return 'boss';
+  if (WGS.dim === 'k') return 'cloud';
+  if (WGS.dim === 'u') return WGS.p.y > 4000 || Math.abs(WGS.p.x) > 4000 ? 'deep' : 'crystal';
+  if (wgNight(WGS.clock) > 0.5) return 'moon';
+  if (WGS.songT === undefined || WGS.t - WGS.songT > 2) { WGS.songT = WGS.t; WGS.songB = wgSurface(WGS.world.seed, Math.floor(WGS.p.x / 16), Math.floor(WGS.p.y / 16)).b; }
+  return WG_SONG[WGS.songB] || 'meadow';
+}
 function updateWG(dt) {
-  try { Audio_.play(!WGS.world || WGS.scr === 'worlds' || WGS.scr === 'create' || WGS.scr === 'join' || WGS.scr === 'browse' ? 'meadow' : WGS.dim === 'u' ? 'crystal' : wgNight(WGS.clock) > 0.5 ? 'beach' : 'meadow'); } catch (e) { /* music is optional */ }
+  try { Audio_.play(wgSong()); } catch (e) { /* music is optional */ }
   if (!WGS.world && WGS.scr !== 'worlds' && WGS.scr !== 'create' && WGS.scr !== 'loading' && WGS.scr !== 'join' && WGS.scr !== 'browse') WGS.scr = 'worlds';
   WGS.t += dt; WGS.tf += dt;
   if (WGS.toast && (WGS.toast.t -= dt) <= 0) WGS.toast = null;
@@ -70,7 +81,7 @@ function updateWG(dt) {
   if (s === 'play') return wgPlayUpdate(dt);
   if (s === 'loading') return;
   if (s === 'dead') { WGS.deadT += dt; wgUpdateWorldBg(dt); return; }
-  if (s === 'pause' || s === 'inv' || s === 'chest') { wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
+  if (s === 'pause' || s === 'inv' || s === 'chest' || s === 'trade') { wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
 }
 function wgUpdateWorldBg(dt) { for (const q of WGS.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.age += dt; } WGS.parts = WGS.parts.filter(q => q.age < q.life); }
 
@@ -86,6 +97,7 @@ function drawWG() {
   if (s === 'pause') wgDrawPause();
   else if (s === 'inv') wgDrawInv();
   else if (s === 'chest') wgDrawChest();
+  else if (s === 'trade') wgDrawTrade();
   else if (s === 'dead') wgDrawDead();
 }
 
@@ -188,6 +200,7 @@ function wgPlayUpdate(dt) {
   const Tt = Input.touch;
   if (Input.lastAim === 'touch') { WGS.touch = { mx: Tt.mx, my: Tt.my, act: !!Tt.aim, use: WGS.tapUse }; if (Tt.aim) { Input.mx = Tt.aim.x; Input.my = Tt.aim.y; } else if (WGS.tapAt) { Input.mx = WGS.tapAt[0]; Input.my = WGS.tapAt[1]; } WGS.tapUse = false; WGS.tapAt = null; } else WGS.touch = null;
   // movement
+  if (WGS.dim === 'k' && GROUND[wgGround(w, 'k', Math.floor(p.x / 16), Math.floor(p.y / 16))].void) wgFallFromSky();
   const kd = (n, arrow) => Input.down[wgKey(n)] || Input.down[arrow];
   let mx = (kd('right', 'ArrowRight') ? 1 : 0) - (kd('left', 'ArrowLeft') ? 1 : 0), my = (kd('down', 'ArrowDown') ? 1 : 0) - (kd('up', 'ArrowUp') ? 1 : 0);
   if (WGS.touch) { mx += WGS.touch.mx; my += WGS.touch.my; }
@@ -259,6 +272,11 @@ function wgGrowTick(dt) {
       if (o.kind === 'crop' && ch.m[k] < 3) { const wet = WGS.weather || (WGS.wet && WGS.wet.has(WGS.dim + tx + ',' + ty)); if (Math.random() < (wet ? 2 : 1) * ([0.5, 1, 2][(WGS.world.meta.rules || {}).grow === undefined ? 1 : WGS.world.meta.rules.grow]) / CROP[o.crop] * CS * CS / 6) { ch.o[k] = id; ch.m[k]++; ch.mod = ch.artDirty = true; } }
       else if (o.ripe && Math.random() < 0.02) { wgSetObj(w, WGS.dim, tx, ty, O_ID[o.ripe]); }
       else if (o.kind === 'sapling' && Math.random() < 0.01) { const t = O_ID[o.grow === 'oak' ? 'oak' : o.grow]; if (t) wgSetObj(w, WGS.dim, tx, ty, t); }
+    }
+    for (let k = 0; k < CS * CS; k++) { // machines tick every second
+      const id = ch.o[k]; if (!id || !OBJ[id].tick) continue; const o = OBJ[id], tx = ch.cx * CS + k % CS, ty = ch.cy * CS + Math.floor(k / CS);
+      if (o.kind === 'hive' && ch.m[k] < 4 && Math.random() < 1 / 70) { ch.m[k]++; ch.mod = true; }
+      else if (o.kind === 'sprinkler') { WGS.wet = WGS.wet || new Map(); for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) WGS.wet.set(WGS.dim + (tx + dx) + ',' + (ty + dy), WGS.t + 45); }
     }
   }
 }
@@ -358,18 +376,26 @@ function wgDrawChat() {
 
 // ---------- weather: now and then it rains (snow in the cold), rain waters the fields ----------
 function wgWeatherTick(dt) {
-  if (WGN.role === 'client') { const k = WGS.weather ? WGS.weather.kind : null; WGS.weather = WGS.wk ? { kind: WGS.wk, dark: 0.12, wind: 0.6 } : null; return; }
+  if (WGN.role === 'client') { const k = WGS.weather ? WGS.weather.kind : null; WGS.weather = WGS.wk ? { kind: 'rain', dark: WGS.wk === 'storm' ? 0.26 : 0.12, wind: 0.6, storm: WGS.wk === 'storm' } : null; wgStormTick(dt); return; }
   if (WGS.dim !== 'o') return;
   WGS.wxT = (WGS.wxT === undefined ? 90 + Math.random() * 120 : WGS.wxT) - dt;
   if (WGS.wxT <= 0) {
     if (WGS.weather) { WGS.weather = null; WGS.wk = null; WGS.wxT = 150 + Math.random() * 240; wgToast('THE RAIN STOPS', 2); }
-    else { WGS.weather = { kind: 'rain', dark: 0.12, wind: 0.6 }; WGS.wk = 'rain'; WGS.wxT = 50 + Math.random() * 70; wgToast('IT STARTS TO RAIN', 2); }
+    else { const st = Math.random() < 0.3; WGS.weather = { kind: 'rain', dark: st ? 0.26 : 0.12, wind: 0.6, storm: st }; WGS.wk = st ? 'storm' : 'rain'; WGS.wxT = 50 + Math.random() * 70; wgToast(st ? 'A STORM ROLLS IN' : 'IT STARTS TO RAIN', 2); }
   }
+  wgStormTick(dt);
+}
+function wgStormTick(dt) { // lightning, then thunder a moment later
+  const W = WGS.weather; if (!W || !W.storm || WGS.dim !== 'o') { WGS.flash = 0; return; }
+  WGS.ltT = (WGS.ltT === undefined ? 4 : WGS.ltT) - dt; WGS.flash = Math.max(0, (WGS.flash || 0) - dt * 3.5);
+  if (WGS.ltT <= 0) { WGS.ltT = 4 + Math.random() * 9; WGS.flash = 1; WGS.thunder = 0.3 + Math.random() * 1.2; }
+  if (WGS.thunder > 0 && (WGS.thunder -= dt) <= 0) { WGS.thunder = 0; wgSfx('boom'); WGS.shake = Math.max(WGS.shake || 0, 0.12); }
 }
 function wgDrawWeatherFX() {
   const W = WGS.weather; if (!W || WGS.dim !== 'o' || !wgOpt().wx) return;
   const p = WGS.p, g = GROUND[wgGround(WGS.world, 'o', Math.floor(p.x / 16), Math.floor(p.y / 16))], snow = g.id === 'snow' || g.id === 'ice', l = -SCR.ox, t = -SCR.oy, w = SCR.w, h = SCR.h, T = WGS.t;
-  const n = IS_TOUCH ? 40 : 70;
+  const n = (IS_TOUCH ? 40 : 70) * (W.storm ? 2 : 1);
+  if (W.storm && WGS.flash > 0) fillScreen('rgba(235,240,255,' + (WGS.flash * 0.5).toFixed(2) + ')');
   for (let i = 0; i < n; i++) {
     const sp = snow ? 22 + (i % 5) * 4 : 150 + (i % 4) * 20, x = (i * 53.7 + T * (snow ? 6 : -30) + Math.sin(T + i) * (snow ? 6 : 0)) % w, y = (i * 97.1 + T * sp) % h;
     const X = Math.round(l + (x + w) % w), Y = Math.round(t + y);
@@ -412,6 +438,7 @@ function wgServerBoot(q) {
     }
     WGS.server = true; WGS.p.hidden = true; WGS.p.name = 'SERVER'; WGS.scr = 'play'; WGS.readonly = false; WGU.look = WGS.p.look;
     wgnHost(q.get('pub') === '1', (q.get('code') || '').toUpperCase().slice(0, 5) || undefined);
+    { const pm = wgnPerm(); if (q.get('pass')) pm.pass = wgnClean(q.get('pass')); if (q.get('white')) { pm.white = 1; pm.wl = q.get('white').split(',').map(wgnClean).filter(Boolean); } }
     console.log('WILDGROVE SERVER ' + name + ' CODE ' + WGN.code);
   });
 }

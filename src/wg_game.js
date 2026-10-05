@@ -187,6 +187,8 @@ function wgCanPlaceAt(tx, ty, item) {
 function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, eat...
   const w = WGS.world, dim = WGS.dim, id = wgObjAt(w, dim, tx, ty), o = id ? OBJ[id] : null;
   const s = WGS.inv[WGS.sel], it = s ? WGI[s.id] : null;
+  const trd = WGS.mobs.find(m => m.type === 'trader' && Math.hypot(m.x - (tx * 16 + 8), m.y - 6 - (ty * 16 + 8)) < 26);
+  if (trd && Math.hypot(trd.x - WGS.p.x, trd.y - WGS.p.y) < 60) { WGS.trade = trd.id; WGS.scr = 'trade'; WGS.ui = {}; wgSfx('select'); return true; }
   const mob = WGN.role !== 'client' && it && WGS.mobs.find(m => WG_MOBS[m.type].pas && Math.hypot(m.x - (tx * 16 + 8), m.y - 6 - (ty * 16 + 8)) < 20);
   if (mob) {
     if (it.id === 'shears' && mob.type === 'sheep') { if ((mob.shorn || 0) > WGS.t) { wgToast('ALREADY SHEARED'); return true; } mob.shorn = WGS.t + 150; wgDrop(mob.x, mob.y - 4, 'wool', 2 + Math.floor(Math.random() * 2)); wgSfx('pickup'); wgPart(mob.x, mob.y - 8, 6, { c: ['w', 'L'], s: 24, up: 14 }); return true; }
@@ -201,8 +203,9 @@ function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, e
     if (o.kind === 'storage') { WGS.chest = { tx, ty, dim }; WGS.scr = 'chest'; WGS.ui = {}; wgSfx('select'); return true; }
     if (o.kind === 'station') { if (o.st === 'fire' || o.st === 'furnace' || o.st === 'bench' || o.st === 'anvil' || o.st === 'alch' || o.st === 'loom') { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; return true; } }
     if (o.kind === 'bed') { WGS.p.spawn = { x: tx * 16 + 8, y: ty * 16 + 20, dim }; wgToast('SPAWN POINT SET'); if (wgNight(WGS.clock) > 0.5 && dim === 'o') { WGS.clock = 0.27; WGS.day++; wgToast('GOOD MORNING'); } return true; }
-    if (o.kind === 'stairs') { wgGoDim(o.down ? 'u' : 'o', tx, ty); return true; }
+    if (o.kind === 'stairs') { if (o.sky) wgGoSky(tx, ty); else if (o.skyup) wgLeaveSky(); else wgGoDim(o.down ? 'u' : 'o', tx, ty); return true; }
     if (o.kind === 'sign') { wgToast('SIGN: ' + (wgSignText(tx, ty) || 'EMPTY'), 3); return true; }
+    if (o.kind === 'hive') { const n = wgMetaAt(w, dim, tx, ty); if (n > 0) { wgDrop(tx * 16 + 8, ty * 16 + 20, 'honey', n); wgSetObj(w, dim, tx, ty, id, 0); wgPart(tx * 16 + 8, ty * 16 + 8, 5, { c: ['y', 'Y', 'O'], s: 24, up: 14 }); } else wgToast('THE BEES ARE BUSY'); return true; }
     if (o.kind === 'well') { wgToast('FRESH WATER (+HP)'); WGS.p.hp = Math.min(WGS.p.maxHp, WGS.p.hp + 2); return true; }
     if (o.kind === 'plant' && o.pick) { wgBreak(tx, ty, true); return true; }
     if (o.kind === 'crop' && wgMetaAt(w, dim, tx, ty) >= 3) { wgBreak(tx, ty, true); wgSetObj(w, dim, tx, ty, id, 0); wgPart(tx * 16 + 8, ty * 16 + 8, 6, { c: ['y', 'Y', 'O'], s: 30, up: 20 }); return true; }
@@ -279,7 +282,7 @@ function wgGoDim(dim, tx, ty) {
   WGS.dim = dim; WGS.mobs = []; WGS.mine = null;
   // arrive on the matching stairs, one tile below
   WGS.p.x = tx * 16 + 8; WGS.p.y = ty * 16 + 26;
-  wgToast(dim === 'u' ? 'DOWN INTO THE CAVES' : 'BACK TO THE SURFACE');
+  wgToast(dim === 'u' ? 'DOWN INTO THE CAVES' : dim === 'k' ? 'UP IN THE CLOUDS' : 'BACK TO THE SURFACE');
   wgSfx('door');
 }
 
@@ -292,6 +295,7 @@ const WG_ACH = [
   ['armor', 'WELL DRESSED', 'WEAR HEAD, BODY AND FEET', (c) => c.p.armor.head && c.p.armor.body && c.p.armor.feet], ['cave', 'DEEP DIVER', 'GO DOWN INTO THE CAVES', (c) => c.st.cave],
   ['far', 'EXPLORER', 'WALK 600 TILES AWAY', (c) => c.st.far >= 600], ['kills10', 'HUNTER', 'DEFEAT 10 CREATURES', (c) => c.st.kills >= 10], ['kills50', 'SLAYER', 'DEFEAT 50 CREATURES', (c) => c.st.kills >= 50],
   ['day4', 'SURVIVOR', 'SEE THE FOURTH DAY', (c) => WGS.day >= 3], ['day11', 'VETERAN', 'SEE THE ELEVENTH DAY', (c) => WGS.day >= 10], ['king', 'KING OF SLIME', 'DEFEAT THE SLIME KING', (c) => c.st.slimeking], ['warden', 'STAR WARDEN', 'DEFEAT THE STAR WARDEN', (c) => c.st.starwarden],
+  ['sky', 'HEAD IN THE CLOUDS', 'CLIMB TO THE SKY ISLANDS', (c) => c.st.sky],
   ['friend', 'BETTER TOGETHER', 'PLAY WITH A FRIEND', () => typeof WGN !== 'undefined' && WGN.role && (WGN.role === 'client' || WGN.peers.some(q => q.pid > 0))],
 ];
 function wgAchTick() {
@@ -300,3 +304,8 @@ function wgAchTick() {
   st.far = Math.max(st.far, Math.round(Math.hypot(p.x, p.y) / 16)); if (WGS.dim === 'u') st.cave = 1;
   for (const [id, name, , test] of WG_ACH) if (!ach[id] && test(c)) { ach[id] = WGS.day + 1; wgToast('STAR: ' + name, 3.5); wgSfx('confirm'); wgPart(p.x, p.y - 14, 12, { c: ['y', 'Y', 'w'], s: 40, up: 30, life: 0.8, sz: 2 }); }
 }
+
+// ---------- the wandering trader ----------
+const WG_TRADES = [['copper', 2, 'seed_pumpkin', 3], ['wood', 12, 'sap_palm', 1], ['honey', 2, 'sap_jungle', 1], ['fish', 3, 'pearl', 1], ['bone', 6, 'arrow', 12], ['slime', 3, 'torch', 8], ['iron', 2, 'lantern', 1], ['crystal', 1, 'glow_berry', 4],
+  ['pearl', 2, 'crystal', 1], ['leather', 4, 'rod', 1], ['petal_r', 4, 'banner', 1], ['clay', 6, 'planter', 1], ['stone', 20, 'statue', 1], ['wool', 6, 'couch', 1], ['apple', 4, 'sap_oak', 2], ['feather', 6, 'bow', 1], ['copper', 6, 'bucket', 1], ['glass', 4, 'lamppost', 1]];
+function wgTradesOf(id) { const out = [], used = new Set(); for (let i = 0; out.length < 5 && i < 40; i++) { const k = hash(id, i, 61) % WG_TRADES.length; if (!used.has(k) && WGI[WG_TRADES[k][0]] && WGI[WG_TRADES[k][2]]) { used.add(k); out.push(WG_TRADES[k]); } } return out; }

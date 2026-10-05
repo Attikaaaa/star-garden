@@ -7,6 +7,7 @@ const WG_MOBS = {
   deer:    { name: 'DEER', hp: 12, spd: 24, pas: 1, w: 7, h: 6, drops: [['meat', 1, 2, 1], ['leather', 1, 2, 0.8]], dim: 'o', biomes: ['forest', 'highland', 'meadow'] },
   frog:    { name: 'FROG', hp: 2, spd: 22, pas: 1, w: 4, h: 3, drops: [['slime', 0, 1, 0.5]], dim: 'o', biomes: ['swamp', 'jungle'] },
   crab:    { name: 'CRAB', hp: 5, spd: 20, pas: 1, w: 5, h: 3, drops: [['shell', 1, 1, 0.7], ['meat', 1, 1, 0.4]], dim: 'o', biomes: ['beach'] },
+  trader:  { name: 'TRADER', hp: 30, spd: 13, pas: 1, special: 1, w: 6, h: 7, drops: [['crystal', 1, 2, 0.7]], dim: 'o' },
   slime:   { name: 'SLIME', hp: 10, spd: 20, dmg: 3, w: 6, h: 5, drops: [['slime', 1, 2, 1]], dim: 'o', night: 1, cave: 1 },
   bonebag: { name: 'SKELETON', hp: 14, spd: 24, dmg: 4, w: 5, h: 6, shoot: 1, drops: [['bone', 1, 2, 1], ['arrow', 1, 3, 0.7]], dim: 'u', night: 1, cave: 1 },
   slimeking: { name: 'SLIME KING', hp: 140, spd: 22, dmg: 5, w: 15, h: 10, boss: 1, big: 1, drops: [['star_bar', 2, 3, 1], ['slime', 6, 10, 1], ['crystal', 2, 4, 1], ['apple', 2, 3, 1]], dim: 'o' },
@@ -45,6 +46,11 @@ function wgMobSpr(type, fr, hurt) {
     for (const s2 of [-1, 1]) for (let k = 0; k < 3; k++) wgLine(g, 10 + s2 * 3, 12 + k, 10 + s2 * (6 + k), 14 + k - (k + w) % 2, hurt ? 'w' : 'r');
     wgBlob(g, 10, 11, 4.6, 3, H(['r', 'R', 'O', 'a'])); R(5, 8 - w, 3, 3, hurt ? 'w' : 'o'); R(12, 8 - (1 - w), 3, 3, hurt ? 'w' : 'o'); P(5, 8 - w, 'Y'); P(14, 8 - (1 - w), 'Y');
     P(8, 7, 'w'); P(12, 7, 'w'); P(8, 8, '0'); P(12, 8, '0'); R(8, 6, 1, 1, hurt ? 'w' : 'r'); R(12, 6, 1, 1, hurt ? 'w' : 'r');
+  } else if (type === 'trader') { // a wandering trader: plum robe, deep hood, a heavy pack
+    const w = b ? 1 : 0;
+    R(7, 15, 2, 2, 'x'); R(11, 15, 2 - w, 2, 'x'); R(4, 6, 5, 8 - w, 'n'); R(4, 6, 5, 1, 'N'); R(5, 5, 3, 2, 'N'); P(5, 9, 'O'); P(7, 11, 'y'); // the pack
+    R(7, 7, 8, 9, 'v'); R(7, 7, 8, 1, 'V'); R(7, 7, 1, 9, 'V'); R(14, 8, 1, 8, 'p'); R(7, 15, 8, 1, 'p');
+    wgBlob(g, 11, 5, 4, 4, ['v', 'V', 'V', 'P']); R(11, 4, 4, 4, '0'); R(13, 5, 2, 2, 's'); P(14, 5, '0'); P(13, 6, 'k'); R(15, 9, 3, 1, 'u'); P(17, 8, 'y'); P(17, 7, 'Y'); // a lantern on a stick
   } else if (type === 'slime') { // a bog ooze: dark and glistening, with a sick glow inside
     const sq = b ? 1 : 0, W = (k) => hurt ? ['w', 'w', 'w', 'w'] : k;
     wgBlob(g, 10, 11 - sq, 7 + sq, 5 - sq, W(['x', 'g', 'G', 'h']));
@@ -112,6 +118,8 @@ function wgDrawMob(e, cx0, cy0) {
   ctx.restore();
   if (!d.big && m.hp < d.hp && m.hurt > 0) rect(sx - 6, sy - 24 - fly, Math.max(1, Math.round(12 * m.hp / d.hp)), 2, d.pas ? 'g' : 'r');
 }
+// who simulates the creatures here: the host, a solo player, or a guest who is not in the host's dimension
+function wgSimHere() { return typeof WGN === 'undefined' || WGN.role !== 'client' || WGS.dim !== WGN.hd; }
 function wgSpawnMob(type, x, y) {
   const d = WG_MOBS[type];
   const m = { id: ++WGS.mid, type, x, y, dim: WGS.dim, hp: d.hp, fr: 0, ft: 0, hurt: 0, vx: 0, vy: 0, dir: 0, wt: Math.random() * 2, cd: 1, flip: false };
@@ -120,13 +128,14 @@ function wgSpawnMob(type, x, y) {
 function wgMobSpawnTick(dt) {
   WGS.spawnT = (WGS.spawnT || 0) - dt; if (WGS.spawnT > 0) return;
   WGS.spawnT = 1.2;
-  if (typeof WGN !== 'undefined' && WGN.role === 'client') return;
+  if (!wgSimHere()) return;
   const P = wgPlayers(); if (!P.length) return; const p = P[Math.floor(Math.random() * P.length)], dim = WGS.dim, night = dim === 'u' || wgNight(WGS.clock) > 0.5;
   let pas = 0, hos = 0; for (const m of WGS.mobs) if (m.dim === dim) WG_MOBS[m.type].pas ? pas++ : hos++;
+  if (dim === 'o' && !night && Math.random() < 0.005 && !WGS.mobs.some(m => m.type === 'trader')) { const a = Math.random() * 6.283, x = p.x + Math.cos(a) * 130, y = p.y + Math.sin(a) * 130, tx = Math.floor(x / 16), ty = Math.floor(y / 16); if (!GROUND[wgGround(WGS.world, dim, tx, ty)].liq && !wgObjAt(WGS.world, dim, tx, ty)) { wgSpawnMob('trader', x, y); wgToast('A TRADER WANDERS BY', 3); } return; }
   const a = Math.random() * 6.283, r = 150 + Math.random() * 90, x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
   const tx = Math.floor(x / 16), ty = Math.floor(y / 16), g = GROUND[wgGround(WGS.world, dim, tx, ty)];
   if (g.liq || wgObjAt(WGS.world, dim, tx, ty)) return;
-  const list = Object.keys(WG_MOBS).filter(k => { const d = WG_MOBS[k]; if (d.dim !== dim && !(dim === 'o' && d.night)) return false; if (!d.pas && (WGS.world.meta.rules || {}).noMobs) return false; return d.pas ? !night && pas < 11 : (night || d.cave && dim === 'u') && hos < wgHosCap(dim); });
+  const list = Object.keys(WG_MOBS).filter(k => { const d = WG_MOBS[k]; if (d.special || d.dim !== dim && !(dim === 'o' && d.night)) return false; if (!d.pas && (WGS.world.meta.rules || {}).noMobs) return false; return d.pas ? !night && pas < 11 : (night || d.cave && dim === 'u') && hos < wgHosCap(dim); });
   if (!list.length) return;
   const t = list[Math.floor(Math.random() * list.length)], d = WG_MOBS[t];
   if (d.pas && d.biomes) { const b = wgSurface(WGS.world.seed, tx, ty).b; if (!d.biomes.includes(b)) return; }
@@ -156,7 +165,7 @@ function wgDamage(tg, dmg, fx, fy) {
   tg.L.hcd = now + 700; wgnSend(tg.L, { t: 'dmg', dmg, fx, fy });
 }
 function wgUpdateMobs(dt) {
-  if (typeof WGN !== 'undefined' && WGN.role === 'client') return; // the host runs the creatures
+  if (!wgSimHere()) return; // the host runs the creatures (a guest in another dimension runs their own)
   const P = wgPlayers(); if (!P.length) return;
   for (let i = WGS.mobs.length - 1; i >= 0; i--) {
     const m = WGS.mobs[i], d = WG_MOBS[m.type];
@@ -166,6 +175,7 @@ function wgUpdateMobs(dt) {
     const dx = tg.x - m.x, dy = tg.y - m.y;
     if (dist > 340 && !d.boss) { WGS.mobs.splice(i, 1); continue; }
     m.hurt = Math.max(0, m.hurt - dt); m.cd -= dt;
+    if (m.type === 'trader' && (m.life = (m.life === undefined ? 300 : m.life) - dt) <= 0) { WGS.mobs.splice(i, 1); wgToast('THE TRADER MOVES ON', 2); continue; }
     if (m.love > 0) { m.love -= dt; if (Math.random() < dt * 6) wgPart(m.x, m.y - 14, 1, { c: ['P', 'r'], s: 6, up: 14, life: 0.7, sz: 2 }); if (m.love <= 0) { m.love = 0; m.cool = WGS.t + 90; const b = wgSpawnMob(m.type, m.x + 10, m.y + 4); b.cool = WGS.t + 90; wgToast('A NEW ' + d.name + '!'); } }
     if (m.type === 'chicken' && !m.egg) m.egg = WGS.t + 70 + Math.random() * 80; if (m.type === 'chicken' && WGS.t > m.egg) { m.egg = 0; wgDrop(m.x, m.y, 'egg', 1); }
     let wx = 0, wy = 0;
@@ -190,7 +200,7 @@ function wgUpdateMobs(dt) {
 }
 // a hit on a creature: the host judges it, a guest asks the host
 function wgHitMob(m, dmg, fx, fy) {
-  if (typeof WGN !== 'undefined' && WGN.role === 'client') { wgnSend(WGN.link, { t: 'hit', id: m.id, dmg }); m.hurt = 0.4; wgPart(m.x, m.y - 6, 4, { c: ['w', 'L'], s: 30, up: 18, life: 0.4 }); wgSfx('hit'); return; }
+  if (!wgSimHere()) { wgnSend(WGN.link, { t: 'hit', id: m.id, dmg }); m.hurt = 0.4; wgPart(m.x, m.y - 6, 4, { c: ['w', 'L'], s: 30, up: 18, life: 0.4 }); wgSfx('hit'); return; }
   wgHurtMob(m, dmg, fx, fy);
 }
 function wgMobLoot(x, y, id, n) {

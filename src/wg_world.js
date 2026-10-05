@@ -26,7 +26,7 @@ function wgSurface(seed, x, y) {
   let e = WGW.f(seed + 1, x / 120, y / 120, 4) * 1.15 + WGW.f(seed + 5, x / 380, y / 380, 2) * 0.35;
   let t = WGW.f(seed + 2, x / 260, y / 260, 3) * 1.25, m = WGW.f(seed + 3, x / 190, y / 190, 3) * 1.2;
   const d = Math.sqrt(x0 * x0 + y0 * y0);
-  if (d < 46) { const k = 1 - d / 46; e = e + (0.18 - e) * k; t = t + (0 - t) * k; m = m + (0.1 - m) * k; }
+  if (d < 46) { const k = 1 - d / 46; e = e + (0.18 - e) * k; t = t + (0 - t) * k; m = m + (-0.12 - m) * k; }
   // rivers: thin bands where a second noise crosses zero
   const rv = WGW.f(seed + 7, x / 150, y / 150, 3);
   let b;
@@ -44,7 +44,7 @@ function wgSurface(seed, x, y) {
   let g = b === 'ocean' ? (e < -0.34 ? 'deep' : 'shallow') : BIOMES[b].ground;
   const river = Math.abs(rv) < 0.018 && e > -0.08 && b !== 'mountain' && b !== 'highland' && b !== 'volcano' && d > 14;
   if (river) { g = 'shallow'; b = b === 'desert' ? 'desert' : b; }
-  if (b === 'volcano' && e > 0.58 && WGW.f(seed + 11, x / 22, y / 22, 2) > 0.25) g = 'lava';
+  if (b === 'volcano' && e > 0.54 && WGW.f(seed + 11, x / 22, y / 22, 2) > 0.12) g = 'lava';
   if (b === 'beach' && t < -0.3) g = 'snow';
   if (b === 'mountain' && t < -0.1 && e > 0.72) g = 'snow';
   if (b === 'highland') g = e > 0.8 ? 'snow' : 'rock';
@@ -278,7 +278,7 @@ function wgChunk(w, dim, cx, cy, make) {
   if (!ch && make !== false) {
     ch = wgNewChunk(cx, cy, dim);
     if (w.saved && w.saved.has(key)) wgReadChunk(ch, w.saved.get(key));
-    else if (dim === 'o') wgGenOver(w.seed, ch); else wgGenUnder(w.seed, ch);
+    else if (dim === 'o') wgGenOver(w.seed, ch); else if (dim === 'k') wgGenSky(w.seed, ch); else wgGenUnder(w.seed, ch);
     w.chunks.set(key, ch);
     if (typeof wgNetChunk === 'function') wgNetChunk(w, dim, cx, cy);
   }

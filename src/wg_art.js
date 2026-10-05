@@ -44,7 +44,7 @@ function wgGroundTex(gid, v, tone) {
   const key = 'g' + gid + '_' + v + (tone ? 't' + tone : '');
   if (WGA.cache[key]) return WGA.cache[key];
   const gr = GROUND[gid], R = gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16);
-  const base = { dirt: 1, mud: 0, snow: 2, ice: 1, cave: 0, path: 1, tilled: 1, ash: 1, moss: 1, rock: 1, sand: 1, grass: 1, jungle: 1, deep: 1, shallow: 1, lava: 1 }[gr.id];
+  const base = { cloud: 1, dirt: 1, mud: 0, snow: 2, ice: 1, cave: 0, path: 1, tilled: 1, ash: 1, moss: 1, rock: 1, sand: 1, grass: 1, jungle: 1, deep: 1, shallow: 1, lava: 1 }[gr.id];
   const sc = (n, col, w, h) => { for (let i = 0; i < n; i++) wgRc(g, Math.floor(rng() * 16), Math.floor(rng() * 16), w || 1, h || 1, col); };
   const b = base === undefined ? 1 : base;
   wgRc(g, 0, 0, 16, 16, R[b]);
@@ -64,9 +64,10 @@ function wgGroundTex(gid, v, tone) {
       break;
     }
     case 'mud': sc(16, R[1]); sc(8, R[0]); sc(4, R[2]); if (rng() < 0.6) { const x = 2 + Math.floor(rng() * 9), y = 2 + Math.floor(rng() * 9); wgRc(g, x, y, 4, 2, R[2]); wgRc(g, x + 1, y, 2, 1, R[3]); } break;
-    case 'ash': sc(7, R[0]); sc(5, R[2]); sc(2, R[3]); break;
+    case 'ash': sc(7, R[0]); sc(5, R[2]); sc(2, R[3]); if (v === 1 || v === 3) { let x = 1 + Math.floor(rng() * 6), y = 2 + Math.floor(rng() * 10); for (let i = 0; i < 7; i++) { wgPx(g, x, y, i % 3 ? 'o' : 'O'); x += 1 + (rng() < 0.4 ? 1 : 0); y += rng() < 0.5 ? 1 : rng() < 0.5 ? -1 : 0; } } break; // glowing cracks
     case 'moss': sc(7, R[2]); sc(5, R[0]); sc(3, R[3]); break;
     case 'cave': sc(14, R[1]); sc(8, R[2]); sc(2, R[3]); break;
+    case 'cloud': sc(10, R[2]); sc(6, R[0]); sc(3, R[3]); for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 11), y = Math.floor(rng() * 13); wgRc(g, x, y, 4, 1, R[3]); wgRc(g, x + 1, y + 1, 3, 1, R[2]); } break;
     case 'ice': for (let i = 0; i < 3; i++) { const x = Math.floor(rng() * 12), y = Math.floor(rng() * 14); wgRc(g, x, y, 4, 1, R[2]); wgPx(g, x + 4, y + 1, R[3]); } sc(4, R[3]); break;
     case 'tilled': for (let y = 2; y < 16; y += 5) { wgRc(g, 0, y, 16, 2, R[0]); wgRc(g, 0, y + 2, 16, 1, R[2]); } sc(10, R[3]); break;
     case 'deep': case 'shallow': case 'lava': break; // drawn as animated backdrop
@@ -292,13 +293,13 @@ function wgBuildNature() {
     })]);
     wgReg('palm', [...(WGA.obj.palm || []).map(o => o.c), wgMake('palm' + v, 32, 40, (g) => {
       const lean = v ? -1 : 1;
-      for (let y = 38; y >= 14; y--) { const t = (38 - y) / 24, x = Math.round(15 + lean * Math.sin(t * 1.3) * 5); wgRc(g, x, y, 3, 1, 'N'); wgPx(g, x, y, 'O'); wgPx(g, x + 2, y, 'n'); if (y % 3 === 0) wgPx(g, x + 1, y, 'n'); }
+      for (let y = 38; y >= 14; y--) { const t = (38 - y) / 24, x = Math.round(15 + lean * Math.sin(t * 1.3) * 5); wgRc(g, x, y, 4, 1, 'N'); wgPx(g, x, y, 'O'); wgPx(g, x + 3, y, 'n'); wgPx(g, x + 2, y, 'n'); if (y % 3 === 0) wgRc(g, x + 1, y, 2, 1, 'u'); }
       const tx = Math.round(15 + lean * Math.sin(1.3) * 5) + 1, ty = 14;
-      const fr = [[-12, -2], [-9, -7], [-3, -10], [5, -9], [11, -4], [12, 1], [-8, 3]];
+      const fr = [[-15, -1], [-12, -8], [-6, -12], [4, -12], [12, -8], [15, -1], [-11, 4], [11, 4], [0, -14]];
       for (const [fx, fy] of fr) {
-        for (let i = 0; i <= 12; i++) {
-          const t = i / 12, x = Math.round(tx + fx * t), y = Math.round(ty + fy * t + Math.sin(t * 3.14) * -3 + t * t * 7);
-          wgPx(g, x, y, t < 0.5 ? 'G' : 'g'); wgPx(g, x, y + 1, 'g'); if (i % 3 === 1) wgPx(g, x, y - 1, 'h');
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16, x = Math.round(tx + fx * t), y = Math.round(ty + fy * t + Math.sin(t * 3.14) * -3 + t * t * 8);
+          wgPx(g, x, y, t < 0.55 ? 'G' : 'g'); wgPx(g, x, y + 1, 'g'); wgPx(g, x + (fx > 0 ? -1 : 1), y + 1, 'g'); if (i % 2 === 1) wgPx(g, x, y - 1, 'h'); if (i % 4 === 2) wgPx(g, x, y + 2, 'g');
         }
       }
       wgBlob(g, tx, ty + 1, 2.5, 2.5, ['n', 'N', 'O', 'Y']); wgPx(g, tx - 2, ty + 3, 'n'); wgPx(g, tx + 2, ty + 3, 'n');
