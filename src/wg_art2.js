@@ -113,7 +113,7 @@ function wgIcon(id) {
   const handle = (x0, y0, x1, y1) => { line(x0, y0, x1, y1, 'n'); line(x0 + 1, y0, x1 + 1, y1, 'u'); line(x0, y0 - 1, x1, y1 - 1, 'N'); };
   const done = (o) => { if (o !== false) wgOutline(c); WGA.cache[key] = c; return c; };
   const blob = (x, y, rx, ry, r) => wgBlob(g, x, y, rx, ry, r);
-  if (it.kind === 'tool') { // pickaxe, axe, shovel, hoe: a brown shaft rising to the right and a head in the tier's metal
+  if (it.kind === 'tool' && ['pick', 'axe', 'shovel', 'hoe'].includes(it.tool)) { // pickaxe, axe, shovel, hoe: a brown shaft rising to the right and a head in the tier's metal
     const H = it.tier === 0 ? ['u', 'e', 'a', 'A'] : R, px = (x, y, k) => { if (x >= 0 && x < 16 && y >= 0 && y < 16) wgPx(g, Math.round(x), Math.round(y), k); };
     const shaft = (x0, y0, x1, y1) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; px(x, y, 'N'); px(x + 1, y, 'n'); px(x, y + 1, 'n'); } px(x0, y0, 'u'); px(x0 + 1, y0, 'u'); };
     if (it.tool === 'pick') {
