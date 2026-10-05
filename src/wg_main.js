@@ -51,13 +51,19 @@ function wgField(label, f, x, y, w) {
 }
 
 // ---------- the world list ----------
-function wgDrawBackdrop() {
-  fillScreen(PAL['1']);
-  const t = performance.now() / 1000;
-  for (let i = 0; i < 28; i++) { const x = (i * 97 + t * (8 + i % 5 * 3)) % (VW + 20) - 10, y = (i * 53) % VH; rect(x - SCR.ox * 0, y, 1 + i % 2, 1 + i % 2, i % 3 ? '3' : '2'); }
-  // a far hill line so the screen is not empty
-  for (let x = -SCR.ox; x < VW + SCR.ox; x++) { const h = 150 + Math.round(Math.sin(x / 31) * 6 + Math.sin(x / 13) * 3); rect(x, h, 1, VH - h + SCR.oy, 'G'); rect(x, h, 1, 1, 'h'); }
-  for (let i = 0; i < 9; i++) { if (i > 1 && i < 7) continue; const x = 20 + i * 45 + (i * 13) % 17; const l = wgObjSpr('oak', 0); if (l) ctx.drawImage(l, x, 150 - l.height + 14); }
+function wgDrawBackdrop() { // a dusk sky over two mountain ridges, a moon, drifting clouds, hills with oaks and fireflies
+  const t = performance.now() / 1000, X0 = -SCR.ox, X1 = VW + SCR.ox, Y0 = -SCR.oy, Y1 = VH + SCR.oy;
+  const bands = ['1', 'v', 'V', 'p', 'P', 'R'];
+  for (let k = 0; k < bands.length; k++) rect(X0, Y0 + Math.round((Y1 - Y0) * 0.62 * k / bands.length), X1 - X0, Math.ceil((Y1 - Y0) * 0.62 / bands.length) + 1, bands[k]);
+  fillScreen('rgba(30,16,60,0.35)');
+  for (let i = 0; i < 40; i++) { const x = (i * 97) % (VW + 40) - 20, y = (i * 53) % 110, tw = Math.sin(t * 2 + i) > 0.6; rect(x, y, 1, 1, tw ? 'w' : i % 3 ? '3' : '4'); }
+  const mx = 340, my = 8; rect(mx, my, 16, 16, 'L'); rect(mx - 1, my + 2, 18, 12, 'L'); rect(mx + 2, my - 1, 12, 18, 'L'); rect(mx + 5, my + 4, 3, 3, 'l'); rect(mx + 9, my + 10, 4, 4, 'l'); rect(mx + 3, my + 11, 2, 2, 'l');
+  for (let c = 0; c < 4; c++) { const x = Math.round((c * 131 + t * (3 + c)) % (VW + 90)) - 60, y = 40 + c * 18; rect(x, y, 34, 3, 'q'); rect(x + 6, y - 3, 20, 3, 'q'); rect(x + 2, y + 3, 28, 1, 'R'); }
+  for (let x = X0; x < X1; x++) { const h = 128 + Math.round(Math.sin(x / 47) * 14 + Math.sin(x / 19) * 5); rect(x, h, 1, Y1 - h, 'd'); if (Math.sin(x / 47) > 0.55) rect(x, h, 1, 2, 'L'); }
+  for (let x = X0; x < X1; x++) { const h = 142 + Math.round(Math.sin(x / 33 + 2) * 9 + Math.sin(x / 11) * 3); rect(x, h, 1, Y1 - h, 'X'); }
+  for (let x = X0; x < X1; x++) { const h = 156 + Math.round(Math.sin(x / 31) * 6 + Math.sin(x / 13) * 3); rect(x, h, 1, Y1 - h, 'g'); rect(x, h, 1, 1, 'G'); }
+  for (let i = 0; i < 9; i++) { if (i > 1 && i < 7) continue; const x = 20 + i * 45 + (i * 13) % 17; const l = wgObjSpr('oak', 0); if (l) ctx.drawImage(l, x, 156 - l.height + 14); }
+  for (let i = 0; i < 14; i++) { const a = 0.5 + Math.sin(t * 2 + i * 1.7) * 0.5, x = Math.round((i * 61) % VW + Math.sin(t * 0.6 + i) * 6), y = 150 + (i * 29) % 50 + Math.round(Math.cos(t * 0.5 + i) * 4); ctx.globalAlpha = a; rect(x, y, 1, 1, 'Y'); ctx.globalAlpha = 1; }
 }
 function wgObjSpr(id, i) { const l = WGA.obj[id]; return l && l[i] ? l[i].c : null; }
 // the music follows where you are: one tune per kind of place, a calmer one at night, a driving one for a boss
