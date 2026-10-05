@@ -14,6 +14,8 @@
   wgRec('cloud_stairs', 1, { star_bar: 3, crystal: 2, feather: 4 }, 'anvil');
   wgObj('cloud_back', { name: 'WAY DOWN', kind: 'stairs', solid: 0, hp: 99999, skyup: 1, light: 40 });
   for (const [id, name, drop] of [['driftwood', 'DRIFTWOOD', 'wood'], ['starfish', 'STARFISH', 'shell'], ['beachgrass', 'BEACH GRASS', 'fiber']]) wgObj(id, { name, kind: 'plant', solid: 0, hp: 1, drops: [DR(drop, 1, 1)] });
+  for (const [id, name, drop, tool] of [['fallen_log', 'FALLEN LOG', 'wood', 'axe'], ['frostbush', 'FROST BUSH', 'stick'], ['snowdrift', 'SNOWDRIFT', 'fiber']]) if (!OBJ[id]) wgObj(id, tool ? { name, kind: 'plant', solid: 1, tool, hp: 3, drops: [DR(drop, 1, 2)] } : { name, kind: 'plant', solid: 0, hp: 1, drops: [DR(drop, 1, 1)] });
+  BIOMES.forest.veg.push(['fallen_log', 1.1]); BIOMES.snow.veg.push(['frostbush', 1.6], ['snowdrift', 1.4]);
   Object.assign(BIOMES.beach, { dens: 0.17 }); Object.assign(BIOMES.desert, { dens: 0.12 }); Object.assign(BIOMES.meadow, { dens: 0.18 }); Object.assign(BIOMES.snow, { dens: 0.18 }); BIOMES.beach.veg.push(['driftwood', 1.4], ['starfish', 1.1], ['beachgrass', 5], ['palm', 1.5]);
   dec('beehive', 'BEEHIVE', { kind: 'hive', tick: 1, tool: 'axe', hp: 4 }, [1, { wood: 6, fiber: 4 }], 'bench');
   dec('sprinkler', 'SPRINKLER', { kind: 'sprinkler', tick: 1, hp: 4, anim: 1 }, [1, { copper: 3, glass: 1 }], 'anvil');
@@ -81,6 +83,9 @@ function wgSkyRim(g, x, y, N, E, S, W) { // the edge of an island: a bright lip 
 
 function wgBuildExtra() {
   wgReg('driftwood', [wgMake('driftwood', 16, 10, (g) => { wgLine(g, 1, 7, 14, 5, 'A'); wgLine(g, 1, 8, 14, 6, 'e'); wgLine(g, 2, 4, 12, 7, 'a'); wgLine(g, 2, 5, 12, 8, 'e'); wgPx(g, 14, 5, 'n'); wgPx(g, 1, 7, 'n'); wgPx(g, 6, 3, 'A'); wgPx(g, 7, 2, 'A'); wgPx(g, 7, 3, 'e'); })]);
+  wgReg('fallen_log', [wgMake('fallen_log', 26, 12, (g) => { wgRc(g, 1, 3, 23, 7, '0'); wgRc(g, 2, 4, 21, 5, 'N'); wgRc(g, 2, 4, 21, 1, 'O'); wgRc(g, 2, 8, 21, 1, 'n'); for (const x of [6, 11, 17]) wgPx(g, x, 6, 'n'); wgRc(g, 0, 3, 3, 7, '0'); wgRc(g, 1, 4, 2, 5, 'a'); wgPx(g, 2, 6, 'e'); wgRc(g, 22, 3, 3, 7, '0'); wgRc(g, 22, 4, 2, 5, 'n'); wgPx(g, 8, 2, 'h'); wgPx(g, 9, 2, 'G'); wgPx(g, 15, 2, 'G'); })]);
+  wgReg('frostbush', [0, 1].map(v => wgMake('frostbush' + v, 14, 12, (g) => { for (const [x, y, c] of [[3, 6, 'n'], [5, 4, 'n'], [7, 2, 'N'], [9, 4, 'n'], [11, 6, 'n'], [7, 6, 'n'], [7, 9, 'u']]) { wgPx(g, x, y, c); wgPx(g, x, y + 1, c); } for (const [x, y] of [[2, 5], [4, 3], [6, 1], [8, 1], [10, 3], [12, 5], [7, 5]]) { wgRc(g, x, y, 2, 1, 'w'); wgPx(g, x + (v ? 1 : 0), y - 1, 'C'); } })));
+  wgReg('snowdrift', [0, 1].map(v => wgMake('snowdrift' + v, 20, 8, (g) => { for (let x = 0; x < 20; x++) { const h = Math.round(Math.sin((x + v * 4) / 19 * Math.PI) * (4 + v)); for (let y = 7 - h; y < 8; y++) wgPx(g, x, y, y === 7 - h ? 'w' : y > 5 ? 'm' : 'L'); } })));
   wgReg('starfish', [wgMake('starfish', 9, 9, (g) => { for (const [x, y] of [[4, 0], [4, 1], [4, 2], [0, 3], [1, 3], [2, 3], [6, 3], [7, 3], [8, 3], [3, 4], [4, 4], [5, 4], [2, 6], [1, 7], [6, 6], [7, 7], [3, 5], [5, 5], [4, 3]]) wgPx(g, x, y, (x + y) % 3 ? 'o' : 'O'); wgPx(g, 4, 3, 'Y'); wgPx(g, 4, 1, 'Y'); })]);
   wgReg('beachgrass', [0, 1].map(v => wgMake('beachgrass' + v, 12, 14, (g) => { for (const [x, h, lean] of [[3, 9, -1], [6, 12, 0], [9, 8, 1], [5, 7, -1], [7, 6, 1]]) for (let y = 0; y < h; y++) wgPx(g, x + Math.round(lean * y * 0.25 * (v ? -1 : 1)), 13 - y, y > h - 3 ? 'H' : y % 3 ? 'h' : 'G'); })));
 
