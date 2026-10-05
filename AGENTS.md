@@ -26,6 +26,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 
 | File | Contents |
 |---|---|
+| `wg_*.js`, `dress.js`, `lang_hu_wg.js` | **Wildgrove** survival mode (`G.state === 'wg'`), self-contained: `wg_data` (items/objects/recipes, append-only ids), `wg_world` (seeded chunks, caves), `wg_art`/`wg_art2` (sprites), `wg_game` (session `WGS`, mining, use), `wg_mobs`, `wg_render`, `wg_ui`, `wg_main` (screens, play loop), `wg_store` (IndexedDB, `.sgworld` export/import), `wg_net` (host-authoritative MQTT+WebRTC). Server: `tools/wg-server.mjs`. Tests: `sh qa/_wg_all.sh` |
 | `palette.js` | `PAL` (the one palette), `THEMES` (per-land tile colour slots and land names) |
 | `save.js` | `Save`: settings, lifetime stats, found items, vault, Garden levels, wands, name, robe (localStorage, fails soft) |
 | `gfx.js` | sprite registry, atlas baking, `drawS` / `drawFeet` / `drawGlow`, shadow, ring; art tools `sculpt`, `stamp`, `autoOutline`, `grid` |

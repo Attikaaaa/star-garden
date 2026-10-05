@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.14.0', lines: ['A NEW GAME ON THE TITLE SCREEN: WILDGROVE', 'AN ENDLESS SURVIVAL WORLD: CHOP, BUILD, FARM, FIGHT', 'PLAY WITH FRIENDS, SAVE AND SHARE YOUR WORLDS'] },
   { v: '1.13.0', lines: ['THE LAST LAND: THE MOON GARDEN, WHERE THE STAR ROAD ENDS', 'LOW GRAVITY: YOU SLIDE, AND GOLD ROCKS BEND YOUR SHOTS', 'BEAT THE NIGHT BLOOM TO OPEN ROAD+: THE SAME ROAD, A LITTLE WILDER', 'DAILY RUNS NOW VISIT THE WHOLE STAR ROAD', 'THE CASINO: A VIP LOUNGE, A FOUNTAIN, QUESTS AND A CONSTELLATION', "HOLD'EM IN THE LOUNGE: BEAT A FROG, AN OWL AND A FOX", 'A VELVET ROBE AT THE PRIZE COUNTER'] },
   { v: '1.12.0', lines: ['A NEW LAND: THE GLOW DEEP', 'THE CURRENT CARRIES EVERYTHING: WATCH THE FLOOR ARROWS', 'CATCH A BUBBLE FOR ONE BIG BUBBLE SHOT'] },
   { v: '1.11.0', lines: ['TWO NEW LANDS: THE STORY LIBRARY AND THE EMBER FORGE', 'THE PAGES TURN: STEP CLEAR OF THE NEW SHELVES', 'THE FORGE KEEPS TIME: WATCH THE RUNES, THEN STEP OFF'] },
@@ -266,7 +267,7 @@ function drawNewTags(items, y, gap, keyOf, posOf) {
     const k = keyOf(it);
     if (!k || (k !== true && !hasBadge(k))) return;
     const sel = i === G.menuSel, [x, ry] = posOf ? posOf(i) : [VW / 2, y + i * gap];
-    const nx = x + textW(it) / 2 + (sel ? 16 : 8);
+    const nx = x + textW(it) / 2 + (sel ? 19 : 17);
     if (Math.floor(G.time * 3) % 3) text('NEW', nx, ry, 'P', 2);
   });
 }

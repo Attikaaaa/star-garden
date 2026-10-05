@@ -8,6 +8,8 @@ function panel(x, y, w, h) {
   rect(x + 1, y + 1, w - 2, h - 2, '1');
   rect(x + 2, y + 1, w - 4, 1, '2');
   rect(x + 1, y + 2, 1, h - 4, '2');
+  rect(x + 2, y + h - 2, w - 3, 1, 'rgba(43,26,71,0.55)'); rect(x + w - 2, y + 2, 1, h - 4, 'rgba(43,26,71,0.55)');
+  rect(x + 2, y + h, w - 2, 2, SHADOW);
 }
 function dim(a) { fillScreen('rgba(43,26,71,' + a + ')'); }
 
@@ -283,14 +285,10 @@ function pointer(x, y) { text('>', x - (Math.floor(G.time * 4) % 2), y, 'Y', 2);
 function drawMenu(items, y, gap, cur, posOf) {
   gap = gap || 14;
   if (cur === undefined) cur = G.menuSel;
+  const bw = Math.max(...items.map(it => textW(it))) + 30;
   items.forEach((it, i) => {
     const sel = i === cur, [x, ry] = posOf ? posOf(i) : [VW / 2, y + i * gap];
-    text(it, x, ry, sel ? 'Y' : 'l', 2, 1);
-    if (sel) {
-      const w = textW(it), bob = Math.floor(G.time * 4) % 2;
-      text('>', x - w / 2 - 9 - bob, ry, 'Y', 2);
-      text('<', x + w / 2 + 6 + bob, ry, 'Y', 2);
-    }
+    titleBtn(x, ry, bw, it, sel, Math.min(TITLE_BH, gap - 2));
   });
 }
 // Key cap with a letter (E on keyboard, X on a controller).
@@ -303,10 +301,12 @@ function keyCap(x, y) {
 // ---------- Title ----------
 // Two columns: play choices on the left, the extras (and the casino) on the right,
 // Pip and friends beside them. A first launch keeps the classic centred menu.
-const TITLE_Y = 112, TITLE_GAP = 14, TITLE_COL1 = 178, TITLE_COL2 = 306;
+const TITLE_Y = 104, TITLE_GAP = 17, TITLE_COL1 = 172, TITLE_COL2 = 296, TITLE_BH = 14;
+// A button is as wide as its column: 108 on the left, 88 on the right, a plain 96 for the lone PLAY.
+const titleBW = (items, i) => titleClassic(items) ? 96 : i < titleCols(items) ? 108 : 88;
 // The title menu grows as the player gets to things: a first launch shows just PLAY.
 const TITLE_BADGE = { ARENA: 'menu:arena', 'CO-OP': 'menu:coop', 'DAILY STAR RUN': 'menu:daily', CASINO: 'menu:casino' };
-const TITLE_SIDE = new Set(['CO-OP', 'THE GARDEN', 'CASINO', 'SETTINGS']);
+const TITLE_SIDE = new Set(['CO-OP', 'THE GARDEN', 'WILDGROVE', 'CASINO', 'SETTINGS']);
 function titleItems() {
   const first = Save.stats.runs === 0 && !hasRun();
   const out = first ? ['PLAY'] : hasRun() ? ['CONTINUE', 'NEW ADVENTURE'] : ['ADVENTURE'];
@@ -314,6 +314,7 @@ function titleItems() {
   if (menuOpen('arena')) { if (hasArena()) out.push('CONTINUE ARENA'); out.push('ARENA'); }
   if (menuOpen('coop')) out.push('CO-OP');
   if (menuOpen('garden')) out.push('THE GARDEN');
+  out.push('WILDGROVE');
   if (!first && menuOpen('casino') && !Save.settings.noCasino) out.push('CASINO');
   return out.concat(['SETTINGS']);
 }
@@ -340,11 +341,24 @@ function titleMenu(items) {
   let chosen = -1;
   const wide = Input.lastAim === 'touch' ? 118 : 0;
   items.forEach((it, i) => {
-    const w = wide || textW(it) + 22;
+    const w = wide || titleBW(items, i) + 4;
     if (hoverRow(i, titleItemX(items, i) - w / 2, titleItemY(items, i) - 3, w, TITLE_GAP - 1)) chosen = i;
   });
   if (pressed(...K_OK)) chosen = G.menuSel;
   return chosen;
+}
+// A chunky button: rounded outline, lit from the top left, the chosen one orange and lifted.
+function titleBtn(x, y, w, label, sel, h) {
+  h = h || TITLE_BH;
+  const x0 = Math.round(x - w / 2), y0 = Math.round(y - h / 2) - (sel ? 1 : 0);
+  rect(x0 + 2, y0 + h, w - 2, 2, SHADOW);
+  rect(x0 + 1, y0, w - 2, h, '0'); rect(x0, y0 + 1, w, h - 2, '0');
+  const hi = sel ? 'Y' : '3', top = sel ? 'O' : '2', bot = sel ? 'o' : '1';
+  rect(x0 + 1, y0 + 1, w - 2, h - 2, top);
+  rect(x0 + 1, y0 + h - 5, w - 2, 4, bot);
+  rect(x0 + 2, y0 + 1, w - 4, 1, hi); rect(x0 + 1, y0 + 2, 1, h - 7, hi);
+  text(label, x, y0 + h / 2 - 2, 'w', 2, 1);
+  if (sel) { const k = Math.floor(G.time * 4) % 2 ? 'sparkle_0' : 'sparkle_1'; drawS(S(k), x0 + 3, y0 + 5); drawS(S(k), x0 + w - 7, y0 + 5); }
 }
 function drawTitleBg() {
   const t = G.time;
@@ -360,16 +374,22 @@ function drawTitleBg() {
     drawS(S(faceTile(x, 7) + '@meadow'), x * 16, 24);
   }
   rect(-SCR.ox, 40, SCR.w, 3, SHADOW);
+  // sun shafts from the top left, and a darker lower edge so the text reads
+  for (let k = 0; k < 4; k++) for (let y = 43; y < 190; y += 2) rect(Math.round(k * 110 - 30 + (y - 43) * 0.55 + Math.sin(t * 0.4 + k) * 4), y, 18 + k * 3, 2, 'rgba(255,244,163,0.045)');
+  rect(-SCR.ox, 186, SCR.w, SCR.h - SCR.oy - 186, 'rgba(43,26,71,0.4)'); rect(-SCR.ox, 185, SCR.w, 1, 'rgba(43,26,71,0.4)');
   const logo = S('logo');
   drawS(logo, (VW - logo.w) / 2, 6 + Math.round(Math.sin(t * 2) * 1.5));
 }
 function drawTitle() {
   const t = G.time;
   drawTitleBg();
-  text('THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', VW / 2, 52, 'Y', 2, 1);
+  const tag = 'THE ADVENTURES OF PIP, THE LITTLE STAR WIZARD', tw = textW(tag) + 16;
+  rect(VW / 2 - tw / 2 + 1, 46, tw - 2, 13, 'rgba(43,26,71,0.6)'); rect(VW / 2 - tw / 2, 47, tw, 11, 'rgba(43,26,71,0.6)');
+  text(tag, VW / 2, 52, 'Y', 2, 1);
   const items = titleItems();
   // Pip and friends stand centred under the logo on a first launch, beside the menu later
-  const hx = titleClassic(items) ? VW / 2 : 68, hy = titleClassic(items) ? 104 : 134;
+  const hx = titleClassic(items) ? VW / 2 : 60, hy = titleClassic(items) ? 90 : 134;
+  for (let k = 0; k < 3; k++) rect(hx - 40 + k * 6, hy - 4 + k, 80 - k * 12, 8 - k * 2, 'rgba(255,244,163,0.06)'); // a pool of light under Pip
   shadow(hx, hy, 12);
   drawFeet(S(heroPre(heroUnlocked(Save.hero) ? Save.hero : 'pip') + 'd' + HERO_WALK[Math.floor(t / 0.14) % 4] + SKIN[Save.skin]), hx, hy + 1);
   if (Save.pet) { shadow(hx + 17, hy, 8); drawFeet(S('pet_' + Save.pet + '_' + Math.floor(t * (Save.pet === 'bee' ? 14 : 2)) % 2), hx + 17, hy + 1 - (Save.pet === 'bee' ? 7 : 0), 1); }
@@ -381,18 +401,20 @@ function drawTitle() {
   shadow(bx, hy - 2, 10);
   drawFeet(S('bee_' + Math.floor(t * 16) % 2), bx, by, 1);
   const at = (i) => [titleItemX(items, i), titleItemY(items, i)];
-  drawMenu(items, TITLE_Y, TITLE_GAP, undefined, at);
-  drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it], at);
+  items.forEach((it, i) => { const [x, y] = at(i); titleBtn(x, y, titleBW(items, i), it, i === G.menuSel); });
+  // NEW hangs off the button's right edge
+  const tagAt = (i) => [at(i)[0] + titleBW(items, i) / 2 + 2 - textW(items[i]) / 2 - (i === G.menuSel ? 19 : 17), at(i)[1]];
+  drawNewTags(items, TITLE_Y, TITLE_GAP, (it) => TITLE_BADGE[it], tagAt);
   const gi = items.indexOf('THE GARDEN'), vs = String(Save.vault);
   // THE GARDEN shows its vault on the right, so its NEW sits on the left; when the left column's
   // item on the same row has its own NEW, the two blink in turn so they never read as NEWNEW
   if (gi >= 0 && hubBadge()) {
-    const gx = titleItemX(items, gi), gy = titleItemY(items, gi), off = G.menuSel === gi ? 16 : 8, ph = Math.floor(G.time * 3) % 3;
+    const gx = titleItemX(items, gi), gy = titleItemY(items, gi), off = G.menuSel === gi ? 2 : 0, ph = Math.floor(G.time * 3) % 3;
     const twin = Save.vault && items.some((it, i) => i < titleCols(items) && titleItemY(items, i) === gy && TITLE_BADGE[it] && hasBadge(TITLE_BADGE[it]));
-    if (twin ? ph === 0 : ph) text('NEW', Save.vault ? gx - textW('THE GARDEN') / 2 - off - textW('NEW') : gx + textW('THE GARDEN') / 2 + off, gy, 'P', 2);
+    if (twin ? ph === 0 : ph) text('NEW', Save.vault ? gx - titleBW(items, gi) / 2 - 3 - off - textW('NEW') : gx + titleBW(items, gi) / 2 + 3 + off, gy, 'P', 2);
   }
   if (gi >= 0 && Save.vault) {
-    const x = titleItemX(items, gi) + textW('THE GARDEN') / 2 + 10 + (G.menuSel === gi ? 6 : 0), y = titleItemY(items, gi);
+    const x = titleItemX(items, gi) + titleBW(items, gi) / 2 + 4, y = titleItemY(items, gi);
     drawS(S('coin_0'), x, y - 1);
     text(vs, x + 11, y, 'Y', 2);
   }
@@ -466,8 +488,9 @@ function drawSettings() {
   text('SETTINGS', VW / 2, 48, 'Y', 2, 1);
   rows.forEach(([, label, val, v], i) => {
     const y = SET_Y + i * gap, sel = i === G.menuSel;
-    if (sel) pointer(SET_X - 10, y);
-    text(label, SET_X, y, sel ? 'Y' : 'l', 1);
+    if (sel) { const by = Math.round(y - gap / 2) + 1; rect(SET_X - 14, by, 188, gap - 1, '2'); rect(SET_X - 14, by, 188, 1, '3'); pointer(SET_X - 10, y); }
+    else if (i % 2) rect(SET_X - 14, Math.round(y - gap / 2) + 1, 188, gap - 1, 'rgba(43,26,71,0.28)');
+    text(label, SET_X, y, sel ? 'w' : 'l', 1);
     if (val === 'bar') {
       rect(BAR_X - 1, y - 1, 71, 9, '0');
       for (let k = 0; k < 10; k++) rect(BAR_X + k * 7, y, 6, 7, k < v ? (sel ? 'Y' : 'w') : '2');

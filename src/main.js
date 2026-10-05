@@ -26,6 +26,7 @@ function setState(s) {
   G.state = s; G.menuSel = 0; G.menuHover = -1;
 }
 const MENU_STATES = new Set(['title', 'settings', 'keys', 'daily', 'yard', 'garden', 'library', 'kert', 'quests', 'stars', 'book', 'mail', 'wardrobe', 'prep', 'coop', 'entry', 'lobby', 'casino']);
+// 'wg' (Wildgrove) is its own world: no menu ambience, the mode keeps its own saves
 function toast(msg) { G.toast = { msg, t: 1.6 }; }
 
 // Forget every in-flight effect of a previous run or floor.
@@ -592,12 +593,14 @@ function update(dt) {
       else if (id === 'ADVENTURE' || id === 'NEW ADVENTURE' || id === 'ARENA') { Audio_.sfx('confirm'); G.prep = { mode: id === 'ARENA' ? 'arena' : 'adv' }; setState('prep'); }
       else if (id === 'CO-OP') { Audio_.sfx('confirm'); setState('coop'); }
       else if (id === 'THE GARDEN') { Audio_.sfx('confirm'); openGarden(); }
+      else if (id === 'WILDGROVE') { Audio_.sfx('confirm'); wipe(enterWG); }
       else if (id === 'CASINO') { Audio_.sfx('confirm'); wipe(enterCasino); }
       else if (id === 'DAILY STAR RUN') { Audio_.sfx('confirm'); setState('daily'); G.menuSel = 0; G.dailyYard = false; }
       else if (id === 'SETTINGS') { Audio_.sfx('confirm'); G.back = 'title'; setState('settings'); }
       return;
     }
     case 'casino': updateCasino(dt); return;
+    case 'wg': updateWG(dt); return;
     case 'prep': {
       if (updateCouchJoin()) { for (const k in Input.hit) delete Input.hit[k]; return; }
       const r = updatePrep();
@@ -953,6 +956,7 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, SCR.ox, SCR.oy);
   if (s === 'title') drawTitle();
   else if (s === 'casino') drawCasino();
+  else if (s === 'wg') drawWG();
   else if (s === 'daily') drawDaily();
   else if (s === 'yard') drawYard();
   else if (s === 'garden') drawHub();
@@ -1066,6 +1070,7 @@ document.addEventListener('visibilitychange', () => {
 // Closing the tab or leaving the app: keep what was earned since the last save point.
 // A solo run is saved only in a cleared room (saveRun checks), the rest always.
 function flushSave() {
+  if (G.state === 'wg' && WGS.world) wgSaveNow();
   if (G.state === 'play' || G.state === 'pause') saveRun();
   Save.write();
 }

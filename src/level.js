@@ -472,6 +472,7 @@ function renderRoomStatic(room, theme) {
     blit(g, T(floorTile(c, r, room.seed)), c * 16, OY + r * 16);
   }
   if (th.paint) th.paint(g, room); // a land's own floor (Cloud Steps: clouds and sunstone)
+  dressFloor(g, room, theme);
   // walls: caps everywhere, faces on the top wall
   for (let c = 0; c < COLS; c++) blit(g, capS, c * 16, OY - 16);
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {

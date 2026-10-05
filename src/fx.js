@@ -56,8 +56,10 @@ const PETAL = ['P', 'q', 'w', 'Y'];
 function spawnAmbient(theme, anywhere) {
   const y0 = anywhere ? rnd(-SCR.oy, SCR.h - SCR.oy) : -SCR.oy - 4, xl = -SCR.ox, xr = SCR.w - SCR.ox;
   if (theme === 'meadow') {
-    if (Math.random() < 0.9) amb('petal', rnd(xl - 60, xr), y0, rnd(10, 18), rnd(9, 15), 30);
-    else if (AMB.filter(a => a.life > 0 && a.kind === 'fly').length < 2) { const l = Math.random() < 0.5; amb('fly', l ? xl - 8 : xr + 8, rnd(60, 180), l ? 1 : -1, 0, 30); }
+    const r = Math.random();
+    if (r < 0.62) amb('petal', rnd(xl - 60, xr), y0, rnd(10, 18), rnd(9, 15), 30);
+    else if (r < 0.85) amb('pollen', rnd(24, VW - 24), rnd(50, 200), rnd(-3, 3), rnd(-4, -1), rnd(4, 7));
+    else if (AMB.filter(a => a.life > 0 && a.kind === 'fly').length < 3) { const l = Math.random() < 0.5; amb('fly', l ? xl - 8 : xr + 8, rnd(60, 180), l ? 1 : -1, 0, 30); }
   } else if (theme === 'beach') {
     amb('glint', rnd(20, VW - 20), rnd(44, 196), 0, 0, 0.6);
     const pits = G.room && G.room.pits;
@@ -142,6 +144,7 @@ function drawAmbient(ox, oy) {
         break;
       }
       case 'leaf': { const c = ['o', 'O', 'V', 'n'][Math.floor(a.max * 7) % 4]; if (Math.floor(a.ph * 3) % 2) rect(x, y, 2, 1, c); else { rect(x, y, 1, 1, c); rect(x + 1, y + 1, 1, 1, c); } break; }
+      case 'pollen': if ((a.ph + a.max) % 2 < 1.5) rect(x + Math.round(Math.sin(a.ph * 1.4 + a.max) * 2), y, 1, 1, Math.floor(a.ph * 2) % 2 ? 'Y' : 'w'); break;
       case 'ffly': if ((a.ph * 0.9 + a.max) % 2.2 < 1.6) { rect(x, y, 1, 1, 'Y'); if ((a.ph * 0.9 + a.max) % 2.2 < 1.1) { rect(x - 1, y, 1, 1, 'y'); rect(x + 1, y, 1, 1, 'y'); rect(x, y - 1, 1, 1, 'y'); rect(x, y + 1, 1, 1, 'y'); } } break;
       case 'fly': drawS(S('bfly_' + (Math.floor(a.ph * 8) % 2)), x - 3, y - 2, a.vx < 0 ? 1 : 0); break;
       case 'glint': drawS(S(a.life / a.max > 0.5 ? 'sparkle_1' : 'sparkle_0'), x - 1, y - 1); break;

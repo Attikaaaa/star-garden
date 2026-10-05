@@ -215,6 +215,18 @@ are all there. Star Scrolls found in runs teach new magic items.
 
 Items stack and combine well; your shots change colour with the items you carry.
 
+## Wildgrove (the survival game)
+
+Pick WILDGROVE on the title screen. It is a second game on the same link: an endless, generated world seen from above, slightly from the side.
+
+- **Survive and build.** Chop trees, mine stone and ore, craft at the bench, furnace, anvil, alchemy table and loom, climb from wood to star tools. Farm crops, shear sheep, breed animals, fish, cook. Torches keep the night away. Caves lie under every world (find the cave stairs). Wake the Slime King at an old altar with five slime.
+- **Controls.** WASD to move (Shift runs), hold left click to mine or hit, right click to use, place and eat, 1-9 or the wheel for the hotbar, E for the backpack and crafting, Q drops one, Enter chats online. On a phone: left thumb walks, right thumb aims (tap uses), round buttons for USE, BAG and pause.
+- **Worlds.** Saved on your device (IndexedDB), automatic every 30 seconds, with rolling older saves. EXPORT writes a `.sgworld` file you can keep or send; IMPORT loads one.
+- **Friends.** Pause, PLAY WITH FRIENDS: open the world privately (a 5 letter code) or publicly (listed under PUBLIC WORLDS). The host's browser runs the world, so keep it open. Everyone keeps their own backpack.
+- **Dedicated server.** `node tools/wg-server.mjs "MY WORLD" --public` runs a world 24/7 in a headless Chromium (no dependencies, set CHROME=... if none is found). Options: `--seed N`, `--code ABCDE`, `--peaceful`.
+
+Tests live in `qa/_wg_*.mjs` (generation, saves, recipes, two-browser network, boss, phone performance).
+
 ## Saving
 
 Solo adventures and Arena runs save automatically. Use *Save and quit* in the pause menu

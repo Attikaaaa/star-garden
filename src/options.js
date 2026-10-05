@@ -143,7 +143,9 @@ function drawPrep() {
   rows.forEach((r, i) => {
     if (r === 'start' || r === 'back') return;
     const y = prepY(rows, i), on = r === sel, [v] = prepValue(r);
-    text(PREP_LABEL[r], VW / 2 - 138, y, on ? 'Y' : 'l', 1);
+    if (on) { rect(VW / 2 - 146, y - 8, 292, 16, '2'); rect(VW / 2 - 146, y - 8, 292, 1, '3'); }
+    else if (i % 2) rect(VW / 2 - 146, y - 8, 292, 16, 'rgba(43,26,71,0.28)');
+    text(PREP_LABEL[r], VW / 2 - 138, y, on ? 'w' : 'l', 1);
     text(v, VW / 2 + 30, y, on ? 'Y' : 'w', 1, 1);
     if (on) { const bob = Math.floor(G.time * 4) % 2, hw = textW(v) / 2; text('<', VW / 2 + 30 - hw - 9 - bob, y, 'Y', 1); text('>', VW / 2 + 30 + hw + 5 + bob, y, 'Y', 1); }
   });

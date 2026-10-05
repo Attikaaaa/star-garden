@@ -89,17 +89,18 @@ cv.addEventListener('mousedown', e => {
   _mousePos(e);
   if (G.state === 'settings' && G.tapFull && Input.my >= G.tapFull[0] && Input.my < G.tapFull[1]) toggleFullscreen();
   if (e.button === 0) { Input.mouseDown = true; Input.mouseHit = true; Input.lastAim = 'mouse'; }
+  if (e.button === 2) { Input.rDown = true; Input.rHit = true; Input.lastAim = 'mouse'; }
   Audio_.unlock();
 });
 cv.addEventListener('wheel', e => { Input.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });
-window.addEventListener('mouseup', e => { if (e.button === 0) Input.mouseDown = false; });
+window.addEventListener('mouseup', e => { if (e.button === 0) Input.mouseDown = false; if (e.button === 2) Input.rDown = false; });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 
 const key = (c) => !!Input.down[c];
 const pressed = (...codes) => codes.some(c => Input.hit[c]);
 function endInputFrame() {
   for (const k in Input.hit) delete Input.hit[k];
-  Input.mouseHit = false; Input.wheel = 0;
+  Input.mouseHit = false; Input.rHit = false; Input.wheel = 0;
 }
 
 // ---------- Gamepad (standard mapping) ----------
@@ -161,6 +162,7 @@ cv.addEventListener('pointerdown', e => {
   Input.mx = x; Input.my = y; Input.mouseSeen = true;
   if (G.state === 'title') goFullscreen();
   if (G.state === 'settings' && G.tapFull && y >= G.tapFull[0] && y < G.tapFull[1]) toggleFullscreen();
+  if (G.state === 'wg' && WGS.scr === 'play') { wgTouchDown(x, y, e); return; }
   if (G.state !== 'play') { Input.mouseHit = true; Input.mouseDown = true; return; }
   const B = touchBtns();
   if (_inBtn(B.pause, x, y)) { Input.hit.TouchPause = true; return; }
@@ -190,7 +192,7 @@ function _tend(e) {
   if (e.pointerType === 'touch') { _touchT = performance.now(); Input.mouseDown = false; }
   const T = Input.touch;
   if (T.move && T.move.id === e.pointerId) T.move = null;
-  if (T.aim && T.aim.id === e.pointerId) T.aim = null;
+  if (T.aim && T.aim.id === e.pointerId) { if (G.state === 'wg') wgTouchTap(T.aim); T.aim = null; }
 }
 cv.addEventListener('pointerup', _tend);
 cv.addEventListener('pointercancel', _tend);
