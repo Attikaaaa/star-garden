@@ -202,6 +202,11 @@ function wgUpdateMobs(dt) {
       m.bt = (m.bt || 2) - dt; if (dist < 90 && dist > 1) { wx = -dx / dist * 0.5; wy = -dy / dist * 0.5; }
       if (m.bt <= 0 && dist < 240) { m.bt = 2.6; m.bn = (m.bn || 0) + 1; if (m.bn % 4 === 0) { m.vx = dx / dist * 260; m.vy = dy / dist * 260; } else { const n = 8 + (m.bn % 2) * 4, o = m.bn * 0.4; WGS.arrows = WGS.arrows || []; for (let k = 0; k < n; k++) { const a = o + k / n * 6.283; WGS.arrows.push({ x: m.x, y: m.y - 14, vx: Math.cos(a) * 72, vy: Math.sin(a) * 72, life: 3, dim: WGS.dim, star: 1 }); } wgSfx('eshoot'); } }
     }
+    if (!d.fly && (m.blockedX || m.blockedY) && (wx || wy)) { // walked into a tree or a wall: slide round it instead of pushing on
+      m.sl = m.sl || (Math.random() < 0.5 ? -1 : 1);
+      if (m.blockedX && Math.abs(wx) >= Math.abs(wy) * 0.5) { wy += m.sl * 0.9; wx *= 0.4; } else if (m.blockedY) { wx += m.sl * 0.9; wy *= 0.4; }
+    } else m.sl = 0;
+    m.blockedX = m.blockedY = false;
     const sp = d.spd * (wx || wy ? 1 : 0), vx = wx * sp + m.vx, vy = wy * sp + m.vy;
     if (d.fly) { m.x += vx * dt; m.y += vy * dt; } else { wgMoveBox(m, vx * dt, 0, d.big ? 6 : d.w, 2); wgMoveBox(m, 0, vy * dt, d.big ? 6 : d.w, 2); const g = GROUND[wgGround(WGS.world, WGS.dim, Math.floor(m.x / 16), Math.floor(m.y / 16))]; if (g.liq) { m.x -= vx * dt * 1.2; m.y -= vy * dt * 1.2; } }
     if (wx || wy) { m.ft += dt * 6; m.fr = Math.floor(m.ft) % 2; if (Math.abs(wx) > 0.1) m.flip = wx > 0; }
