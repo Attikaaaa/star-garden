@@ -194,6 +194,12 @@ function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, e
   const mob = WGN.role !== 'client' && it && WGS.mobs.find(m => WG_MOBS[m.type].pas && Math.hypot(m.x - (tx * 16 + 8), m.y - 6 - (ty * 16 + 8)) < 20);
   if (mob) {
     if (it.id === 'shears' && mob.type === 'sheep') { if ((mob.shorn || 0) > WGS.t) { wgToast('ALREADY SHEARED'); return true; } mob.shorn = WGS.t + 150; wgDrop(mob.x, mob.y - 4, 'wool', 2 + Math.floor(Math.random() * 2)); wgSfx('pickup'); wgPart(mob.x, mob.y - 8, 6, { c: ['w', 'L'], s: 24, up: 14 }); return true; }
+    if (it.id === 'meat' && mob.type === 'fox' && !mob.pet) { // a fox befriended with food: it follows you from then on
+      if (WGS.p.pet) { wgToast('YOU ALREADY HAVE A PET'); return true; }
+      wgInvTake(WGS.inv, 'meat', 1); wgSfx('select'); wgPart(mob.x, mob.y - 14, 3, { c: ['P', 'r'], s: 6, up: 14, life: 0.8, sz: 2 });
+      if (Math.random() < 0.4) { mob.pet = 1; WGS.p.pet = 'fox'; wgToast('THE FOX TRUSTS YOU', 3); wgSfx('confirm'); } else wgToast('THE FOX SNIFFS...');
+      return true;
+    }
     if (it.id === 'wheat' && (mob.type === 'sheep' || mob.type === 'chicken')) {
       if ((mob.cool || 0) > WGS.t || mob.love > 0) { wgToast('NOT NOW'); return true; }
       if (WGS.mobs.filter(m => WG_MOBS[m.type].pas).length >= 14) { wgToast('TOO CROWDED'); return true; }

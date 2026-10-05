@@ -3,6 +3,7 @@
 const WG_MOBS = {
   sheep:   { name: 'SHEEP', hp: 8, spd: 14, pas: 1, w: 7, h: 5, drops: [['wool', 1, 2, 1], ['meat', 1, 1, 0.6]], dim: 'o', biomes: ['meadow', 'forest', 'hills'] },
   chicken: { name: 'CHICKEN', hp: 4, spd: 18, pas: 1, w: 5, h: 4, drops: [['feather', 1, 2, 1], ['egg', 1, 1, 0.5], ['meat', 1, 1, 0.5]], dim: 'o', biomes: ['meadow', 'forest', 'beach'] },
+  fox:     { name: 'FOX', hp: 6, spd: 36, pas: 1, w: 5, h: 5, drops: [['meat', 1, 1, 0.8]], dim: 'o', biomes: ['forest', 'snow', 'highland'] },
   rabbit:  { name: 'RABBIT', hp: 3, spd: 30, pas: 1, w: 4, h: 4, drops: [['meat', 1, 1, 0.8], ['leather', 0, 1, 0.3]], dim: 'o', biomes: ['meadow', 'forest', 'highland'] },
   deer:    { name: 'DEER', hp: 12, spd: 24, pas: 1, w: 7, h: 6, drops: [['meat', 1, 2, 1], ['leather', 1, 2, 0.8]], dim: 'o', biomes: ['forest', 'highland', 'meadow'] },
   frog:    { name: 'FROG', hp: 2, spd: 22, pas: 1, w: 4, h: 3, drops: [['slime', 0, 1, 0.5]], dim: 'o', biomes: ['swamp', 'jungle'] },
@@ -27,6 +28,12 @@ function wgMobSpr(type, fr, hurt) {
   } else if (type === 'chicken') {
     R(8, 13, 1, 3, 'O'); R(11, 13, 1, 3, 'O'); wgBlob(g, 10, 10, 4.4, 3.6, hurt ? ['w', 'w', 'w', 'w'] : ['l', 'L', 'w', 'w']); R(13, 8, 3, 2, 'L');
     wgBlob(g, 6, 7 + b, 2.6, 2.6, hurt ? ['w', 'w', 'w', 'w'] : ['L', 'w', 'w', 'w']); R(3, 7 + b, 2, 1, 'o'); P(6, 6 + b, '0'); R(5, 4 + b, 2, 1, 'r');
+  } else if (type === 'fox') {
+    const w = b ? 1 : 0, H = (k) => hurt ? ['w', 'w', 'w', 'w'] : k;
+    R(6, 13, 2, 3 - w, 'x'); R(9, 13, 2, 3 - (1 - w), 'u'); R(13, 13, 2, 3 - (1 - w), 'x'); R(16, 13, 2, 3 - w, 'u');
+    wgBlob(g, 16, 10 + b, 2.6, 3.4, H(['n', 'o', 'O', 'O'])); R(15, 7 + b, 4, 2, hurt ? 'w' : 'w'); // tail with a pale tip
+    wgBlob(g, 10, 10, 5.4, 3.4, H(['n', 'o', 'O', 'O'])); R(7, 11, 7, 2, hurt ? 'w' : 'L');
+    wgBlob(g, 4, 8 + b, 2.8, 2.4, H(['n', 'o', 'O', 'O'])); R(3, 3 + b, 2, 3, hurt ? 'w' : 'o'); R(6, 3 + b, 2, 3, hurt ? 'w' : 'n'); P(3, 3 + b, 'x'); P(6, 3 + b, 'x'); P(1, 9 + b, '0'); P(3, 8 + b, '0'); R(2, 10 + b, 2, 1, 'L');
   } else if (type === 'rabbit') {
     const hop = b ? -1 : 0, H = (k) => hurt ? ['w', 'w', 'w', 'w'] : k;
     wgBlob(g, 11, 12 + hop, 4.4, 3.4, H(['n', 'N', 'O', 'a'])); wgBlob(g, 6, 10 + hop, 2.8, 2.6, H(['n', 'N', 'O', 'a'])); R(5, 4 + hop, 2, 4, 'N'); R(8, 4 + hop, 2, 4, 'n'); P(5, 5 + hop, 'q'); P(8, 5 + hop, 'P');
@@ -130,7 +137,7 @@ function wgMobSpawnTick(dt) {
   WGS.spawnT = 1.2;
   if (!wgSimHere()) return;
   const P = wgPlayers(); if (!P.length) return; const p = P[Math.floor(Math.random() * P.length)], dim = WGS.dim, night = dim === 'u' || wgNight(WGS.clock) > 0.5;
-  let pas = 0, hos = 0; for (const m of WGS.mobs) if (m.dim === dim) WG_MOBS[m.type].pas ? pas++ : hos++;
+  let pas = 0, hos = 0; for (const m of WGS.mobs) if (m.dim === dim && !m.pet) WG_MOBS[m.type].pas ? pas++ : hos++;
   if (dim === 'o' && !night && Math.random() < 0.005 && !WGS.mobs.some(m => m.type === 'trader')) { const a = Math.random() * 6.283, x = p.x + Math.cos(a) * 130, y = p.y + Math.sin(a) * 130, tx = Math.floor(x / 16), ty = Math.floor(y / 16); if (!GROUND[wgGround(WGS.world, dim, tx, ty)].liq && !wgObjAt(WGS.world, dim, tx, ty)) { wgSpawnMob('trader', x, y); wgToast('A TRADER WANDERS BY', 3); } return; }
   const a = Math.random() * 6.283, r = 150 + Math.random() * 90, x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
   const tx = Math.floor(x / 16), ty = Math.floor(y / 16), g = GROUND[wgGround(WGS.world, dim, tx, ty)];
@@ -142,6 +149,7 @@ function wgMobSpawnTick(dt) {
   wgSpawnMob(t, x, y);
 }
 function wgHurtMob(m, dmg, fx, fy) {
+  if (m.pet) return;
   m.hp -= dmg; m.hurt = 0.4; const a = Math.atan2(m.y - fy, m.x - fx); m.vx = Math.cos(a) * 90; m.vy = Math.sin(a) * 90;
   wgPart(m.x, m.y - 6, 5, { c: WG_MOBS[m.type].pas ? ['w', 'L'] : ['g', 'h'], s: 30, up: 18, life: 0.4 }); wgSfx('hit');
   if (m.hp <= 0) {
@@ -167,13 +175,15 @@ function wgDamage(tg, dmg, fx, fy) {
 function wgUpdateMobs(dt) {
   if (!wgSimHere()) return; // the host runs the creatures (a guest in another dimension runs their own)
   const P = wgPlayers(); if (!P.length) return;
+  if (WGS.p.pet && WGS.scr !== 'dead' && !WGS.mobs.some(m => m.pet)) { const f = wgSpawnMob(WGS.p.pet, WGS.p.x - 14, WGS.p.y + 6); f.pet = 1; } // the pet is never lost: it turns up beside you again after a trip or a load
   for (let i = WGS.mobs.length - 1; i >= 0; i--) {
     const m = WGS.mobs[i], d = WG_MOBS[m.type];
     if (m.dead || m.dim !== WGS.dim) { WGS.mobs.splice(i, 1); continue; }
     let tg = P[0], dist = 1e9;
     for (const q of P) { const dd = Math.hypot(q.x - m.x, q.y - m.y); if (dd < dist) { dist = dd; tg = q; } }
     const dx = tg.x - m.x, dy = tg.y - m.y;
-    if (dist > 340 && !d.boss) { WGS.mobs.splice(i, 1); continue; }
+    if (m.pet && dist > 200) { m.x = tg.x - 12; m.y = tg.y + 6; dist = 14; }
+    if (dist > 340 && !d.boss && !m.pet) { WGS.mobs.splice(i, 1); continue; }
     m.hurt = Math.max(0, m.hurt - dt); m.cd -= dt;
     if (m.type === 'trader' && (m.life = (m.life === undefined ? 300 : m.life) - dt) <= 0) { WGS.mobs.splice(i, 1); wgToast('THE TRADER MOVES ON', 2); continue; }
     if (m.love > 0) { m.love -= dt; if (Math.random() < dt * 6) wgPart(m.x, m.y - 14, 1, { c: ['P', 'r'], s: 6, up: 14, life: 0.7, sz: 2 }); if (m.love <= 0) { m.love = 0; m.cool = WGS.t + 90; const b = wgSpawnMob(m.type, m.x + 10, m.y + 4); b.cool = WGS.t + 90; wgToast('A NEW ' + d.name + '!'); } }
@@ -181,6 +191,10 @@ function wgUpdateMobs(dt) {
     let wx = 0, wy = 0;
     if (!d.pas && dist < 150 && dist > 1) { wx = dx / dist; wy = dy / dist; if (d.shoot && dist < 90) { wx *= -0.3; wy *= -0.3; } if (d.shoot && m.cd <= 0 && dist < 130) { m.cd = 2.2; WGS.arrows = WGS.arrows || []; WGS.arrows.push({ x: m.x, y: m.y - 8, vx: dx / dist * 110, vy: dy / dist * 110, life: 1.6, dim: WGS.dim }); } }
     else { m.wt -= dt; if (m.wt <= 0) { m.wt = 1 + Math.random() * 2.5; m.dir = Math.random() < 0.4 ? -1 : Math.random() * 6.283; } if (m.dir >= 0) { wx = Math.cos(m.dir) * 0.5; wy = Math.sin(m.dir) * 0.5; } }
+    if (m.pet) { // follows at a trot, bites whatever hunts its friend
+      if (dist > 30) { wx = dx / dist; wy = dy / dist; } else if (dist < 14 && dist > 1) { wx = -dx / dist * 0.4; wy = -dy / dist * 0.4; } m.fear = 0;
+      if (m.cd <= 0) { const h = WGS.mobs.find(q => !WG_MOBS[q.type].pas && q.dim === m.dim && Math.hypot(q.x - m.x, q.y - m.y) < 26); if (h) { m.cd = 1.1; wgHurtMob(h, 2, m.x, m.y); } }
+    }
     if (d.pas && m.fear > 0) { m.fear -= dt; if (dist > 1) { wx = -dx / dist; wy = -dy / dist; } }
     m.vx *= 0.82; m.vy *= 0.82;
     if (d.boss) { m.bt = (m.bt || 3) - dt; if (m.bt <= 0 && dist < 200) { m.bt = 4.5; m.bn = (m.bn || 0) + 1; if (m.bn % 2) { m.vx = dx / dist * 230; m.vy = dy / dist * 230; wgPart(m.x, m.y, 8, { c: ['g', 'h', 'H'], s: 40, up: 10, life: 0.4 }); } else for (let k = 0; k < 2; k++) wgSpawnMob('slime', m.x + (k ? 24 : -24), m.y + 6); } }
