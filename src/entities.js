@@ -161,6 +161,7 @@ function movePlayer(p, dt) {
     if (p.ctail) cometTail(p); // COMET TAIL (moon.js)
     const gl = landMech(); // the Moon Garden: a dash glides on after it ends; elsewhere it cancels a slide on ice
     if (gl && gl.glide) { p.mvx = vx * gl.glide(p); p.mvy = vy * gl.glide(p); } else p.mvx = p.mvy = 0;
+    if (room.grass && NET.role !== 'client') cutGrassAt(room, p.x, p.y - 2);
   } else { const sp = p.speed * (p.buff.haste > 0 ? 1.2 : 1), d = driftMove(room, p, mx * sp, my * sp, dt); vx = d[0]; vy = d[1]; }
 
   // Door assist: pushing into a doorway slides you into its opening.
@@ -513,6 +514,7 @@ function updateShots(dt) {
     if (G.wind && !s.ret) s.vx += G.wind * dt; // WINDY
     s.x += s.vx * dt; s.y += s.vy * dt;
     driftShot(room, s, dt);
+    if (room.grass && !s.ret) cutGrassAt(room, s.x, s.y + 4);
     if (s.trail && Math.random() < 0.55) part(px, py, 0, 0, 0.22, s.kind === 'comet' ? pick(TRAIL_COMET) : s.fw ? pick(TRAIL_FW) : TRAIL[s.tint], { size: s.kind === 'comet' && Math.random() < 0.4 ? 2 : 1, drag: 1 });
     // enemies first, so nothing hugging a wall is immune
     for (const e of G.enemies) {
@@ -717,7 +719,7 @@ function breakTile(room, c, r) {
   flowKey = -1;
   const x = c * 16 + 8, y = OY + r * 16 + 10;
   poof(x, y - 2);
-  burst(x, y - 4, 10, G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : G.floor.theme === 'lantern' ? ['o', 'O', 'y'] : G.floor.theme === 'toy' ? ['r', 'y', 'B'] : G.floor.theme === 'snow' ? ['r', 'y', 'w'] : ['2', '3', 'c'], 70, 0.5, { g: 150 });
+  burst(x, y - 4, 10, brkBits(room, G.floor.theme, c, r) || (G.floor.theme === 'meadow' ? ['G', 'h', 'g'] : G.floor.theme === 'beach' ? ['r', 'R', 'y'] : G.floor.theme === 'cloud' ? ['P', 'q', 'w'] : G.floor.theme === 'lantern' ? ['o', 'O', 'y'] : G.floor.theme === 'toy' ? ['r', 'y', 'B'] : G.floor.theme === 'snow' ? ['r', 'y', 'w'] : ['2', '3', 'c']), 70, 0.5, { g: 150 });
   Audio_.sfx('brk');
   noteTeam('brk');
   if (!(room.fort && room.fort.includes(r * COLS + c)) && grand() < 0.28 + teamLuck() * 0.08) dropLoot(x, y, 0.6); // a warden's sand walls pay nothing

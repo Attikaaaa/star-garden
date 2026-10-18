@@ -191,12 +191,14 @@ function drawPitLife(room, theme, ox, oy) {
   if (!room.pits || theme === 'cloud') return; // the open sky is still
   const crystal = theme === 'crystal' || theme === 'well', key = crystal ? 'Y' : THEMES[theme].h;
   for (const [x, y, h] of room.pits) {
+    // keep clear of the far bank (scenery.js draws it along a pool's top edge)
+    const top = tileAt(room, x >> 4, ((y - OY) >> 4) - 1) !== T_PIT;
     if (crystal) {
-      if (Math.floor(G.time * 2 + (h % 7)) % 4 === 0) rect(ox + x + 3 + (h % 10), oy + y + 6 + ((h >> 4) % 7), 1, 1, key);
+      if (Math.floor(G.time * 2 + (h % 7)) % 4 === 0) rect(ox + x + 3 + (h % 10), oy + y + (top ? 11 : 3) + ((h >> 4) % 4), 1, 1, key);
       continue;
     }
     const ph = (G.time * 0.6 + (h % 97) / 97) % 1;
-    const wx = x + 2 + Math.floor(ph * 9), wy = y + 6 + ((h >> 5) % 6);
+    const wx = x + 2 + Math.floor(ph * 9), wy = y + (top ? 9 : 3) + ((h >> 5) % 5);
     const len = ph < 0.15 || ph > 0.85 ? 1 : 3;
     rect(ox + wx, oy + wy, len, 1, key);
   }

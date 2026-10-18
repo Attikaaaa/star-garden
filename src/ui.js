@@ -28,7 +28,6 @@ function beltSlotAt(x, y) {
 const BUFF_IDS = ['regen', 'haste', 'power', 'guard'];
 function drawHUD() {
   const p = G.player;
-  hudOn();                           // the corner HUD has its own, finer canvas on desktop
   ctx.translate(-SCR.ox, -SCR.oy);   // hearts, coins, meter and belt hug the screen corner
   const hearts = Math.min(20, Math.ceil(p.maxHp / 2)); // two rows at most; items cap maxHp at 20 anyway
   const low = p.hp <= 2 && p.maxHp > 2 && alive(p), beat = low && (G.beatT || 0) > 0.95;
@@ -80,7 +79,6 @@ function drawHUD() {
   ctx.translate(SCR.ox, SCR.oy);
   const right = G.mode === 'arena' ? drawWave() : drawMinimap();
   drawKills(right);
-  hudOff();
   drawCombo();
   const b = G.boss && !G.boss.dead && G.boss.state !== 'intro' ? G.boss : wardenOf();
   if (b) {
@@ -362,18 +360,11 @@ function titleBtn(x, y, w, label, sel, h) {
 }
 function drawTitleBg() {
   const t = G.time;
-  const scroll = Math.floor(t * 8) % 16;
-  const cx0 = Math.floor(-SCR.ox / 16) - 2, cx1 = Math.ceil((SCR.w - SCR.ox) / 16) + 1;
-  for (let y = Math.floor(-SCR.oy / 16) - 1; y < Math.ceil((SCR.h - SCR.oy) / 16) + 1; y++) for (let x = cx0; x < cx1; x++) {
-    drawS(S(floorTile(x - Math.floor(t * 8 / 16), y, 7) + '@meadow'), x * 16 + scroll, y * 16);
-  }
+  drawTitleScene(t * 8);
   drawAmbient(0, 0);
   if (!G.titleScene) { dim(0.66); return; } // every other menu gets a calm dark field: no logo, no wall, nothing behind the panels to read
   dim(0.25);
-  for (let x = cx0; x < cx1; x++) {
-    for (let y = 8; y > -SCR.oy - 16; y -= 16) drawS(S('cap@meadow'), x * 16, y);
-    drawS(S(faceTile(x, 7) + '@meadow'), x * 16, 24);
-  }
+  drawTitleWall();
   rect(-SCR.ox, 40, SCR.w, 3, SHADOW);
   // sun shafts from the top left, and a darker lower edge so the text reads
   for (let k = 0; k < 4; k++) for (let y = 43; y < 190; y += 2) rect(Math.round(k * 110 - 30 + (y - 43) * 0.55 + Math.sin(t * 0.4 + k) * 4), y, 18 + k * 3, 2, 'rgba(255,244,163,0.045)');

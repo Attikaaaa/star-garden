@@ -825,6 +825,7 @@ function renderWorld(ox, oy) {
   const room = G.room, theme = G.floor.theme;
   if (room.dirty) renderRoomStatic(room, theme);
   ctx.drawImage(room.canvas, ox, oy);
+  drawSceneryLive(room, ox, oy);
   drawPitLife(room, theme, ox, oy);
   mechDraw(ox, oy, 0);
   if (room.turn) drawPageTurn(room, ox, oy);
@@ -839,6 +840,7 @@ function renderWorld(ox, oy) {
   drawMarkers(ox, oy);
   dlN = 0;
   for (const k of room.pickups) dl(k.y, 0, k);
+  if (room.tall) for (const t of room.tall) dl(t.y, 7, t);
   for (const o of room.props) if (o.kind === 'ped' || o.kind === 'frog' || o.kind === 'chest' || ROOM_PROPS.has(o.kind)) dl(o.y, 1, o);
   for (const e of G.enemies) dl(e.y, 2, e);
   if (G.corpse) dl(G.corpse.y, 4, G.corpse);
@@ -850,11 +852,12 @@ function renderWorld(ox, oy) {
     const d = DL[i];
     if (d.kind === 0) drawPickup(d.o, ox, oy);
     else if (d.kind === 1) drawProp(d.o, ox, oy);
-    else if (d.kind === 2) drawEnemy(d.o, ox, oy);
+    else if (d.kind === 2) { drawEnemy(d.o, ox, oy); grassFront(d.o, ox, oy); }
     else if (d.kind === 4) drawCorpse(ox, oy);
     else if (d.kind === 5) drawTurret(d.o, ox, oy);
     else if (d.kind === 6) drawPet(d.o, ox, oy);
-    else drawPlayer(d.o, ox, oy);
+    else if (d.kind === 7) drawTall(d.o, ox, oy);
+    else { drawPlayer(d.o, ox, oy); grassFront(d.o, ox, oy); }
   }
   for (const p of G.players) if (p.orbitals && alive(p)) drawOrbitals(p, ox, oy);
   mechDraw(ox, oy, 1);
@@ -931,6 +934,8 @@ function renderGame() {
     drawDoors(tr.from, -cx, -cy);
     ctx.drawImage(tr.to.canvas, dx * VW - cx, dy * VH - cy);
     drawDoors(tr.to, dx * VW - cx, dy * VH - cy, true);
+    for (const t of tr.from.tall || []) drawTall(t, -cx, -cy);
+    for (const t of tr.to.tall || []) drawTall(t, dx * VW - cx, dy * VH - cy);
     const [ex, ey] = ENTRY[OPP[tr.dir]];
     G.players.forEach((p, i) => {
       if (p.dead) return;
@@ -949,7 +954,6 @@ function renderGame() {
 
 function render() {
   const s = G.state;
-  if (HUD.on) { hctx.setTransform(1, 0, 0, 1, 0, 0); hctx.clearRect(0, 0, hudCv.width, hudCv.height); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (G.floor && (s === 'play' || s === 'pause' || s === 'fork' || s === 'over' || s === 'win' || (s === 'settings' && G.back !== 'title'))) drawBackdrop(G.floor.theme);
   else if (s === 'yard') drawBackdrop('meadow');
@@ -989,9 +993,6 @@ function render() {
   drawOvl();
   if (G.toast) { const w = textW(G.toast.msg) + 12, y = SCR.h - SCR.oy - 16; panel((VW - w) / 2, y, w, 15); text(G.toast.msg, VW / 2, y + 4, 'w', 0, 1); }
   drawCursor();
-  // pause, menus, wipes and pop-ups are drawn on the game canvas: the HUD layer steps aside
-  const hide = s !== 'play' || Wipe.t >= 0 || modalUp() || OVL.box || (OVL.isOpen && OVL.isOpen()) ? 'hidden' : '';
-  if (hudCv.style.visibility !== hide) hudCv.style.visibility = hide;
 }
 
 // ---------- Screen fit: integer scaling for crisp pixels, inside the safe area ----------
@@ -1009,48 +1010,21 @@ function resize() {
   if (cv.width !== SCR.w || cv.height !== SCR.h) { cv.width = SCR.w; cv.height = SCR.h; ctx.imageSmoothingEnabled = false; }
   cv.style.width = (SCR.w * k / dpr) + 'px';
   cv.style.height = (SCR.h * k / dpr) + 'px';
-  // desktop: the corner HUD uses smaller pixels (about half, never under 1.5 CSS px so it
-  // stays easy to read); phones keep it as big as the world
-  const kh = IS_TOUCH || k < 3 ? k : Math.min(k, Math.max(Math.ceil(1.5 * dpr), Math.floor(k * 0.5)));
-  HUD.on = kh < k;
-  hudCv.style.display = HUD.on ? '' : 'none';
-  if (!HUD.on) return;
-  HUD.w = Math.floor(w / kh); HUD.h = Math.floor(h / kh);
-  HUD.ox = (HUD.w - VW) >> 1; HUD.oy = (HUD.h - VH) >> 1;
-  if (hudCv.width !== HUD.w || hudCv.height !== HUD.h) { hudCv.width = HUD.w; hudCv.height = HUD.h; }
-  hctx.imageSmoothingEnabled = false;
-  const r = cv.getBoundingClientRect();
-  hudCv.style.left = r.left + 'px'; hudCv.style.top = r.top + 'px';
-  hudCv.style.width = (HUD.w * kh / dpr) + 'px';
-  hudCv.style.height = (HUD.h * kh / dpr) + 'px';
 }
-// The corner HUD's own transparent canvas over the game. Between hudOn() and hudOff() every
-// draw call (and SCR) points at it; with HUD.on false both do nothing.
-const hudCv = document.createElement('canvas'), hctx = hudCv.getContext('2d');
-hudCv.style.cssText = 'position:fixed;pointer-events:none;display:none';
-document.body.appendChild(hudCv);
-const HUD = { on: false, w: VW, h: VH, ox: 0, oy: 0, keep: null };
-function hudOn() {
-  if (!HUD.on || HUD.keep) return;
-  HUD.keep = [ctx, SCR.w, SCR.h, SCR.ox, SCR.oy];
-  ctx = hctx; SCR.w = HUD.w; SCR.h = HUD.h; SCR.ox = HUD.ox; SCR.oy = HUD.oy;
-  ctx.setTransform(1, 0, 0, 1, SCR.ox, SCR.oy);
-}
-function hudOff() {
-  if (!HUD.keep) return;
-  [ctx, SCR.w, SCR.h, SCR.ox, SCR.oy] = HUD.keep;
-  HUD.keep = null;
-}
-// Wall caps of the current land around the play view, on the room's own tile grid.
+// Wall caps of the current land around the play view (lands with scenery: the same endless
+// texture as the room's own caps, see scenery.js; the others tile their cap sprite).
 let _bd = null, _bdKey = '';
 function drawBackdrop(theme) {
   const key = theme + SCR.w + 'x' + SCR.h;
   if (key !== _bdKey) {
     _bdKey = key;
-    _bd = document.createElement('canvas'); _bd.width = SCR.w; _bd.height = SCR.h;
-    const g = _bd.getContext('2d'), cap = S('cap@' + theme);
-    const x0 = SCR.ox % 16 - 16, y0 = (SCR.oy + OY) % 16 - 16;
-    for (let y = y0; y < SCR.h; y += 16) for (let x = x0; x < SCR.w; x += 16) blit(g, cap, x, y);
+    if (SCN_LANDS.has(theme)) _bd = capArea(theme, SCR.w, SCR.h, SCR.ox, SCR.oy);
+    else {
+      _bd = document.createElement('canvas'); _bd.width = SCR.w; _bd.height = SCR.h;
+      const g = _bd.getContext('2d'), cap = S('cap@' + theme);
+      const x0 = SCR.ox % 16 - 16, y0 = (SCR.oy + OY) % 16 - 16;
+      for (let y = y0; y < SCR.h; y += 16) for (let x = x0; x < SCR.w; x += 16) blit(g, cap, x, y);
+    }
   }
   ctx.drawImage(_bd, 0, 0);
 }
@@ -1094,7 +1068,7 @@ function frame(now) {
     while (acc >= STEP && n < 5) { update(STEP); endInputFrame(); acc -= STEP; n++; }
     if (n === 5) acc = 0;
   } catch (e) { acc = 0; endInputFrame(); frameError(e); }
-  try { render(); } catch (e) { hudOff(); frameError(e); }
+  try { render(); } catch (e) { frameError(e); }
 }
 // still reported (online.js), without stopping the loop
 function frameError(e) {

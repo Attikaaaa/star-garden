@@ -17,7 +17,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 - **Classic `<script>` tags**, not ES modules, so the game runs from `file://`. The files
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
-  data → level → entities → enemies → fx → ui → meta → the progress and content files →
+  data → level → scenery → entities → enemies → fx → ui → meta → the progress and content files →
   couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → toy → snow → sun → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
@@ -37,7 +37,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `audio.js` | `Audio_`: sound effects and 4 songs on a step sequencer, cross-fades, volumes |
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
-| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
+| `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, the tile renderer for lands without scenery (`renderRoomPlain`), land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
+| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
 | `entities.js` | players (input, movement, combat, down/revive, robes), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
 | `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
@@ -76,6 +77,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `holdem.js` | the lounge's Hold'em sit-and-go: hand evaluator, no-limit betting with side pots, three bots (tight frog, odds owl, bluffing fox), the hand log replayed after a reload. The prize is paid flat (no quiet luck) |
 | `art_casino.js` | chips, the hall's furniture, playing cards, dice and prizes |
 | `art_heroes/more/items/foes/bosses/rooms/garden.js` | art for the content added after the first release |
+| `art_scenery.js` | scenery art: obstacles and breakables per land, tall pieces (trees, palms, crystals), things on the top wall, lamp flames, tall grass |
 
 `tools/dev.mjs` holds developer checks that drive the real game in headless Chromium (Node 22+,
 nothing ships): `layouts` (every `*LAYOUT(S)` const: size, door lanes, BFS reachability),
@@ -148,6 +150,21 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   Layouts are mirrored at random.
 - Door openings: `DOOR_OPEN`, entry points: `ENTRY`. Room types: `start`, `normal`,
   `item`, `shop`, `challenge`, `boss`, `arena` (four gates that never open, no minimap).
+- Scenery (`scenery.js`, the lands in `SCN_LANDS`) is worked out from `room.seed` and the
+  tiles alone (`hash`, `vnoise`, `worley`, `scnRand`), never from the gameplay streams, so
+  every co-op screen and a resumed run draw the same room. Rocks are grouped: a lone `#` is
+  an obstacle, a run of them a ridge (hedge, stone wall), an exact 2x2 block a giant (tree,
+  palm, crystal) drawn as a tall piece sorted by y (display-list kind 7). A land's own
+  pieces (prisms, bells, the gate) are drawn with `tileArt`; a land layout built of
+  breakables uses one kind (`LAY_BRK`). Every per-land table (`SCN_GROUND`, `SCN_DECALS`,
+  `CAP`, `PIT`, `RIDGE`, `FACE_GROW`, `FACE_THINGS`, `OBSTACLES`, `BREAKABLES`, `TALL`,
+  `RING`, `GRASS_BITS`...) needs an entry for a new land with scenery.
+- Tall grass (`room.grass`, one byte per tile: 1 grass, 2 cut) grows in `start`, `normal`
+  and `challenge` rooms of scenery lands, never in the Star Well, in front of doors or where
+  the land's `LAND_MECH[id].noGrass(room, c, r)` says (the pier, the bee ring, the clock's
+  alcove); the Meadow's flower patches keep off it. Shots and rolls cut it on the host
+  (`cutGrass`, sent as the `grass` event and kept in `roomMsg`, the tile checksum and the
+  run save); feet in it hide behind `grassFront`.
 - Collision modes (`solidPx`): `player`, `enemy` (pits are walls), `fly` (walls only),
   `shot` (rocks block, pits do not). Shots test enemies before walls.
 
@@ -190,7 +207,8 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   branches, optionally `glintAt` (pre-shot sparkle), then add the type to a `LANDS[].pool`.
   At most two stationary (`still`) enemies spawn per room.
 - **Land:** a new `THEMES` entry and `THEME_ORDER`, a `LANDS` entry, `rock_<theme>` and
-  `brk_<theme>` sprites, a song in `SONGS` in `audio.js`, ambient life in `fx.js`, and its
+  `brk_<theme>` sprites (for scenery: a `SCN_LANDS` entry and its scenery tables, see *Rooms
+  and coordinates*), a song in `SONGS` in `audio.js`, ambient life in `fx.js`, and its
   place on the Star Road (`ROAD` in `data.js`). A run walks one path of land ids
   (`G.run.path`, saved with the run); `roadLand(depth)` gives the land at a depth, and lands
   not in `LAND` yet are skipped. Daily, weekly and Boss of the Week runs keep `CLASSIC_ROAD`.
@@ -199,7 +217,7 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   When an act's last boss falls (`campHere()`), the boss room also gets the campfire
   (`stockCamp`): a `camp` prop that heals the team once and saves the run, a small shop and the
   frog reading a letter (`CAMP_LETTERS`, one per act, every line in every language).
-- **Land mechanic:** `LAND_MECH[land id] = { enter, update, kill, every, drawLayer, leave }`
+- **Land mechanic:** `LAND_MECH[land id] = { enter, update, kill, every, drawLayer, leave, noGrass }`
   (hooks in `level.js`, the lands' own rules and art in `lands.js`). `enter` / `update` /
   `kill` (a non-boss foe died) / `leave` run only on the host or solo; `every(dt, room)` runs
   on every screen each frame of play, for state both sides can work out alone (it starts
@@ -354,7 +372,8 @@ Every boss, old or new, follows the same rules, so the cast looks and plays as o
 ## Performance
 
 - Each room's static layer is baked to its own canvas and only redrawn after something
-  breaks (`room.dirty`).
+  breaks or is cut (`room.dirty`). Under it, the scenery base (`bakeBase`) is cached by a
+  key of the land and the tiles, so a broken crate does not bake the ground again.
 - All sprites live in one atlas. Text comes from a canvas cache.
 - Particles, ambient life and enemy bullets are pooled; avoid allocations in hot loops.
 - Fixed 60 Hz logic with an accumulator; the game pauses when the tab is hidden, and on

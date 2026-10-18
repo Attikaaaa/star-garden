@@ -1,11 +1,11 @@
 // Offline support: every file is cached on install, straight from the network (never from the
 // browser's HTTP cache, or a release could be stored with last release's files). Later visits
 // are served from the cache and refreshed in the background. Bump VERSION with each release.
-const VERSION = 'star-garden-v71';
+const VERSION = 'star-garden-v72';
 const FILES = [
   './', 'index.html', 'live.json', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
-  'src/palette.js', 'src/save.js', 'src/online.js', 'src/rng.js', 'src/gfx.js', 'src/font.js', 'src/lang.js', 'src/lang_hu.js', 'src/lang_hu_wg.js', 'src/art_chars.js', 'src/art_heroes.js', 'src/art_world.js', 'src/art_ui.js', 'src/art_more.js', 'src/art_items.js', 'src/art_foes.js', 'src/art_bosses.js', 'src/art_rooms.js', 'src/art_garden.js',
-  'src/audio.js', 'src/input.js', 'src/data.js', 'src/level.js', 'src/entities.js', 'src/enemies.js', 'src/fx.js',
+  'src/palette.js', 'src/save.js', 'src/online.js', 'src/rng.js', 'src/gfx.js', 'src/font.js', 'src/lang.js', 'src/lang_hu.js', 'src/lang_hu_wg.js', 'src/art_chars.js', 'src/art_heroes.js', 'src/art_world.js', 'src/art_ui.js', 'src/art_more.js', 'src/art_items.js', 'src/art_foes.js', 'src/art_bosses.js', 'src/art_rooms.js', 'src/art_garden.js', 'src/art_scenery.js',
+  'src/audio.js', 'src/input.js', 'src/data.js', 'src/level.js', 'src/scenery.js', 'src/entities.js', 'src/enemies.js', 'src/fx.js',
   'src/ui.js', 'src/meta.js', 'src/progress.js', 'src/firstrun.js', 'src/screens.js',
   'src/quests.js', 'src/stars.js', 'src/hub.js', 'src/book.js', 'src/items2.js', 'src/mail.js',
   'src/mods.js', 'src/daily.js', 'src/loot.js', 'src/affix.js',

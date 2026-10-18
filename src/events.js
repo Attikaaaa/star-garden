@@ -161,7 +161,7 @@ onNote((ev, a) => {
 // ---------- The SKY tab of the daily screen ----------
 const fmtDays = (ms) => { const d = Math.ceil(ms / DAY_MS); return d <= 1 ? 'TOMORROW' : 'IN ' + d + ' DAYS'; };
 function drawSkyTab() {
-  const now = Date.now(), x0 = VW / 2 - 138, rx = VW / 2 + 60;
+  const now = Date.now(), x0 = DAILY_X0, rx = DAILY_RX;
   // left: tonight's sky
   const rain = showerAt(now), nr = rain ? null : nextShower(now);
   text('STAR RAIN', x0, 52, 'Y', 1);

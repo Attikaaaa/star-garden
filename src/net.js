@@ -14,7 +14,7 @@
 // broker too) and switch to it when it works, which is faster. If the direct link ever
 // drops, the messages simply go through the broker again.
 
-const NET_PROTO = 5; // 4: room tiles travel one char each (codes 10 and up); 5: the nine-land road, clients build rooms' mechanics
+const NET_PROTO = 6; // 4: room tiles travel one char each (codes 10 and up); 5: the nine-land road, clients build rooms' mechanics; 6: rooms carry their tall grass
 const NET_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I mix-ups
 const NET_RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 const NET_TOPIC = 'stargarden/' + NET_PROTO + '/';
@@ -298,8 +298,10 @@ function hostInput(p, L, m) {
   const I = p.in;
   I.mx = m.mx; I.my = m.my; I.ax = m.ax; I.ay = m.ay; I.aim = m.aim; I.pad = m.pad;
   if (m.tp === p.tpN && !p.down && !p.dead) {
+    const x0 = p.x, y0 = p.y;
     p.x = m.x; p.y = m.y; p.face = m.face; p.flip = m.flip; p.moving = m.mv; p.walkT = m.wt; p.dx = m.dx; p.dy = m.dy;
     if (m.dn !== L.dn) { if (L.dn !== undefined) { p.dashT = 0.2; p.inv = Math.max(p.inv, 0.28); p.dashCool = p.dashCd; } }
+    if (p.dashT > 0 && G.room && G.room.grass) cutGrassLine(G.room, x0, y0, p.x, p.y);
   }
   // presses travel as counters, so a lost packet never loses a button press
   if (L.dn !== undefined) {
@@ -379,6 +381,7 @@ function roomMsg(room) {
   return {
     // tiles: one char per tile, since mirrors, ice and lamps are 10 and up
     i: rooms.indexOf(room), tiles: String.fromCharCode(...room.tiles.map(v => 48 + v)), pits: room.pits, seed: room.seed, lay: room.lay, flip: room.flip,
+    g: room.grass ? Array.from(room.grass).join('') : '',
     sv: rooms.map(r => (r.seen ? 1 : 0) + (r.visited ? 2 : 0) + (r.cleared ? 4 : 0)).join(''),
   };
 }
@@ -408,6 +411,7 @@ function netFx(kind, a, b, v) {
   if (NET.role !== 'host' || !G.players.length) return;
   if (kind === 'vault') G.run.team = (G.run.team || 0) + a; // clients read the running total from snapshots
   else if (kind === 'tile') hostAll({ t: 'tile', c: a, r: b, v });
+  else if (kind === 'grass') hostAll({ t: 'grass', c: a, r: b });
   else if (NET.fx.length < 300) NET.fx.push([kind, a]);
 }
 // Record the host's particle bursts, sounds and toasts so every screen shows them.
@@ -452,7 +456,11 @@ function liveBullets() {
   }
   return out;
 }
-const tileSum = (room) => { let h = 0; for (let i = 0; i < room.tiles.length; i++) h = (h * 7 + room.tiles[i]) % 1000003; return h; };
+const tileSum = (room) => {
+  let h = 0;
+  for (let i = 0; i < room.tiles.length; i++) h = (h * 7 + room.tiles[i] + (room.grass ? room.grass[i] * 5 : 0)) % 1000003;
+  return h;
+};
 function propsSig() {
   let s = '';
   for (const o of G.room.props) s += o.kind + (o.item || '') + (o.open || o.used ? 1 : 0) + (o.took ? o.took.join('') : '') + (o.say ? o.say.msg : '') + (o.price || '') + (o.sig || '') + '|';
@@ -653,6 +661,7 @@ function clientMessage(m) {
     case 'room': clientRoom(m); break;
     case 'trans': clientTrans(m); break;
     case 'tile': if (G.room) setTile(G.room, m.c, m.r, m.v || T_FLOOR); break;
+    case 'grass': if (G.room && G.room.grass) { G.room.grass[m.r * COLS + m.c] = 2; G.room.dirty = true; } break;
     case 'you':
       if (m.k === 'hurt' && performance.now() - (NET.localHitT || 0) < 1500) break; // shown already
       if (YOU_FX[m.k]) YOU_FX[m.k](m.a);
@@ -692,6 +701,7 @@ function fillRoom(m) {
   const room = G.floor.rooms[m.i];
   room.tiles = Uint8Array.from(m.tiles, c => c.charCodeAt(0) - 48);
   room.pits = m.pits; room.seed = m.seed; room.lay = m.lay; room.flip = m.flip; room.dirty = true;
+  room.grass = m.g ? Uint8Array.from(m.g, c => +c) : null;
   rebuildMech(room);
   [...m.sv].forEach((c, i) => { const r = G.floor.rooms[i]; r.seen = !!(+c & 1); r.visited = !!(+c & 2); if (r !== room || +c & 4) r.cleared = !!(+c & 4); });
   return room;

@@ -97,7 +97,7 @@ function meadowPatches(room) {
   // the same seed gives the same patches on every screen
   const lane = (c, r) => (c >= 9 && c <= 12 && (r <= 3 || r >= 10)) || ((c <= 3 || c >= 20) && r >= 5 && r <= 8);
   const free = (c, r) => c >= 1 && c <= 22 && r >= 2 && r <= 11 && room.tiles[r * COLS + c] === T_FLOOR && !lane(c, r) &&
-    !P.tiles.has(r * COLS + c) && !room.props.some(o => Math.abs(o.x - c * 16 - 8) < 20 && Math.abs(o.y - OY - r * 16 - 8) < 20);
+    !P.tiles.has(r * COLS + c) && !(room.grass && room.grass[r * COLS + c]) && !room.props.some(o => Math.abs(o.x - c * 16 - 8) < 20 && Math.abs(o.y - OY - r * 16 - 8) < 20);
   if (room.lay === 'bees') {
     // the ring round the rock, one colour per quarter
     BEE_RING.forEach(([x, y], i) => {
@@ -142,6 +142,11 @@ function seedReward(k) {
 }
 
 LAND_MECH.meadow = {
+  // tall grass (scenery.js) keeps off the bee ring, the toadstools and the blanket
+  noGrass(room, c, r) {
+    const on = (cells) => cells.some(([x, y]) => { const [cc, rr] = layCell(room, x, y); return cc === c && rr === r; });
+    return room.lay === 'bees' ? on(BEE_RING) : room.lay === 'stage' ? on(STAGE_SHROOMS) : room.lay === 'picnic' && c >= 9 && c <= 14 && r >= 5 && r <= 7;
+  },
   // both screens: flattened flowers, regrowth and the gust (G.wind is reset each frame)
   every(dt, room) {
     const P = meadowPatches(room);
@@ -581,6 +586,7 @@ function tideFoamY(u) {
   return -1;
 }
 LAND_MECH.shore = {
+  noGrass: (room, c, r) => room.lay === 'pier' && (PIER_V(c, r) || PIER_H(c, r)),
   every(dt, room) {
     const u = tideU(room), f = u >= TIDE_HIGH;
     if (u < 0) { room.flood = false; return; }
@@ -613,14 +619,18 @@ LAND_MECH.shore = {
     }
     // the shallows: blinking in the last second before the ebb
     if (room.flood && !(u >= TIDE_CYCLE - 1 && Math.floor(u * 8) % 2)) {
-      const s = S('shallow_' + (Math.floor(G.time * 2) & 1));
+      const f = Math.floor(G.time * 2) & 1, s = S('shallow_' + f);
+      const sh = SCN_LANDS.has(G.floor.theme) && shallowLayer(room); // pools with scenery banks (scenery.js)
+      if (sh) ctx.drawImage(sh[f], ox, oy);
       for (const [x, y] of room.pits) {
         const c = x / 16, r = (y - OY) / 16;
         const up = tileAt(room, c, r - 1) === T_PIT, dn = tileAt(room, c, r + 1) === T_PIT;
         const lf = tileAt(room, c - 1, r) === T_PIT, rt = tileAt(room, c + 1, r) === T_PIT;
-        const x0 = lf ? 0 : 1, y0 = up ? 0 : 4, w = 16 - x0 - (rt ? 0 : 1), h = (dn ? 16 : 14) - y0;
-        ctx.drawImage(ATLAS, s.x[0] + x0, s.y[0] + y0, w, h, ox + x + x0, oy + y + y0, w, h);
-        if (!up) rect(ox + x + x0, oy + y + 4, w, 1, 'w'); // the waterline under the lip
+        const x0 = lf ? 0 : 1, y0 = up ? 0 : sh ? 6 : 4, w = 16 - x0 - (rt ? 0 : 1), h = (dn ? 16 : 14) - y0;
+        if (!sh) {
+          ctx.drawImage(ATLAS, s.x[0] + x0, s.y[0] + y0, w, h, ox + x + x0, oy + y + y0, w, h);
+          if (!up) rect(ox + x + x0, oy + y + 4, w, 1, 'w'); // the waterline under the lip
+        }
         // Sandbar: current streaks drift down the channel
         if (room.lay === 'sandbar') for (let i = 0; i < 2; i++) {
           const sx = x + 3 + (hash(x, y, i) % 10), sy = (hash(y, x, i + 3) % 16 + G.time * 22) % 16;
@@ -762,6 +772,12 @@ function clockOpen(room, k) {
   toast('THE GATE OPENS');
 }
 LAND_MECH.crystal = {
+  // tall grass (scenery.js) keeps out of the clock's alcove, where the chest stands
+  noGrass(room, c, r) {
+    if (room.lay !== 'clock') return false;
+    const [c0, r0] = layCell(room, 0, 0), [c1] = layCell(room, 3, 0);
+    return r === r0 && c >= Math.min(c0, c1) && c <= Math.max(c0, c1);
+  },
   // the clock is timed by this page's clock: coming back (or reloading) starts the tune afresh
   enter(room) { const k = clockOf(room); if (k && !k.done) { k.at = 0; k.got = 0; clockSig(k); } },
   // host / solo: the tune starts once the room is clear, then waits for the bells

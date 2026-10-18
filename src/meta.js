@@ -200,6 +200,7 @@ function saveRun() {
       gx: r.gx, gy: r.gy, type: r.type, dist: r.dist, cleared: r.cleared, visited: r.visited, seen: r.seen,
       stocked: r.stocked, seed: r.seed, tiles: Array.from(r.tiles), slots: r.slots, pits: r.pits,
       pickups: r.pickups, props: r.props, reward: r.reward, skull: r.skull, hidden: r.hidden, keyRoom: r.keyRoom, lay: r.lay, flip: r.flip,
+      grass: r.grass ? Array.from(r.grass).join('') : '',
     })),
     player: strip(p), stats: G.stats, run: G.run, won: G.won, bestBefore: G.bestBefore, coins: G.coins, diff: G.diff, mods: G.mods || [], boss: G.floor.boss,
   };
@@ -215,13 +216,15 @@ function saveRun() {
 function loadRun(d) {
   if (!d) { try { d = JSON.parse(localStorage.getItem(RUN_KEY)); } catch (e) { d = null; } }
   if (!d || !(d.v >= 1 && d.v <= 3)) { clearRun(); return false; }
-  const rooms = d.rooms.map(r => Object.assign(newRoom(r.gx, r.gy), r, { tiles: Uint8Array.from(r.tiles), doors: {}, dirty: true, canvas: null }));
+  const rooms = d.rooms.map(r => Object.assign(newRoom(r.gx, r.gy), r, { tiles: Uint8Array.from(r.tiles), doors: {}, dirty: true, canvas: null, grass: null }));
   const at = (x, y) => rooms.find(r => r.gx === x && r.gy === y);
   for (const r of rooms) for (const k in DIRS) { const o = at(r.gx + DIRS[k][0], r.gy + DIRS[k][1]); if (o) r.doors[k] = o; }
   // version 3 keeps the road's path; older runs walked the first three lands
   G.run = d.run && d.run.vault !== undefined ? d.run : { vault: 0, keep: 0 };
   if (!G.run.path) G.run.path = CLASSIC_ROAD.slice();
   const land = roadLand(d.depth);
+  // tall grass as it was left (saves from before it grew get it fresh)
+  rooms.forEach((r, i) => { const g = d.rooms[i].grass; r.grass = g === undefined ? growGrass(r, land) : g ? Uint8Array.from(g, c => +c) : null; });
   G.mode = 'adv'; G.arena = null; G.daily = null;
   G.diff = d.diff !== undefined ? d.diff : 1;
   setMods(d.mods);

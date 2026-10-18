@@ -115,6 +115,7 @@ function buildRoom(room, land) {
   room.pits = [];
   for (let i = 0; i < t.length; i++) if (t[i] === T_PIT) room.pits.push([(i % COLS) * 16, OY + ((i / COLS) | 0) * 16, hash(i, 3, room.seed)]);
   room.cleared = !FIGHT_ROOMS.has(room.type) && room.type !== 'boss' && room.type !== 'warden' && room.type !== 'arena';
+  room.grass = growGrass(room, land);
 }
 
 // A room that arrives without its mechanic state (a co-op client's, a resumed run's): the land's
@@ -149,6 +150,7 @@ function setTile(room, c, r, v, quiet) { // quiet: the caller tells co-op client
   const i = r * COLS + c;
   (room.tAt || (room.tAt = new Map())).set(i, G.time); // when it changed, for animations on every screen
   room.tiles[i] = v; room.dirty = true; flowKey = -1;
+  if (room.grass) room.grass[i] = 0;
   room.pits = room.pits.filter(q => q[0] !== c * 16 || q[1] !== OY + r * 16);
   if (v === T_PIT) room.pits.push([c * 16, OY + r * 16, hash(i, 3, room.seed)]);
   if (!quiet && typeof netFx === 'function') netFx('tile', c, r, v);
@@ -446,7 +448,7 @@ function flowDir(x, y) {
   return _fd;
 }
 
-// ---------- Static room layer (cached per room, rebuilt only when dirty) ----------
+// ---------- Static room layer (scenery.js dresses the lands it knows) ----------
 function hash(c, r, s) {
   let h = (c * 374761393 + r * 668265263 + s) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -457,7 +459,8 @@ function blit(g, s, x, y, v) {
   g.drawImage(ATLAS, s.x[i], s.y[i], s.w, s.h, x, y, s.w, s.h);
 }
 
-function renderRoomStatic(room, theme) {
+// Lands without their own scenery (see scenery.js) are drawn from tiles.
+function renderRoomPlain(room, theme) {
   if (!room.canvas) {
     room.canvas = document.createElement('canvas');
     room.canvas.width = VW; room.canvas.height = VH;

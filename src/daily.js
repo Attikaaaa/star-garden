@@ -130,17 +130,20 @@ function finishDaily(won) {
 const dailyBtns = () => (G.dailyTab === 2 ? ['bow', 'back'] : online() ? ['play', 'board', 'share', 'back'] : ['play', 'share', 'back']);
 // three tabs: today, this week, and the sky (events, the season, the Boss of the Week)
 const DAILY_TABS = ['TODAY', 'THIS WEEK', 'SKY'], tabX = (i) => VW / 2 + (i - 1) * 95;
-const dailyBtnY = (n) => (n > 3 ? [153, 11] : n === 2 ? [172, 13] : [160, 13]);
+// the run on the left (DAILY_X0, wrapped to DAILY_LW), the records and buttons on the right (DAILY_RX)
+const DAILY_X0 = VW / 2 - 148, DAILY_LW = 150, DAILY_RX = VW / 2 + 80;
+const dailyBtnY = (n) => (n > 3 ? [148, 12] : n === 2 ? [172, 13] : [150, 13]);
+const dailyBtnX = () => (G.dailyTab === 2 ? VW / 2 : DAILY_RX);
 function dailyTab() { return G.dailyTab === 1 ? 'weekly' : 'daily'; }
 function updateDaily() {
   const was = G.dailyTab || 0, dir = pressed(...K_LEFT, 'PadLB') ? -1 : pressed(...K_RIGHT, 'Tab', 'PadRB') ? 1 : 0;
   if (dir) G.dailyTab = (was + dir + 3) % 3;
-  DAILY_TABS.forEach((t, i) => { if (mouseOn() && Input.mouseHit && Math.abs(Input.mx - tabX(i)) < 46 && Input.my >= 28 && Input.my < 42) G.dailyTab = i; });
+  DAILY_TABS.forEach((t, i) => { if (mouseOn() && Input.mouseHit && Math.abs(Input.mx - tabX(i)) < 46 && Input.my >= 21 && Input.my < 36) G.dailyTab = i; });
   if ((G.dailyTab || 0) !== was) { Audio_.sfx('select'); G.menuSel = 0; return null; }
   const btns = dailyBtns(), [by, gap] = dailyBtnY(btns.length);
   menuNav(btns.length);
   let click = -1;
-  btns.forEach((b, i) => { if (hoverRow(i, VW / 2 - 60, by + i * gap - 3, 120, gap)) click = i; });
+  btns.forEach((b, i) => { if (hoverRow(i, dailyBtnX() - 60, by + i * gap - 3, 120, gap)) click = i; });
   const b = btns[G.menuSel], ok = pressed(...K_OK) || (click >= 0 && Input.mouseHit);
   if (pressed(...K_BACK) || (ok && b === 'back')) return 'back';
   if (ok && b === 'play') return 'play';
@@ -152,11 +155,11 @@ function updateDaily() {
 function drawDaily() {
   drawTitleBg();
   dim(0.5);
-  panel(VW / 2 - 150, 24, 300, 180);
+  panel(VW / 2 - 160, 18, 320, 192);
   DAILY_TABS.forEach((t, i) => {
     const x = tabX(i), on = (G.dailyTab || 0) === i;
-    text(t, x, 31, on ? 'Y' : '3', 1, 1);
-    if (on) rect(x - textW(t) / 2 - 2, 40, textW(t) + 4, 1, 'Y');
+    text(t, x, 25, on ? 'Y' : '3', 1, 1);
+    if (on) rect(x - textW(t) / 2 - 2, 34, textW(t) + 4, 1, 'Y');
   });
   if (G.dailyTab === 2) {
     drawSkyTab();
@@ -164,40 +167,37 @@ function drawDaily() {
     return;
   }
   const kind = dailyTab(), D = dailySpec(kind), R = dailyFresh(kind);
-  text(kind === 'weekly' ? 'WEEKLY CHALLENGE ' + D.key : 'DAILY STAR RUN ' + D.key, VW / 2, 47, 'c', 1, 1);
+  text(kind === 'weekly' ? 'WEEKLY CHALLENGE ' + D.key : 'DAILY STAR RUN ' + D.key, VW / 2, 40, 'c', 1, 1);
   // the run: land, wand, modifiers, starting items
-  const x0 = VW / 2 - 138;
-  text(kind === 'weekly' ? (D.key < DAILY_ROAD_FROM.weekly ? 'ALL THREE LANDS' : 'THREE LANDS, ONE FROM EACH ACT') : THEMES[LANDS[D.land].theme].name, x0, 60, 'Y', 1);
-  drawS(S('wand_' + D.wand), x0, 70);
-  text(WANDS[D.wand].name + '  ' + HEROES[D.hero].name, x0 + 22, 74, 'w', 1);
-  let my = 90;
-  for (const m of D.mods) {
-    text(MODS[m].name, x0, my, 'P', 1); my += 9;
-    for (const l of wrapText(MODS[m].desc, 132)) { text(l, x0, my, 'w', 1); my += 9; }
-    my += 3;
-  }
+  const x0 = DAILY_X0, para = (s, y, col) => { for (const l of wrapText(s, DAILY_LW)) { text(l, x0, y, col, 1); y += 9; } return y; };
+  let my = para(kind === 'weekly' ? (D.key < DAILY_ROAD_FROM.weekly ? 'ALL THREE LANDS' : 'THREE LANDS, ONE FROM EACH ACT') : THEMES[LANDS[D.land].theme].name, 54, 'Y') + 2;
+  drawS(S('wand_' + D.wand), x0, my);
+  text(WANDS[D.wand].name + '  ' + HEROES[D.hero].name, x0 + 22, my + 4, 'w', 1);
+  my += 19;
+  for (const m of D.mods) my = para(MODS[m].desc, para(MODS[m].name, my, 'P'), 'w') + 3;
   D.items.forEach((id, i) => drawS(S('icon_' + id), x0 + i * 18, my));
-  text('NO GARDEN UPGRADES: A FAIR RACE', x0, my + 22, 'l', 1);
+  para('NO GARDEN UPGRADES: A FAIR RACE', my + (D.items.length ? 19 : 0), 'l');
   // records
-  const rx = VW / 2 + 60;
-  text(R.ranked >= 0 ? 'YOUR SCORE' : R.tries ? 'IN PROGRESS' : 'NOT PLAYED YET', rx, 60, 'c', 1, 1);
-  if (R.ranked >= 0) text(String(R.ranked), rx, 71, 'Y', 1, 1);
-  if (R.best > R.ranked && R.ranked >= 0) text('BEST PRACTICE ' + R.best, rx, 82, 'l', 1, 1);
+  const rx = DAILY_RX;
+  text(R.ranked >= 0 ? 'YOUR SCORE' : R.tries ? 'IN PROGRESS' : 'NOT PLAYED YET', rx, 54, 'c', 1, 1);
+  if (R.ranked >= 0) text(String(R.ranked), rx, 65, 'Y', 1, 1);
+  if (R.best > R.ranked && R.ranked >= 0) text('BEST PRACTICE ' + R.best, rx, 76, 'l', 1, 1);
   if (kind === 'daily') {
     const S_ = Save.daily;
-    text('STREAK: ' + (S_.last && daysBetween(S_.last, utcDay()) <= 2 ? S_.streak : 0) + ' DAYS', rx, 94, 'h', 1, 1);
+    text('STREAK: ' + (S_.last && daysBetween(S_.last, utcDay()) <= 2 ? S_.streak : 0) + ' DAYS', rx, 89, 'h', 1, 1);
     // the last seven days
     for (let i = 0; i < 7; i++) {
       const day = utcDay(Date.now() - (6 - i) * 86400000), e = S_.log.find(l => l.d === day), bx = rx - 42 + i * 12;
       const hgt = e ? Math.max(2, Math.min(24, Math.round(e.s / 250))) : 0;
-      rect(bx, 104, 9, 26, '0'); rect(bx + 1, 105, 7, 24, '1');
-      if (hgt) rect(bx + 1, 129 - hgt, 7, hgt, e.w ? 'h' : 'c');
+      rect(bx, 100, 9, 26, '0'); rect(bx + 1, 101, 7, 24, '1');
+      if (hgt) rect(bx + 1, 125 - hgt, 7, hgt, e.w ? 'h' : 'c');
     }
-    text(dailyReady() ? 'READY!' : 'NEW RUN IN ' + untilUtcMidnight(), rx, 134, dailyReady() ? 'Y' : 'l', 1, 1);
-  } else { text('FIRST WIN PAYS', rx, 94, 'h', 1, 1); text('+2 SEEDS +60 VAULT', rx, 104, 'h', 1, 1); }
+    text(dailyReady() ? 'READY!' : 'NEW RUN IN ' + untilUtcMidnight(), rx, 131, dailyReady() ? 'Y' : 'l', 1, 1);
+  } else { text('FIRST WIN PAYS', rx, 89, 'h', 1, 1); text('+2 SEEDS +60 VAULT', rx, 99, 'h', 1, 1); }
   const labels = { play: R.tries ? 'PRACTICE' : 'PLAY (RANKED)', board: 'LEADERBOARD', share: 'SHARE', back: 'BACK' }, btns = dailyBtns();
-  drawMenu(btns.map(b => labels[b]), ...dailyBtnY(btns.length));
-  text(R.tries ? 'THE FIRST TRY COUNTS, THE REST ARE PRACTICE' : 'ONLY THE FIRST TRY COUNTS: GOOD LUCK!', VW / 2, 198, 'c', 1, 1);
+  const [by, gap] = dailyBtnY(btns.length);
+  drawMenu(btns.map(b => labels[b]), by, gap, undefined, (i) => [rx, by + i * gap]);
+  text(R.tries ? 'THE FIRST TRY COUNTS, THE REST ARE PRACTICE' : 'ONLY THE FIRST TRY COUNTS: GOOD LUCK!', VW / 2, 199, 'c', 1, 1);
 }
 
 // ---------- The end of a daily or weekly run (drawn inside the end screen) ----------

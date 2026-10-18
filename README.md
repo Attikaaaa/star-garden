@@ -62,6 +62,11 @@ Menus work with mouse, keyboard, controller (A: select, B: back) and touch.
 - **Rooms:** the doors shut until every enemy is gone. Some rooms throw a second wave at
   you. The minimap shows the boss (crown), treasure room (star), shop (coin) and
   challenge room (swords). The number under the map counts your defeated enemies.
+  In the Meadow, the Shore, the Crystal Cave and the Star Well every room is drawn from
+  its own seed: ponds and chasms, hedges, trees and crystals, lamps and ivy on the walls,
+  so no two rooms look the same.
+- **Tall grass:** fight rooms in the Meadow, the Shore and the Crystal Cave grow clumps of
+  it. It hides your feet; shots and rolls cut it, and now and then a coin falls out.
 - **Elite enemies** glow gold: tougher and faster, but they drop more coins.
 - **Golden Slime:** a rare, harmless slime that runs away. Catch it for vault coins!
 - **Combo:** defeat enemies in quick succession for bonus coins.
