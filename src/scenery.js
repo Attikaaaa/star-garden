@@ -134,13 +134,13 @@ function bakeGround(room, theme) {
   const keys = [R.base, R.dark, R.light];
   for (let y = IN_Y0; y < IN_Y1; y++) for (let x = IN_X0; x < IN_X1; x++) b.px[y * VW + x] = p32(keys[cls[y * VW + x]]);
   if (GROUND_TEX[theme]) GROUND_TEX[theme](b, cls, s, keys);
-  // tufts and specks on a jittered grid, coloured by the patch they sit in
-  const rnd2 = scnRand(s ^ 0x7a11);
+  // tufts and specks on a jittered grid, coloured by the patch they sit in: they gather in
+  // the dark patches and leave the open ground calm, so foes and bullets read at a glance
+  const rnd2 = scnRand(s ^ 0x7a11), set = R.glyphs || TUFTS, TUFT_P = R.glyphs ? [0.05, 0.16, 0.02] : [0.08, 0.3, 0.03];
   for (let y = IN_Y0; y < IN_Y1 - 2; y += 7) for (let x = IN_X0; x < IN_X1 - 3; x += 8) {
-    const gx = x + Math.floor(rnd2() * 6), gy = y + Math.floor(rnd2() * 5), k = keys[cls[gy * VW + gx]], r = rnd2();
-    const set = R.glyphs || TUFTS;
-    if (r < (R.glyphs ? 0.24 : 0.42)) glyph(b, set[Math.floor(rnd2() * set.length)], gx, gy, { x: R.tuft[k] });
-    else if (r < 0.62) b.px[gy * VW + gx] = p32(R.speck[k]);
+    const gx = x + Math.floor(rnd2() * 6), gy = y + Math.floor(rnd2() * 5), c = cls[gy * VW + gx], k = keys[c], r = rnd2();
+    if (r < TUFT_P[c]) glyph(b, set[Math.floor(rnd2() * set.length)], gx, gy, { x: R.tuft[k] });
+    else if (r > 0.9) b.px[gy * VW + gx] = p32(R.speck[k]);
   }
   if (room.type === 'boss' || room.type === 'arena' || room.type === 'warden') drawRingPx(b, theme);
   scatterDecals(b, room, theme, cls, keys);
@@ -166,7 +166,7 @@ const GROUND_TEX = {
     _nB.fill(0); noiseInto(_nB, 26, s + 3, 1);
     for (let y = IN_Y0; y < IN_Y1; y++) for (let x = IN_X0; x < IN_X1; x++) {
       const w = Math.sin(x * 0.21 + y * 0.62 + _nB[y * VW + x] * 7);
-      if (w > 0.94 && vnoise(x, y, 9, s + 5) > 0.45) {
+      if (w > 0.95 && vnoise(x, y, 9, s + 5) > 0.56) {
         const c = cls[y * VW + x];
         b.px[y * VW + x] = p32(c === 1 ? 'a' : c === 2 ? 'N' : 'e');
       }
@@ -177,12 +177,12 @@ const GROUND_TEX = {
     _nB.fill(0); noiseInto(_nB, 64, s + 13, 1);
     const P1 = worleyPts(21, s + 11, 0.8), P2 = worleyPts(34, s + 11, 0.8);
     for (let y = IN_Y0; y < IN_Y1; y++) for (let x = IN_X0; x < IN_X1; x++) {
-      const i = y * VW + x, paved = _nB[i] > 0.42;
+      const i = y * VW + x, paved = _nB[i] > 0.64;
       const w = worleyAt(paved ? P1 : P2, x, y), e = w.f2 - w.f1;
       if (paved) {
         if (e < 1.1) b.px[i] = p32(cls[i] === 1 ? 'd' : 'm');
         else if (e < 2.2 && w.dx < 0 && w.dy < 0 && cls[i] !== 1) b.px[i] = p32('L');
-      } else if (e < 0.8 && vnoise(x, y, 7, s + 17) > 0.55) b.px[i] = p32(cls[i] === 1 ? 'd' : 'm');
+      } else if (e < 0.8 && vnoise(x, y, 7, s + 17) > 0.78) b.px[i] = p32(cls[i] === 1 ? 'd' : 'm');
     }
   },
   // old star-stone flags with lit edges, worn smooth between them
@@ -192,12 +192,12 @@ const GROUND_TEX = {
     for (let y = IN_Y0; y < IN_Y1; y++) for (let x = IN_X0; x < IN_X1; x++) {
       const i = y * VW + x;
       if (cls[i] === 1) continue;
-      const paved = _nB[i] > 0.46;
+      const paved = _nB[i] > 0.64;
       const w = worleyAt(paved ? P1 : P2, x, y), e = w.f2 - w.f1;
       if (paved) {
         if (e < 1.1) b.px[i] = p32('1');
         else if (e < 2.2 && w.dx < 0 && w.dy < 0) b.px[i] = p32(cls[i] === 2 ? '4' : '3');
-      } else if (e < 0.8 && vnoise(x, y, 7, s + 17) > 0.6) b.px[i] = p32('1');
+      } else if (e < 0.8 && vnoise(x, y, 7, s + 17) > 0.78) b.px[i] = p32('1');
     }
   },
 };
@@ -216,9 +216,12 @@ const SCN_DECALS = {
       [_G('.ml. mlLl .dm.'), 3], // pebble
       [_G('.d. dm.'), 2],
       [_G('..n. .nNn nNNn'), 1], // molehill
-      [_G('w.w .y. w.w'), 2], // dandelion fluff
+      [_G('w.w .y. w.w'), 1], // dandelion fluff
     ],
     wall: [_G('.G.G G.G.'), _G('G.G .G.'), _G('.w. wyw .w.'), _G('.P. PqP .P.')],
+    // fight rooms grow the Bloom Loop's flowers (lands.js), so nothing there looks like one
+    fightCluster: [[_G('.GG. GhhG GhG. .g..'), 3], [_G('G.G .G.'), 2], [_G('.G.G G.G.'), 2]],
+    fightWall: [_G('.G.G G.G.'), _G('G.G .G.'), _G('.G. GhG'), _G('G.. .G.')],
   },
   beach: {
     cluster: [[_G('.e. eNe'), 3], [_G('.A. AwA'), 2]],
@@ -264,27 +267,29 @@ function scatterDecals(b, room, theme, cls) {
   const fits = (rows, x, y) => x >= IN_X0 + 1 && y >= IN_Y0 + 2 && x + rows[0].length < IN_X1 - 1 && y + rows.length < IN_Y1 - 1;
   // clusters (flower beds, shell drifts, shard fields), more in quiet rooms
   const quiet = room.type !== 'normal' && room.type !== 'challenge' && room.type !== 'boss' && room.type !== 'arena' && room.type !== 'warden';
-  const nc = 2 + Math.floor(r() * 3) + (quiet ? 1 : 0);
+  const fight = !quiet || room.type === 'start', CL = fight && D.fightCluster ? D.fightCluster : D.cluster;
+  const nc = (quiet ? 2 : 1) + (r() < 0.4 ? 1 : 0);
   for (let k = 0; k < nc; k++) {
     const cx = IN_X0 + 12 + r() * (IN_X1 - IN_X0 - 24), cy = IN_Y0 + 10 + r() * (IN_Y1 - IN_Y0 - 20);
-    const n = 4 + Math.floor(r() * 7), sp = 6 + r() * 10, pal = pickW(D.cluster, r());
+    const n = 3 + Math.floor(r() * 5), sp = 5 + r() * 8, pal = pickW(CL, r());
     for (let i = 0; i < n; i++) {
       const a = r() * Math.PI * 2, d = Math.sqrt(r()) * sp;
-      const g = r() < 0.75 ? pal : pickW(D.cluster, r()), x = Math.round(cx + Math.cos(a) * d * 1.4), y = Math.round(cy + Math.sin(a) * d);
+      const g = r() < 0.75 ? pal : pickW(CL, r()), x = Math.round(cx + Math.cos(a) * d * 1.4), y = Math.round(cy + Math.sin(a) * d);
       if (fits(g, x, y)) glyph(b, g, x, y);
     }
   }
   // singles anywhere
-  const ns = 10 + Math.floor(r() * 8);
+  const ns = 4 + Math.floor(r() * 4);
   for (let k = 0; k < ns; k++) {
     const g = pickW(D.single, r()), x = Math.round(IN_X0 + 4 + r() * (IN_X1 - IN_X0 - 12)), y = Math.round(IN_Y0 + 4 + r() * (IN_Y1 - IN_Y0 - 12));
     if (fits(g, x, y)) glyph(b, g, x, y);
   }
   // the foot of the walls: tufts, drifts and rubble
+  const WL = fight && D.fightWall ? D.fightWall : D.wall;
   const along = (x0, y0, x1, y1, step) => {
     for (let t = 0; t < 1; t += step / Math.max(x1 - x0, y1 - y0)) {
-      if (r() < 0.45) continue;
-      const g = D.wall[Math.floor(r() * D.wall.length)];
+      if (r() < 0.65) continue;
+      const g = WL[Math.floor(r() * WL.length)];
       const x = Math.round(x0 + (x1 - x0) * t + r() * 3), y = Math.round(y0 + (y1 - y0) * t + r() * 2);
       glyph(b, g, Math.min(IN_X1 - g[0].length, Math.max(IN_X0, x)), Math.min(IN_Y1 - g.length, Math.max(IN_Y0, y)));
     }
@@ -809,7 +814,7 @@ function growGrass(room, land) {
   }
   // a few patches, never a jungle
   cand.sort((a, b) => b[0] - a[0]);
-  cand.length = Math.min(cand.length, 14 + hash(2, 1, s) % 12);
+  cand.length = Math.min(cand.length, 7 + hash(2, 1, s) % 6);
   for (const [, i] of cand) g[i] = 1;
   return cand.length ? g : null;
 }
