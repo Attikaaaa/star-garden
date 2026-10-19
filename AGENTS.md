@@ -26,7 +26,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 
 | File | Contents |
 |---|---|
-| `wg_*.js`, `lang_hu_wg.js` | **Wildgrove** survival mode (`G.state === 'wg'`), self-contained: `wg_data` (items/objects/recipes, append-only ids), `wg_world` (seeded chunks, caves), `wg_art`/`wg_art2` (sprites), `wg_game` (session `WGS`, mining, use), `wg_mobs`, `wg_render`, `wg_ui`, `wg_main` (screens, play loop), `wg_store` (IndexedDB, `.sgworld` export/import), `wg_net` (host-authoritative MQTT+WebRTC). Server: `tools/wg-server.mjs`. Each chunk's ground is baked once (`wgChunkArt`); a ground change repaints only that tile and its neighbours (`wgDirty(..., true)` lists them, `wgChunkReady` paints), an object change repaints nothing, chunks next to the view are baked ahead and far ones let go (`wgChunkUpkeep`). Natural ground stays calm: one small feature per tile at most. Tests: `sh qa/_wg_all.sh` (generation and density, save and reload, every item obtainable, frame cost, co-op join...) |
+| `wg_*.js`, `lang_hu_wg.js` | **Wildgrove** survival mode (`G.state === 'wg'`), self-contained: `wg_data` (items/objects/recipes, append-only ids), `wg_world` (seeded chunks, caves), `wg_art`/`wg_art2` (sprites), `wg_game` (session `WGS`, mining, use), `wg_mobs`, `wg_render`, `wg_ui`, `wg_main` (screens, play loop), `wg_store` (IndexedDB, `.sgworld` export/import), `wg_net` (host-authoritative MQTT+WebRTC), `wg_map` (the world map on M / pad Back / touch MAP from the chunks seen, `w.meta.seen`; a pin per hero, `p.pin`, with a HUD arrow; controller play: sticks move and aim, A mines, X uses, LB/RB hotbar, a stick pointer in the backpack). Server: `tools/wg-server.mjs`. Each chunk's ground is baked once (`wgChunkArt`); a ground change repaints only that tile and its neighbours (`wgDirty(..., true)` lists them, `wgChunkReady` paints), an object change repaints nothing, chunks next to the view are baked ahead and far ones let go (`wgChunkUpkeep`). Natural ground stays calm: one small feature per tile at most. Tests: `sh qa/_wg_all.sh` (generation and density, save and reload, every item obtainable, frame cost, co-op join...) |
 | `palette.js` | `PAL` (the one palette), `THEMES` (per-land tile colour slots and land names) |
 | `save.js` | `Save`: settings, lifetime stats, found items, vault, Garden levels, wands, name, robe (localStorage, fails soft) |
 | `gfx.js` | sprite registry, atlas baking, `drawS` / `drawFeet` / `drawGlow`, shadow, ring; art tools `sculpt`, `stamp`, `autoOutline`, `grid` |
@@ -194,7 +194,9 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
 - Coins are a team purse, `G.coins`, changed through `gainCoins(n)` (it also fills the
   vault). Vault bonuses: `earnVault(n)` (scaled by difficulty, sent to every co-op player). Use `wipe(cb)` when switching between
   the game and menus; `cb` runs while the screen is fully covered.
-- Query input through the shared code lists (`K_UP`, `K_OK`, `K_BACK`... in `ui.js`).
+- Query input through the shared code lists (`K_UP`, `K_OK`, `K_BACK`... in `ui.js`). Hits are cleared after
+  each update; draw code that reads input (Wildgrove's menus) runs inside `withFrameInput` (`input.js`),
+  which replays what the frame's updates saw. The global M (mute) and F (fullscreen) keys stay out of Wildgrove.
   Controller and touch buttons are virtual codes (`PadA`, `PadStart`, `TouchDash`...), so
   they can go into any `pressed()` call.
 - Change settings and stats only through `Save`, then call `Save.write()`. Short feedback:

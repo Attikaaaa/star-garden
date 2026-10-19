@@ -575,8 +575,9 @@ function update(dt) {
   pollPad();
   pollTouch();
   if (ovlUpdate(dt)) return;
-  if (pressed('KeyM')) { Audio_.toggleMute(); toast(Save.settings.muted ? 'SOUND OFF (M)' : 'SOUND ON'); }
-  if (pressed('KeyF')) toggleFullscreen();
+  const own = G.state === 'wg'; // Wildgrove has its own M (the map) and F (use), and a chat to type in
+  if (pressed('KeyM') && !own) { Audio_.toggleMute(); toast(Save.settings.muted ? 'SOUND OFF (M)' : 'SOUND ON'); }
+  if (pressed('KeyF') && !own) toggleFullscreen();
   if (G.toast && (G.toast.t -= dt) <= 0) G.toast = null;
   netPoll();
   if (updateWipe(dt)) return;
@@ -962,7 +963,7 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, SCR.ox, SCR.oy);
   if (s === 'title') drawTitle();
   else if (s === 'casino') drawCasino();
-  else if (s === 'wg') drawWG();
+  else if (s === 'wg') withFrameInput(drawWG);
   else if (s === 'daily') drawDaily();
   else if (s === 'yard') drawYard();
   else if (s === 'garden') drawHub();
@@ -1071,6 +1072,7 @@ function frame(now) {
     if (n === 5) acc = 0;
   } catch (e) { acc = 0; endInputFrame(); frameError(e); }
   try { render(); } catch (e) { frameError(e); }
+  dropFrameInput();
 }
 // still reported (online.js), without stopping the loop
 function frameError(e) {

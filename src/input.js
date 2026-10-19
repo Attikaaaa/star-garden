@@ -98,15 +98,36 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 
 const key = (c) => !!Input.down[c];
 const pressed = (...codes) => codes.some(c => Input.hit[c]);
+// What this frame's updates saw is kept for draw code that reads input too (Wildgrove's menus click
+// while drawing): without it a click landed only when a frame happened to run no update.
+const FRAME_IN = { hit: Object.create(null), mouseHit: false, rHit: false, wheel: 0 };
 function endInputFrame() {
-  for (const k in Input.hit) delete Input.hit[k];
+  for (const k in Input.hit) { FRAME_IN.hit[k] = true; delete Input.hit[k]; }
+  if (Input.mouseHit) FRAME_IN.mouseHit = true;
+  if (Input.rHit) FRAME_IN.rHit = true;
+  FRAME_IN.wheel += Input.wheel;
   Input.mouseHit = false; Input.rHit = false; Input.wheel = 0;
+}
+// Runs a draw with this frame's input replayed; what it uses up stays used up for the next update.
+function withFrameInput(fn) {
+  const pend = Input.hit, pm = Input.mouseHit, pr = Input.rHit, pw = Input.wheel;
+  Input.hit = Object.assign(Object.create(null), FRAME_IN.hit, pend);
+  Input.mouseHit = FRAME_IN.mouseHit || pm; Input.rHit = FRAME_IN.rHit || pr; Input.wheel = FRAME_IN.wheel + pw;
+  try { fn(); } finally {
+    for (const k in pend) if (!Input.hit[k]) delete pend[k];
+    const m = Input.mouseHit, r = Input.rHit, w = Input.wheel;
+    Input.hit = pend; Input.mouseHit = pm && m; Input.rHit = pr && r; Input.wheel = w ? pw : 0;
+  }
+}
+function dropFrameInput() {
+  for (const k in FRAME_IN.hit) delete FRAME_IN.hit[k];
+  FRAME_IN.mouseHit = false; FRAME_IN.rHit = false; FRAME_IN.wheel = 0;
 }
 
 // ---------- Gamepad (standard mapping) ----------
 // Left stick / d-pad: move and navigate. Right stick: aim and shoot. A/LB/LT: roll.
 // X: interact. Y: drink / use the first belt item. Start: pause. In menus A confirms, B goes back.
-const PAD_BTN = { 0: 'PadA', 1: 'PadB', 2: 'PadX', 3: 'PadY', 4: 'PadLB', 5: 'PadRB', 6: 'PadLT', 7: 'PadRT', 9: 'PadStart', 12: 'PadUp', 13: 'PadDown', 14: 'PadLeft', 15: 'PadRight' };
+const PAD_BTN = { 0: 'PadA', 1: 'PadB', 2: 'PadX', 3: 'PadY', 4: 'PadLB', 5: 'PadRB', 6: 'PadLT', 7: 'PadRT', 8: 'PadBack', 9: 'PadStart', 10: 'PadLS', 12: 'PadUp', 13: 'PadDown', 14: 'PadLeft', 15: 'PadRight' };
 Input.pad = { mx: 0, my: 0, ax: 0, ay: 0, prev: [], navY: 0, navX: 0 };
 function pollPad() {
   const P = Input.pad;

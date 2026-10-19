@@ -100,7 +100,7 @@ function wgDrawPause() {
     wgUiEnd(ui); return;
   }
   if (ui.mp) { wgDrawFriends(ui); wgUiEnd(ui); return; }
-  if (ui.help) { panel(60, 20, 264, 150); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE']; rows.forEach((r, i) => wtext(r, 70, 30 + i * 12, 'w', 1)); if (wgButton(ui, 'BACK', 140, 150, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
+  if (ui.help) { panel(60, 20, 264, 150); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP']; rows.forEach((r, i) => wtext(r, 70, 27 + i * 9, i > 10 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 154, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
   panel(112, 22, 160, client ? 118 : 174); wtext('PAUSED', VW / 2, 30, 'Y', 3, 1);
   let y = 44;
   if (wgButton(ui, 'RESUME', 128, y, 128) || pressed('Escape') && ui.armed) { WGS.scr = 'play'; return; } y += 18;
@@ -112,7 +112,8 @@ function wgDrawPause() {
   }
   if (wgButton(ui, 'SETTINGS', 128, y, 62)) ui.set = !ui.set;
   if (wgButton(ui, 'STARS', 194, y, 62)) { ui.ach = true; ui.pg = 0; } y += 18;
-  if (wgButton(ui, ui.help ? 'HIDE CONTROLS' : 'CONTROLS', 128, y, 128)) ui.help = !ui.help; y += 18;
+  if (wgButton(ui, 'MAP', 128, y, 50)) { wgOpenMap(); return; }
+  if (wgButton(ui, 'CONTROLS', 182, y, 74)) ui.help = !ui.help; y += 18;
   if (wgButton(ui, client ? 'LEAVE WORLD' : 'SAVE AND QUIT', 128, y, 128)) {
     if (client) { wgnStop(); wgnLeaveGame(); wgRefreshList(); }
     else wgSaveNow().then(() => { wgUnlockWorld(); wgnStop(); WGS.world = null; WGS.scr = 'worlds'; wgRefreshList(); wipe(() => { WGS.scr = 'worlds'; WGS.ui = {}; }); });

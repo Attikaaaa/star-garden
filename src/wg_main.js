@@ -13,7 +13,7 @@ function wgRefreshList() { WGU.busy = true; wgStoreAll().then(l => { WGU.list = 
 function wgLeave() { WGS.world = null; WGS.scr = 'worlds'; wipe(() => setState('title')); }
 
 // ---------- immediate mode buttons ----------
-function wgUiBegin(ui) { ui.n = 0; ui.hit = -1; if (Input.mx !== ui.lmx || Input.my !== ui.lmy) { ui.moved = true; ui.lmx = Input.mx; ui.lmy = Input.my; } else ui.moved = false; if (pressed(...K_DOWN)) { ui.sel = ((ui.sel || 0) + 1) % Math.max(1, ui.cnt); Audio_.sfx('select'); } if (pressed(...K_UP)) { ui.sel = ((ui.sel || 0) + (ui.cnt || 1) - 1) % Math.max(1, ui.cnt); Audio_.sfx('select'); } ui.ok = pressed(...K_OK); }
+function wgUiBegin(ui) { ui.n = 0; ui.hit = -1; if (ui.sel === undefined && (Input.lastAim === 'pad' || Input.lastAim === 'keys')) ui.sel = 0; /* a pad or the arrows start on the first button */ if (Input.mx !== ui.lmx || Input.my !== ui.lmy) { ui.moved = true; ui.lmx = Input.mx; ui.lmy = Input.my; } else ui.moved = false; if (pressed(...K_DOWN)) { ui.sel = ((ui.sel || 0) + 1) % Math.max(1, ui.cnt); Audio_.sfx('select'); } if (pressed(...K_UP)) { ui.sel = ((ui.sel || 0) + (ui.cnt || 1) - 1) % Math.max(1, ui.cnt); Audio_.sfx('select'); } ui.ok = pressed(...K_OK); }
 function wgUiEnd(ui) { ui.cnt = ui.n; }
 function wgButton(ui, label, x, y, w, o) {
   o = o || {};
@@ -199,6 +199,7 @@ function wgPlayUpdate(dt) {
   else if (WGS.photo === 1) WGS.photo = 2;
   if (pressed('F2')) WGS.photo = 1;
   for (let i = 0; i < 9; i++) if (pressed('Digit' + (i + 1))) WGS.sel = i;
+  if (pressed('PadRB')) WGS.sel = (WGS.sel + 1) % 9; if (pressed('PadLB')) WGS.sel = (WGS.sel + 8) % 9;
   if (Input.wheel) { WGS.sel = (WGS.sel + (Input.wheel > 0 ? 1 : 8)) % 9; Input.wheel = 0; }
   if (pressed(wgKey('drop'))) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); } }
   // time
@@ -210,9 +211,10 @@ function wgPlayUpdate(dt) {
   const kd = (n, arrow) => Input.down[wgKey(n)] || Input.down[arrow];
   let mx = (kd('right', 'ArrowRight') ? 1 : 0) - (kd('left', 'ArrowLeft') ? 1 : 0), my = (kd('down', 'ArrowDown') ? 1 : 0) - (kd('up', 'ArrowUp') ? 1 : 0);
   if (WGS.touch) { mx += WGS.touch.mx; my += WGS.touch.my; }
+  mx += Input.pad.mx; my += Input.pad.my; // the left stick
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
   const g = GROUND[wgGround(w, WGS.dim, Math.floor(p.x / 16), Math.floor(p.y / 16))];
-  const run = (Input.down[wgKey('run')] || (wgKey('run') === 'ShiftLeft' && Input.down.ShiftRight)) && p.food > 3;
+  const run = (Input.down[wgKey('run')] || (wgKey('run') === 'ShiftLeft' && Input.down.ShiftRight) || Input.down.PadLS) && p.food > 3;
   let sp = 58 * (run ? 1.55 : 1) * g.speed * (p.buff.speed ? 1.3 : 1);
   if (g.slip) { p.vx += mx * sp * dt * 3; p.vy += my * sp * dt * 3; p.vx *= 0.985; p.vy *= 0.985; } else { p.vx *= 0.8; p.vy *= 0.8; }
   const kx = g.slip ? p.vx : mx * sp + p.vx, ky = g.slip ? p.vy : my * sp + p.vy;
@@ -223,14 +225,15 @@ function wgPlayUpdate(dt) {
   const cam = WGS.cam, cx0 = Math.round(cam.x) - VW / 2, cy0 = Math.round(cam.y) - VH / 2;
   let ax, ay;
   if (Input.lastAim === 'mouse' || (Input.lastAim === 'touch' && WGS.touch && (WGS.touch.act || WGS.touch.use))) { ax = Input.mx + cx0; ay = Input.my + cy0; if (Input.lastAim === 'mouse') { const a = Math.atan2(ay - (p.y - 8), ax - p.x); if (!p.moving) p.face = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? (Math.cos(a) > 0 ? 'r' : 'l') : (Math.sin(a) > 0 ? 'd' : 'u'); } }
+  else if (Input.lastAim === 'pad' && (Input.pad.ax || Input.pad.ay)) { const a = Math.atan2(Input.pad.ay, Input.pad.ax); ax = p.x + Math.cos(a) * 22; ay = p.y - 4 + Math.sin(a) * 22; if (!p.moving) p.face = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? (Math.cos(a) > 0 ? 'r' : 'l') : (Math.sin(a) > 0 ? 'd' : 'u'); } // the right stick aims
   else { const f = { d: [0, 1], u: [0, -1], l: [-1, 0], r: [1, 0] }[p.face]; ax = p.x + f[0] * 20; ay = p.y - 4 + f[1] * 20; }
   WGS.aim = Math.atan2(ay - (p.y - 8), ax - p.x);
   let ttx = Math.floor(ax / 16), tty = Math.floor(ay / 16);
   const d = Math.hypot(ttx * 16 + 8 - p.x, tty * 16 + 8 - (p.y - 4));
   WGS.target = d <= WG_REACH ? { tx: ttx, ty: tty } : null;
   // act
-  const lmb = Input.mouseDown && Input.lastAim === 'mouse' || Input.down.Space || Input.down.KeyJ || WGS.touch && WGS.touch.act;
-  const rmb = Input.rHit || pressed(wgKey('use'), 'KeyK') || (WGS.touch && WGS.touch.use);
+  const lmb = Input.mouseDown && Input.lastAim === 'mouse' || Input.down.Space || Input.down.KeyJ || Input.down.PadA || Input.down.PadRT || WGS.touch && WGS.touch.act;
+  const rmb = Input.rHit || pressed(wgKey('use'), 'KeyK', 'PadX', 'PadLT') || (WGS.touch && WGS.touch.use);
   p.swingCd = Math.max(0, (p.swingCd || 0) - dt); p.swing = Math.max(0, p.swing - dt); p.hurt = Math.max(0, p.hurt - dt); p.inv = Math.max(0, p.inv - dt);
   const held = wgHeld();
   if (lmb) {
@@ -319,11 +322,12 @@ function wgDrawPlayer(e, cx0, cy0) {
 // Left thumb walks, right thumb aims: hold to mine or fight, a short tap uses. The round buttons sit at the edges.
 function wgTouchBtns() {
   const l = -SCR.ox, r = -SCR.ox + SCR.w, t = -SCR.oy, b = -SCR.oy + SCR.h;
-  return { use: [r - 30, b - 52, 15], bag: [r - 20, t + 56, 11], pause: [l + 16, t + 16, 10] };
+  return { use: [r - 30, b - 52, 15], bag: [r - 20, t + 56, 11], map: [r - 20, t + 82, 11], pause: [l + 16, t + 16, 10] };
 }
 function wgTouchDown(x, y, e) {
   const B = wgTouchBtns(), hit = (q) => Math.hypot(x - q[0], y - q[1]) <= q[2] + 4, T = Input.touch;
   if (hit(B.pause)) { WGS.scr = 'pause'; WGS.ui = {}; return; }
+  if (hit(B.map)) { wgOpenMap(); return; }
   if (hit(B.bag)) { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; return; }
   if (hit(B.use)) { WGS.tapUse = true; WGS.tapAt = null; return; }
   const by = -SCR.oy + SCR.h - 22, bx = Math.round((-SCR.ox + SCR.w / 2) - 9 * 19 / 2);
@@ -336,7 +340,7 @@ function wgDrawTouch() {
   const T = Input.touch, B = wgTouchBtns();
   for (const s of [T.move, T.aim]) if (s) { ctx.globalAlpha = 0.35; rect(Math.round(s.ox) - 16, Math.round(s.oy) - 16, 32, 32, '1'); rect(Math.round(s.x) - 6, Math.round(s.y) - 6, 12, 12, 'w'); ctx.globalAlpha = 1; }
   const dot = (q, lab, col) => { ctx.globalAlpha = 0.75; rect(q[0] - q[2], q[1] - q[2] + 2, q[2] * 2, q[2] * 2 - 4, '0'); rect(q[0] - q[2] + 2, q[1] - q[2], q[2] * 2 - 4, q[2] * 2, '0'); rect(q[0] - q[2] + 1, q[1] - q[2] + 3, q[2] * 2 - 2, q[2] * 2 - 6, col); rect(q[0] - q[2] + 3, q[1] - q[2] + 1, q[2] * 2 - 6, q[2] * 2 - 2, col); ctx.globalAlpha = 1; wtext(lab, q[0], q[1] - 3, 'w', 1, 1); };
-  dot(B.use, 'USE', '2'); dot(B.bag, 'BAG', '2'); dot(B.pause, 'II', '1');
+  dot(B.use, 'USE', '2'); dot(B.bag, 'BAG', '2'); dot(B.map, 'MAP', '2'); dot(B.pause, 'II', '1');
 }
 
 // ---------- joining ----------
