@@ -160,5 +160,8 @@
   Object.assign(LANG.hu.table, { // the homing feather
     'HOMING FEATHER': 'HAZAVEZETŐ TOLL', 'STAND STILL...': 'NE MOZDULJ...', 'HOME AGAIN': 'ÚJRA OTTHON', 'THE GLOW FADES': 'A FÉNY ELHALVÁNYUL',
     'USE IT TO GO HOME TO YOUR BED': 'HASZNÁLD, ÉS HAZAVISZ AZ ÁGYADHOZ', 'STAND STILL WHILE IT GLOWS': 'NE MOZDULJ, AMÍG FÉNYLIK' });
+  Object.assign(LANG.hu.table, { // the winter pack
+    'SNOWBALL': 'HÓGOLYÓ', 'SNOWMAN': 'HÓEMBER', 'ICE LANTERN': 'JÉGLÁMPÁS', 'SNOW WALL': 'HÓFAL', 'HOT CIDER': 'FORRÓ ALMABOR', 'FROSTY FRIEND': 'FAGYOS BARÁT',
+    'BUILD A SNOWMAN': 'ÉPÍTS HÓEMBERT', 'SCOOP IT FROM SNOW WITH USE': 'HASZNÁLATTAL MERÍTHETŐ A HÓBÓL' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
