@@ -41,7 +41,7 @@ wgDrawObj = function (id, tx, ty, sx, sy) {
   const Y = sy - 2, rows = [[4, 8], [3, 10], [4, 8]], top = 2 - Math.min(2, m - 1); // the opening's rows (x0, width) from sprite row 3; the water fills them from the bottom
   for (let r = top; r < 3; r++) { const [x0, n] = rows[r]; rect(sx + x0, Y + 3 + r, n, 1, r === top ? (m >= WG_BARREL_FULL ? 'c' : 'B') : 'b'); }
   if (m >= WG_BARREL_FULL) rect(sx + 5, Y + 3, 2, 1, 'C'); // a glint on a full one
-  if (WGS.weather && WGS.dim === 'o') { const h = hash(tx, ty, Math.floor(WGS.t * 3)); if (h % 3) rect(sx + 4 + h % 7, Y + 3 + top + (h >> 3) % (3 - top), 1, 1, 'C'); }
+  if (WGS.weather && WGS.dim === 'o') { const h = hash(tx, ty, Math.floor(WGS.t * 3)); if (h % 3) rect(sx + 4 + h % 7, Y + 3 + top + (h >>> 3) % (3 - top), 1, 1, 'C'); }
 };
 const _wgTipBarrel = wgTipLines;
 wgTipLines = function (s) { const L = _wgTipBarrel(s); if (s.id === 'rain_barrel') L.push('IT GATHERS RAIN FOR A BUCKET'); return L; };

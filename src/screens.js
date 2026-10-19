@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.51', lines: ['WILDGROVE: ICE FISHING AND A SNOW GLOBE', 'USE THE ROD ON ICE TO CUT A HOLE', 'ICEFIN BITE MORE THROUGH THE ICE', 'SHAKE A SNOW GLOBE AND WATCH IT SNOW'] },
   { v: '1.16.50', lines: ['WILDGROVE: FOUR NEW HATS', 'A PARTY HAT, A WITCH HAT, A SAILOR CAP', 'AND A FROG HAT, OF COURSE', 'WEAR TEN TO BECOME A MAD HATTER'] },
   { v: '1.16.49', lines: ['WILDGROVE: A SPRING EGG HUNT', 'PAINTED EGGS HIDE IN THE GRASS IN SPRING', 'A NEW SET TO FIND EACH DAY', 'SIX EGGS MAKE A BASKET TO SET OUT'] },
   { v: '1.16.48', lines: ['WILDGROVE: A BIRD FEEDER', 'FILL A FEEDER WITH SEEDS', 'FOUR NEW BIRDS COME TO EAT BY DAY', 'SPOT THEM ALL TO BECOME A BIRDWATCHER'] },

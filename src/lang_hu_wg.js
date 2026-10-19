@@ -332,5 +332,9 @@
   Object.assign(LANG.hu.table, { // the third box of hats
     'PARTY HAT': 'PARTISAPKA', 'WITCH HAT': 'BOSZORKÁNYKALAP', 'SAILOR CAP': 'MATRÓZSAPKA', 'FROG HAT': 'BÉKASAPKA', 'MAD HATTER': 'BOLOND KALAPOS', 'WEAR TEN DIFFERENT HATS': 'VISELJ TÍZ KÜLÖNBÖZŐ KALAPOT',
   });
+  Object.assign(LANG.hu.table, { // ice fishing and the snow globe
+    'ICE HOLE': 'LÉK', 'SNOW GLOBE': 'HÓGÖMB', 'ICE FISHER': 'LÉKHORGÁSZ', 'CATCH A FISH THROUGH THE ICE': 'FOGJ HALAT A JÉG ALÓL',
+    'YOU CUT A HOLE IN THE ICE': 'LÉKET VÁGTÁL A JÉGBE', 'ON ICE IT CUTS A HOLE TO FISH THROUGH': 'JÉGEN LÉKET VÁG A HORGÁSZATHOZ', 'USE IT TO SHAKE IT': 'HASZNÁLD, HOGY MEGRÁZD',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

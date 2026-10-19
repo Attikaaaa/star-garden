@@ -18,7 +18,7 @@ const wgFeedT = () => ((WGS.day | 0) + WGS.clock % 1) * wgDayLen(); // the world
 function wgFeedVisit(tx, ty, b, T) { // perch b's bird in the visit at time T: its kind and how far through (u 0..1), or null
   const n = Math.floor(T / WG_FEED_SLOT), h = hash(tx, ty, n * 2 + b + 1);
   if (h % 5 >= (b ? 2 : 4)) return null;
-  return { k: hash(tx, ty, n * 8 + b + 5) % 4, u: T / WG_FEED_SLOT - n, a: (h >> 4) % 4 * 0.04 + b * 0.1 };
+  return { k: hash(tx, ty, n * 8 + b + 5) % 4, u: T / WG_FEED_SLOT - n, a: (h >>> 4) % 4 * 0.04 + b * 0.1 };
 }
 const _wgUseFeed = wgUse;
 wgUse = function (tx, ty) {
