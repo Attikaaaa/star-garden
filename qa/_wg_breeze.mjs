@@ -40,7 +40,7 @@ r = await g.ev(`(() => { WGS.dim = 'u'; drawWG(); const under = WGKT.size; WGS.d
 ok(r[0] === 0 && !r[1] && r[2], 'no kite underground; HIGH FLYER: ' + JSON.stringify(r));
 r = await g.ev(`(() => { const s = [...document.scripts].find(x => x.src.includes('wg_net')); return !!s; })()`);
 const net = await (await import('fs')).promises.readFile(new URL('../src/wg_net.js', import.meta.url), 'utf8');
-ok(r && /kt: typeof wgKiteHeld/.test(net) && /kite: wgnKite\(m\.kt\)/.test(net) && /kite: wgnKite\(a\[11\]\)/.test(net) && /L\.kite \| 0\]\)/.test(net), 'the net messages carry the kite');
+ok(r && /kt: typeof wgKiteHeld/.test(net) && /kite: wgnKite\(m\.kt\)/.test(net) && /kite: wgnKite\(a\[11\]\)/.test(net) && /L\.kite \| 0[,\]]/.test(net), 'the net messages carry the kite');
 await g.ev(`WGS.remote = [{ pid: 3, x: WGS.p.x + 30, y: WGS.p.y, face: 'd', moving: false, walkT: 0, dim: WGS.dim, hp: 20, name: 'ODD', look: { skin: 1, hair: 0, shirt: 2 }, swing: 0, kite: 9, inv: 0 }]; 0`); await sleep(200);
 r = await g.ev(`[wgnKite(9), wgnKite('x'), wgnKite(-1), wgnKite(2), wgnKite(undefined), WGKT.has(3)]`);
 await g.ev(`WGS.remote = []; 0`);

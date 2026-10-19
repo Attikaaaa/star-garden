@@ -67,7 +67,7 @@ function wgnHostMsg(L, m) {
     wgToast(L.name + ' JOINED!'); wgSfx('select'); wgnAll({ t: 'chat', who: '', msg: L.name + ' JOINED' }, L); WGN.chat.push({ who: '', msg: L.name + ' JOINED', t: 8 });
   } else if (m.t === 'offer') wgnOffer(L, m);
   else if (L.pid < 0) return;
-  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), inv: 0 }); }
+  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), boat: m.bt ? 1 : 0, inv: 0 }); }
   else if (m.t === 'tile') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; wgnAll(Object.assign({}, m, { t: 'set' }), L); }
   else if (m.t === 'chunkreq') { const ch = wgChunk(w, m.d, m.cx, m.cy); wgnSend(L, { t: 'chunk', d: m.d, cx: m.cx, cy: m.cy, pk: ch.mod ? wgPackChunk(ch) : null }); }
   else if (m.t === 'hit') { const mob = WGS.mobs.find(q => q.id === m.id); if (mob && !mob.dead) { WGS.lootTo = L.pid; wgHurtMob(mob, Math.min(40, +m.dmg || 1), L.x, L.y); WGS.lootTo = 0; if (mob.hp > 0) mob.fear = 3; } }
@@ -172,7 +172,7 @@ function wgnClientMsg(L, m) {
   if (!L.open) return;
   L.heard = performance.now();
   const w = WGS.world;
-  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], kite: wgnKite(a[11]), inv: 0 })); }
+  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], kite: wgnKite(a[11]), boat: a[12] ? 1 : 0, inv: 0 })); }
   else if (m.t === 'mobs') { if (WGS.dim === WGN.hd) wgnMobs(m.l); }
   else if (m.t === 'set') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; }
   else if (m.t === 'chunk') { const ch = wgChunk(w, m.d, m.cx, m.cy); if (m.pk) { WGN.applying = true; wgReadChunk(ch, m.pk); ch.artDirty = true; WGN.applying = false; for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const n = wgChunk(w, m.d, m.cx + dx, m.cy + dy, false); if (n) n.artDirty = true; } } }
@@ -219,13 +219,13 @@ function wgnUpdate(dt) {
   for (const c of WGN.chat) c.t -= dt; WGN.chat = WGN.chat.filter(c => c.t > 0).slice(-6);
   const p = WGS.p; if (!p || !WGS.world) return;
   if (WGN.role === 'host') {
-    WGS.remote = WGN.peers.filter(L => L.pid > 0).map(L => ({ pid: L.pid, x: L.x, y: L.y, face: L.face, moving: L.moving, walkT: L.walkT, dim: L.dim, hp: L.hp, name: L.name, look: L.look, swing: L.swing ? 0.1 : 0, kite: L.kite | 0, inv: 0 }));
+    WGS.remote = WGN.peers.filter(L => L.pid > 0).map(L => ({ pid: L.pid, x: L.x, y: L.y, face: L.face, moving: L.moving, walkT: L.walkT, dim: L.dim, hp: L.hp, name: L.name, look: L.look, swing: L.swing ? 0.1 : 0, kite: L.kite | 0, boat: L.boat ? 1 : 0, inv: 0 }));
     for (const L of WGN.peers.slice()) if (L.pid > 0 && now - L.heard > 20000) wgnDrop(L, false);
     WGN.sendT -= dt;
     if (WGN.sendT <= 0) {
       WGN.sendT = 0.1;
-      const l = [[0, Math.round(p.x), Math.round(p.y), p.face, p.moving ? 1 : 0, +p.walkT.toFixed(2), WGS.dim, p.hp, p.name, p.look, p.swing > 0 ? 1 : 0, typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0]];
-      for (const L of WGN.peers) if (L.pid > 0) l.push([L.pid, Math.round(L.x), Math.round(L.y), L.face, L.moving ? 1 : 0, L.walkT, L.dim, L.hp, L.name, L.look, L.swing ? 1 : 0, L.kite | 0]);
+      const l = [[0, Math.round(p.x), Math.round(p.y), p.face, p.moving ? 1 : 0, +p.walkT.toFixed(2), WGS.dim, p.hp, p.name, p.look, p.swing > 0 ? 1 : 0, typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0]];
+      for (const L of WGN.peers) if (L.pid > 0) l.push([L.pid, Math.round(L.x), Math.round(L.y), L.face, L.moving ? 1 : 0, L.walkT, L.dim, L.hp, L.name, L.look, L.swing ? 1 : 0, L.kite | 0, L.boat ? 1 : 0]);
       for (const L of WGN.peers) if (L.pid > 0) {
         wgnSend(L, { t: 'ps', l }, true);
         const ms = []; for (const m of WGS.mobs) if (m.dim === L.dim && Math.hypot(m.x - L.x, m.y - L.y) < 330) ms.push([m.id, m.type, Math.round(m.x), Math.round(m.y), m.flip ? 1 : 0, m.fr, m.hp, Math.round(m.hurt * 10), m.dim]);
@@ -236,7 +236,7 @@ function wgnUpdate(dt) {
     WGN.annT -= dt; if (WGN.annT <= 0) { WGN.annT = 6; wgnAnnounce(); }
   } else if (WGN.link && WGN.link.open) {
     WGN.sendT -= dt;
-    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0 }, true); }
+    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, bt: typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0 }, true); }
     WGN.pgT = (WGN.pgT || 0) - dt; if (WGN.pgT <= 0) { WGN.pgT = 3; wgnSend(WGN.link, { t: 'ping', s: performance.now() }); }
     WGN.meT = (WGN.meT || 0) - dt; if (WGN.meT <= 0) { WGN.meT = 5; wgnSend(WGN.link, { t: 'me', hp: p.hp, food: p.food, inv: WGS.inv, armor: p.armor, sel: WGS.sel }); }
     // glide the mobs towards their last reported spot

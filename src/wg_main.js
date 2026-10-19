@@ -334,11 +334,11 @@ function wgDrawPlayer(e, cx0, cy0) {
   if (e.p.hidden) return;
   const p = e.p, sx = Math.round(p.x - cx0), sy = Math.round(p.y - cy0), face = p.face === 'r' ? 'l' : p.face;
   const fr = p.moving ? Math.floor(p.walkT) % 4 : 0, wade = GROUND[wgGround(WGS.world, WGS.dim, Math.floor(p.x / 16), Math.floor(p.y / 16))].liq;
-  shadow(sx, sy, 10);
+  shadow(sx, wade ? sy - 6 : sy, 10); // a wader's at the water line
   if (p.inv > 0 && Math.floor(WGS.t * 20) % 2) return;
   const spr = wgPlayerSpr(face, fr, p.look || { skin: 0, hair: 0, shirt: 0 });
   ctx.save(); ctx.translate(sx, sy - 24); if (p.face === 'r') ctx.scale(-1, 1);
-  ctx.drawImage(spr, 0, 0, 18, 26, -9, 0, 18, wade ? 18 : 26);
+  ctx.drawImage(spr, 0, 0, 18, wade ? 18 : 26, -9, 0, 18, wade ? 18 : 26); // wading: cut at the water, never squashed
   ctx.restore();
   if (wade) { const t = Math.floor(WGS.t * 4) % 2; rect(sx - 8, sy - 7, 16, 1, 'C'); rect(sx - 9 + t, sy - 6, 18 - t * 2, 2, 'c'); }
   // the held tool, swinging

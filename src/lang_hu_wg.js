@@ -181,5 +181,8 @@
   Object.assign(LANG.hu.table, { // the garden rest pack
     'GARDEN SWING': 'KERTI HINTA', 'BATHTUB': 'FÜRDŐKÁD', 'BIRD BATH': 'MADÁRITATÓ', 'SQUEAKY CLEAN': 'RAGYOGÓ TISZTA',
     'TAKE A WARM BATH': 'VEGYÉL EGY MELEG FÜRDŐT', 'HEALS TWICE AS FAST': 'KÉTSZER OLYAN GYORSAN GYÓGYÍT', 'LITTLE BIRDS COME TO SPLASH': 'KISMADARAK JÖNNEK PANCSOLNI' });
+  Object.assign(LANG.hu.table, { // the pond pack
+    'ROWBOAT': 'CSÓNAK', 'WATER LILY': 'TAVIRÓZSA', 'ROW YOUR BOAT': 'EVEZZ, EVEZZ', 'ROW A HUNDRED TILES': 'EVEZZ SZÁZ MEZŐNYIT',
+    'HOLD IT TO ROW ON WATER': 'TARTSD KÉZBEN, ÉS VÍZEN EVEZHETSZ', 'DRAW WATER WITH A BUCKET': 'VÖDÖRREL VIZET MERÍTHETSZ', 'FLOATS ON WATER': 'A VÍZEN ÚSZIK' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

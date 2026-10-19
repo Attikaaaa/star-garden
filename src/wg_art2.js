@@ -211,7 +211,7 @@ function wgPlaceIcon(id, c, g, done) {
   if (o && o.kind === 'wall' && !o.fence) { const w = wgWall(oid, 0, 0); g.drawImage(w, 0, 0, 16, 16, 0, 0, 16, 16); g.drawImage(w, 0, 16, 16, 6, 0, 10, 16, 6); wgRc(g, 0, 15, 16, 1, '0'); return done(false); }
   if (o && o.kind === 'door') { const w = wgDoorSpr(oid, 0); g.drawImage(w, 0, 0, 16, 22, 0, -3, 16, 22); return done(false); }
   if (o && o.fence) { const f = wgFence(10); g.drawImage(f, 0, 2, 16, 18, 0, 0, 16, 18); return done(false); }
-  if (o && o.kind === 'plant' || o && o.kind === 'sapling') { const l = WGA.obj[o.id]; if (l) { const s = l[0].c; g.drawImage(s, Math.max(0, (16 - s.width) >> 1), Math.max(0, 16 - s.height), Math.min(16, s.width), Math.min(16, s.height), 0, 0, Math.min(16, s.width), Math.min(16, s.height)); } return done(false); }
+  if (o && o.kind === 'plant' || o && o.kind === 'sapling') { const l = WGA.obj[o.id]; if (l) { const s = l[0].c, w = Math.min(16, s.width), h = Math.min(16, s.height); g.drawImage(s, (s.width - w) >> 1, 0, w, h, (16 - w) >> 1, (16 - h) >> 1, w, h); } return done(false); } // centred, never cut
   const l = o && WGA.obj[o.id];
   if (l) {
     const s = l[0].c, sx = Math.max(0, (s.width - 16) >> 1), sy = Math.max(0, s.height - 16);
