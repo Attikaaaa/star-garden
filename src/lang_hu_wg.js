@@ -329,5 +329,8 @@
     'PAINTED EGG': 'FESTETT TOJÁS', 'EGG BASKET': 'TOJÁSOS KOSÁR', 'EGG HUNT': 'TOJÁSVADÁSZAT', 'FIND TEN PAINTED EGGS': 'TALÁLJ TÍZ FESTETT TOJÁST',
     'A PAINTED EGG!': 'EGY FESTETT TOJÁS!', 'HIDDEN IN THE GRASS IN SPRING': 'TAVASSZAL A FŰBEN REJTŐZIK',
   });
+  Object.assign(LANG.hu.table, { // the third box of hats
+    'PARTY HAT': 'PARTISAPKA', 'WITCH HAT': 'BOSZORKÁNYKALAP', 'SAILOR CAP': 'MATRÓZSAPKA', 'FROG HAT': 'BÉKASAPKA', 'MAD HATTER': 'BOLOND KALAPOS', 'WEAR TEN DIFFERENT HATS': 'VISELJ TÍZ KÜLÖNBÖZŐ KALAPOT',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
