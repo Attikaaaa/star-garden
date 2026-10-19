@@ -132,6 +132,9 @@ const Audio_ = (() => {
     chime() { const P = [1047, 1175, 1319, 1568, 1760, 2093]; for (let i = 0; i < 3; i++) { const f = P[Math.floor(Math.random() * P.length)], at = i * 0.14 + Math.random() * 0.05; osc('sine', f, f, 0.9, 0.05, at); osc('triangle', f * 2, f * 2, 0.2, 0.012, at); } }, // a shell chime in the breeze
     windup() { for (let i = 0; i < 5; i++) osc('triangle', 1900 - i * 70, 1500, 0.025, 0.06, i * 0.07); }, // a music box's key turned
   };
+  [523, 587, 659, 784, 880, 1047, 1175, 1319].forEach((f, i) => { // Wildgrove's ocarina: a soft, breathy C pentatonic, oca0 to oca7
+    SFX['oca' + i] = () => { osc('sine', f * 0.99, f, 0.55, 0.12); osc('triangle', f * 2, f * 2, 0.22, 0.014); noise(0.06, 0.018, 2600, 'bandpass'); };
+  });
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;
     const now = ac.currentTime;
