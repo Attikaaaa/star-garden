@@ -23,7 +23,7 @@ r = await g.ev(`(() => { const w = WGS.world, d = WGS.dim, p = WGS.p, x = Math.f
   return res; })()`);
 ok(r.on === 1 && r.off === 0 && r.kept === 1 && !r.two && r.three && r.worn === 3, 'USE puts a hat on and off, HAT TRICK: ' + JSON.stringify(r));
 const net = await (await import('fs')).promises.readFile(new URL('../src/wg_net.js', import.meta.url), 'utf8');
-r = await g.ev(`[wgnHat(2), wgnHat(9), wgnHat('x'), wgnHat(-1), wgnHat(undefined)]`);
+r = await g.ev(`[wgnHat(2), wgnHat(WG_HATS.length + 1), wgnHat('x'), wgnHat(-1), wgnHat(undefined)]`); // one past the last hat is odd
 ok(/ht: \(p\.look && p\.look\.hat\) \| 0/.test(net) && /hat: wgnHat\(m\.ht\)/.test(net) && r.join() === '2,0,0,0,0', 'the net carries the hat, an odd one is dropped: ' + JSON.stringify(r));
 r = await g.ev(`wgTipLines({ id: 'hat_top', n: 1 })`);
 ok(r.includes('USE IT TO PUT IT ON OR TAKE IT OFF') && r.includes('FRIENDS SEE IT TOO'), 'tips: ' + JSON.stringify(r));
