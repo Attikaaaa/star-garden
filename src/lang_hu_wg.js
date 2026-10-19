@@ -193,5 +193,7 @@
     'CHEESE TOAST': 'SAJTOS PIRÍTÓS', 'CREAM OF MUSHROOM': 'GOMBAKRÉMLEVES', 'ICE CREAM': 'FAGYI', 'STRAWBERRY SHAKE': 'EPRES TURMIX',
     'DAIRY FARMER': 'TEJGAZDA', 'MAKE BUTTER AND CHEESE': 'KÖPÜLJ VAJAT ÉS KÉSZÍTS SAJTOT', 'AT A BUTTER CHURN': 'KÖPÜLŐNÉL',
     'SHE HAS NO MILK YET': 'MÉG NINCS TEJE', 'ALSO MILKS A COW': 'TEHENET IS FEJHETSZ VELE' });
+  Object.assign(LANG.hu.table, { // the trees through the seasons
+    'ALL FOUR SEASONS': 'MIND A NÉGY ÉVSZAK', 'SEE A WHOLE YEAR GO BY': 'ÉLJ VÉGIG EGY EGÉSZ ÉVET' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
