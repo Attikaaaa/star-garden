@@ -148,7 +148,9 @@ await sleep(200);
 await g.ev(`__click(352, 18 + 20 + 17)`);
 r = await g.ev(`[WGS.p.track, wgInvCount(WGS.inv, 'wood')]`);
 ok(r[0] && r[0].out === 'stick' && r[1] === 1, 'a tap on the pin pins without making: ' + JSON.stringify(r));
-await g.ev(`__rclick(260, 18 + 20 + 27 + 8)`);
+await g.ev(`WGU.rq.v = 'CHEST'; 0`); await sleep(100); // the search finds it whatever the list's order
+await g.ev(`__rclick(260, 18 + 20 + 8)`);
+await g.ev(`WGU.rq.v = ''; 0`);
 r = await g.ev(`[WGS.p.track, wgSnapshot().st.p.track]`);
 ok(r[0] && r[0].out === 'chest' && r[1] && r[1].out === 'chest', 'a right click pins another, the save keeps it: ' + JSON.stringify(r));
 await sleep(150); console.log('pin row', await g.shot('wg_pin_row.png'));
