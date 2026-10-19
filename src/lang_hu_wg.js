@@ -379,5 +379,9 @@
   Object.assign(LANG.hu.table, { // snowball fights
     'SNOWBALL FIGHT': 'HÓGOLYÓCSATA', 'HIT A FRIEND WITH A SNOWBALL': 'TALÁLJ EL EGY BARÁTOT HÓGOLYÓVAL', 'SPLAT!': 'PACCS!', 'A DIRECT HIT!': 'TELITALÁLAT!', 'USE THROWS IT': 'HASZNÁLD, ÉS ELDOBOD',
   });
+  Object.assign(LANG.hu.table, { // umbrellas
+    'RED UMBRELLA': 'PIROS ESERNYŐ', 'YELLOW UMBRELLA': 'SÁRGA ESERNYŐ', 'BLUE UMBRELLA': 'KÉK ESERNYŐ', 'PURPLE UMBRELLA': 'LILA ESERNYŐ',
+    'SINGING IN THE RAIN': 'ÉNEK AZ ESŐBEN', 'WALK IN THE RAIN UNDER AN UMBRELLA': 'SÉTÁLJ AZ ESŐBEN ESERNYŐ ALATT', 'KEEPS THE RAIN OFF YOUR HEAD': 'NEM ÁZOL MEG ALATTA',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

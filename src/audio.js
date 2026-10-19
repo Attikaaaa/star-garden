@@ -130,6 +130,7 @@ const Audio_ = (() => {
     bigwin() { [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => { osc('p25', f, f, 0.12, 0.11, i * 0.07); bell(f * 2, 0.5 + i * 0.05); }); osc('triangle', 131, 131, 0.9, 0.25, 0.45); },
     scratch() { noise(0.05, 0.05, 5200, 'highpass'); },
     chime() { const P = [1047, 1175, 1319, 1568, 1760, 2093]; for (let i = 0; i < 3; i++) { const f = P[Math.floor(Math.random() * P.length)], at = i * 0.14 + Math.random() * 0.05; osc('sine', f, f, 0.9, 0.05, at); osc('triangle', f * 2, f * 2, 0.2, 0.012, at); } }, // a shell chime in the breeze
+    croak() { const f = 120 + Math.random() * 40; for (let i = 0; i < 2; i++) { osc('triangle', f * 1.3, f, 0.08, 0.06, i * 0.12); osc('square', f * 1.3, f, 0.06, 0.012, i * 0.12); } }, // a frog in the rain
     windup() { for (let i = 0; i < 5; i++) osc('triangle', 1900 - i * 70, 1500, 0.025, 0.06, i * 0.07); }, // a music box's key turned
   };
   [523, 587, 659, 784, 880, 1047, 1175, 1319].forEach((f, i) => { // Wildgrove's ocarina: a soft, breathy C pentatonic, oca0 to oca7
