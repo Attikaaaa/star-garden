@@ -133,6 +133,8 @@ const Audio_ = (() => {
     croak() { const f = 120 + Math.random() * 40; for (let i = 0; i < 2; i++) { osc('triangle', f * 1.3, f, 0.08, 0.06, i * 0.12); osc('square', f * 1.3, f, 0.06, 0.012, i * 0.12); } }, // a frog in the rain
     hoot() { const f = 380 + Math.random() * 30; osc('sine', f * 1.08, f, 0.22, 0.07, 0); osc('sine', f * 1.02, f * 0.94, 0.38, 0.08, 0.32); }, // an owl in the night
     soap() { osc('sine', 1400, 2300, 0.03, 0.03); }, // a soap bubble pops
+    toot() { osc('square', 880, 870, 0.12, 0.035); osc('square', 740, 735, 0.2, 0.035, 0.14); }, // a toy train's whistle
+    song() { const p = 1 + Math.random() * 0.25; osc('sine', 2400 * p, 3200 * p, 0.07, 0.022); osc('sine', 3000 * p, 2600 * p, 0.09, 0.018, 0.09); osc('sine', 2600 * p, 3400 * p, 0.06, 0.018, 0.2); }, // a bird's morning trill
     cheep() { for (let i = 0; i < 3; i++) osc('triangle', 2800, 3900, 0.05, 0.02, i * 0.1); }, // chicks in a nest
     cricket() { for (let k = 0; k < 2; k++) for (let i = 0; i < 3; i++) osc('sine', 4400, 4250, 0.03, 0.018, k * 0.32 + i * 0.06); }, // a cricket on a summer night
     windup() { for (let i = 0; i < 5; i++) osc('triangle', 1900 - i * 70, 1500, 0.025, 0.06, i * 0.07); }, // a music box's key turned

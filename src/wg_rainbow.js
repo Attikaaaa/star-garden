@@ -26,6 +26,6 @@ const _wgFxBow = wgDrawWeatherFX;
 wgDrawWeatherFX = function () {
   _wgFxBow();
   if (WGBOW.t0 < 0 || WGS.dim !== 'o' || !wgOpt().wx || !WGS.world) return;
-  const a = wgBowAlpha(WGS.t - WGBOW.t0); if (!a) return;
+  const a = wgBowAlpha(WGS.t - WGBOW.t0) * (1 - wgNight(WGS.clock)); if (!a) return; // gone with the dusk
   ctx.globalAlpha = a; ctx.drawImage(wgBowArt(), -SCR.ox, -SCR.oy); ctx.globalAlpha = 1;
 };
