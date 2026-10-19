@@ -289,17 +289,14 @@ const wgMod = (a, n) => ((a % n) + n) % n;
 function wgGround(w, dim, x, y) { const ch = wgChunkAt(w, dim, x, y); return ch.g[wgMod(y, WG.CS) * WG.CS + wgMod(x, WG.CS)]; }
 function wgObjAt(w, dim, x, y) { const ch = wgChunkAt(w, dim, x, y); return ch.o[wgMod(y, WG.CS) * WG.CS + wgMod(x, WG.CS)]; }
 function wgMetaAt(w, dim, x, y) { const ch = wgChunkAt(w, dim, x, y); return ch.m[wgMod(y, WG.CS) * WG.CS + wgMod(x, WG.CS)]; }
-function wgDirty(w, dim, x, y, ch) {
-  ch.mod = true; ch.artDirty = true;
-  // neighbours' edges depend on this tile
-  const lx = wgMod(x, WG.CS), ly = wgMod(y, WG.CS);
-  for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    if ((dx < 0 && lx > 0) || (dx > 0 && lx < WG.CS - 1) || (dy < 0 && ly > 0) || (dy > 0 && ly < WG.CS - 1)) {
-      if (dx !== 0 && ((dx < 0 && lx > 0) || (dx > 0 && lx < WG.CS - 1)) && dy === 0) continue;
-      if (dy !== 0 && ((dy < 0 && ly > 0) || (dy > 0 && ly < WG.CS - 1)) && dx === 0) continue;
-    }
-    const n = wgChunk(w, dim, Math.floor((x + dx) / WG.CS), Math.floor((y + dy) / WG.CS), false);
-    if (n && n !== ch) n.artDirty = true;
+// A tile changed: the chunk is saved with the world. When its ground changed, the tile and its eight
+// neighbours (their edges lean on it) are listed for repainting in the baked art (wgChunkReady).
+function wgDirty(w, dim, x, y, ch, ground) {
+  ch.mod = true;
+  if (!ground) return; // objects are drawn apart from the baked ground
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const n = dx || dy ? wgChunk(w, dim, Math.floor((x + dx) / WG.CS), Math.floor((y + dy) / WG.CS), false) : ch;
+    if (n && n.art && !n.artDirty) (n.rep || (n.rep = new Set())).add(wgMod(y + dy, WG.CS) * WG.CS + wgMod(x + dx, WG.CS));
   }
 }
 function wgSetObj(w, dim, x, y, id, meta) {
@@ -311,7 +308,7 @@ function wgSetObj(w, dim, x, y, id, meta) {
 }
 function wgSetGround(w, dim, x, y, id) {
   const ch = wgChunkAt(w, dim, x, y), k = wgMod(y, WG.CS) * WG.CS + wgMod(x, WG.CS);
-  ch.g[k] = id; wgDirty(w, dim, x, y, ch);
+  ch.g[k] = id; wgDirty(w, dim, x, y, ch, true);
   if (typeof wgNetTile === 'function') wgNetTile(dim, x, y);
 }
 function wgCont(w, dim, x, y, make) {

@@ -3,36 +3,56 @@
 // entities, the day-night light mask and weather. World pixels map to the play view with the camera at its centre.
 const WGR = { lightCv: null, lights: [], frame: 0 };
 
-const WG_TONED = { grass: 1, jungle: 1, sand: 1, snow: 1, dirt: 1, mud: 1, ash: 1 };
+const WG_TONED = { grass: 1, jungle: 1, sand: 1, snow: 1, dirt: 1, ash: 1 };
 function wgTone(seed, x, y) { const n = WGW.f(seed + 40, x / 13, y / 13, 2); return n > 0.28 ? 2 : n < -0.3 ? 1 : 0; }
-function wgChunkArt(ch) {
-  const CS = WG.CS, [c, g] = wgCv(CS * 16, CS * 16), w = WGS.world, dim = ch.dim, X0 = ch.cx * CS, Y0 = ch.cy * CS;
-  for (let j = 0; j < CS; j++) for (let i = 0; i < CS; i++) {
-    const tx = X0 + i, ty = Y0 + j, gid = ch.g[j * CS + i], gr = GROUND[gid], v = hash(tx, ty, 77) & 3;
-    if (gr.void) continue;
-    if (!gr.liq) g.drawImage(wgGroundTex(gid, v, WG_TONED[gr.id] && dim === 'o' ? wgTone(w.seed, tx, ty) : 0), i * 16, j * 16);
-    if (dim === 'k') wgSkyRim(g, i * 16, j * 16, GROUND[wgGround(w, dim, tx, ty - 1)].void, GROUND[wgGround(w, dim, tx + 1, ty)].void, GROUND[wgGround(w, dim, tx, ty + 1)].void, GROUND[wgGround(w, dim, tx - 1, ty)].void);
-    else if (gid === G_ID.shallow) { g.fillStyle = 'rgba(201,245,255,0.18)'; g.fillRect(i * 16, j * 16, 16, 16); }
-    // edges: every higher priority neighbour type grows into this tile
-    const ng = new Array(8);
-    let any = false;
-    for (let k = 0; k < 8; k++) { const q = wgGround(w, dim, tx + WG_D8[k][0], ty + WG_D8[k][1]); ng[k] = q; if (q !== gid) any = true; }
-    if (!any) continue;
-    const kinds = new Set();
-    for (let k = 0; k < 8; k++) { const q = ng[k]; if (q !== gid && GROUND[q].pri > gr.pri && !GROUND[q].floor && !GROUND[q].liq) kinds.add(q); }
-    const order = [...kinds].sort((a, b) => GROUND[a].pri - GROUND[b].pri).slice(-3);
-    for (const q of order) {
-      let bits = 0;
-      for (let k = 0; k < 4; k++) if (ng[k] === q) bits |= 1 << k;
-      for (let k = 4; k < 8; k++) { // a diagonal only counts when neither side next to it already covers it
-        const a = k === 4 ? 0 : k === 5 ? 1 : k === 6 ? 2 : 3, b = k === 4 ? 1 : k === 5 ? 2 : k === 6 ? 3 : 0;
-        if (ng[k] === q && !(bits & (1 << a)) && !(bits & (1 << b))) bits |= 1 << k;
-      }
-      if (bits) g.drawImage(wgOverlay(q, bits, hash(tx, ty, 91) & 3, !!gr.liq && gr.liq === 'water'), i * 16, j * 16);
+// One ground tile of a chunk's baked art: its texture, then the edges of higher neighbours growing over it.
+function wgPaintTile(g, ch, i, j) {
+  const CS = WG.CS, w = WGS.world, dim = ch.dim, tx = ch.cx * CS + i, ty = ch.cy * CS + j, gid = ch.g[j * CS + i], gr = GROUND[gid], v = hash(tx, ty, 77) & 3;
+  if (gr.void) return;
+  if (!gr.liq) g.drawImage(wgGroundTex(gid, v, WG_TONED[gr.id] && dim === 'o' ? wgTone(w.seed, tx, ty) : 0), i * 16, j * 16);
+  if (dim === 'k') wgSkyRim(g, i * 16, j * 16, GROUND[wgGround(w, dim, tx, ty - 1)].void, GROUND[wgGround(w, dim, tx + 1, ty)].void, GROUND[wgGround(w, dim, tx, ty + 1)].void, GROUND[wgGround(w, dim, tx - 1, ty)].void);
+  else if (gid === G_ID.shallow) { g.fillStyle = 'rgba(201,245,255,0.18)'; g.fillRect(i * 16, j * 16, 16, 16); }
+  // edges: every higher priority neighbour type grows into this tile
+  const ng = new Array(8);
+  let any = false;
+  for (let k = 0; k < 8; k++) { const q = wgGround(w, dim, tx + WG_D8[k][0], ty + WG_D8[k][1]); ng[k] = q; if (q !== gid) any = true; }
+  if (!any) return;
+  const kinds = new Set();
+  for (let k = 0; k < 8; k++) { const q = ng[k]; if (q !== gid && GROUND[q].pri > gr.pri && !GROUND[q].floor && !GROUND[q].liq) kinds.add(q); }
+  const order = [...kinds].sort((a, b) => GROUND[a].pri - GROUND[b].pri).slice(-3);
+  for (const q of order) {
+    let bits = 0;
+    for (let k = 0; k < 4; k++) if (ng[k] === q) bits |= 1 << k;
+    for (let k = 4; k < 8; k++) { // a diagonal only counts when neither side next to it already covers it
+      const a = k === 4 ? 0 : k === 5 ? 1 : k === 6 ? 2 : 3, b = k === 4 ? 1 : k === 5 ? 2 : k === 6 ? 3 : 0;
+      if (ng[k] === q && !(bits & (1 << a)) && !(bits & (1 << b))) bits |= 1 << k;
     }
+    if (bits) g.drawImage(wgOverlay(q, bits, hash(tx, ty, 91) & 3, !!gr.liq && gr.liq === 'water'), i * 16, j * 16);
   }
-  ch.art = c; ch.artDirty = false; ch.artSe = wgSeason();
+}
+function wgChunkArt(ch) {
+  const CS = WG.CS, [c, g] = wgCv(CS * 16, CS * 16);
+  for (let j = 0; j < CS; j++) for (let i = 0; i < CS; i++) wgPaintTile(g, ch, i, j);
+  ch.art = c; ch.artG = g; ch.artDirty = false; ch.artSe = wgSeason(); ch.rep = null;
   return c;
+}
+// A chunk's ground art, ready to draw: baked once, then only the tiles whose ground changed are repainted
+// (wgDirty lists them in ch.rep), so digging, tilling or a placed floor never re-bakes the whole chunk.
+function wgChunkReady(ch) {
+  if (!ch.art || ch.artDirty || ch.artSe !== wgSeason()) return wgChunkArt(ch);
+  if (ch.rep) { for (const k of ch.rep) { const i = k % WG.CS, j = (k - i) / WG.CS; ch.artG.clearRect(i * 16, j * 16, 16, 16); wgPaintTile(ch.artG, ch, i, j); } ch.rep = null; }
+  return ch.art;
+}
+// Each frame at most one chunk just outside the view is baked ahead, so walking on never waits for one;
+// art of chunks left far behind is let go (a baked chunk is a megabyte), their tiles stay.
+function wgChunkUpkeep(w, dim, cx0, cy0, cx1, cy1) {
+  const se = wgSeason(); WGR.frame++;
+  outer: for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) {
+    const ch = wgChunk(w, dim, cx, cy);
+    ch.used = WGS.t;
+    if (!ch.art || ch.artDirty || ch.artSe !== se) { wgChunkArt(ch); break outer; }
+  }
+  if ((WGR.frame & 127) === 0) for (const ch of w.chunks.values()) if (ch.art && WGS.t - (ch.used || 0) > 20) { ch.art = ch.artG = ch.rep = null; ch.artDirty = true; }
 }
 
 const wgFrameT = () => Math.floor(WGS.t * 3) % 4;
@@ -95,8 +115,9 @@ function wgDrawWorld() {
   for (let cy = Math.floor(y0 / CS); cy <= Math.floor(y1 / CS); cy++) for (let cx = Math.floor(x0 / CS); cx <= Math.floor(x1 / CS); cx++) {
     const ch = wgChunk(w, dim, cx, cy);
     ch.used = WGS.t;
-    ctx.drawImage(ch.art && !ch.artDirty && ch.artSe === wgSeason() ? ch.art : wgChunkArt(ch), cx * CS * T - cx0, cy * CS * T - cy0);
+    ctx.drawImage(wgChunkReady(ch), cx * CS * T - cx0, cy * CS * T - cy0);
   }
+  wgChunkUpkeep(w, dim, Math.floor(x0 / CS), Math.floor(y0 / CS), Math.floor(x1 / CS), Math.floor(y1 / CS));
   // wet soil is darker
   if (WGS.wet) for (const [k, until] of WGS.wet) {
     if (until < WGS.t) { WGS.wet.delete(k); continue; }
@@ -202,9 +223,9 @@ function wgDrawAmbient(cx0, cy0) {
       if (se === 3) { rect(x, y, 2, 2, 'w'); rect(x + 14, y + 20, 1, 1, 'w'); rect(x - 20, y + 9, 2, 2, 'w'); }
       else if (b === 'meadow' || b === 'forest' || b === 'highland' || b === 'swamp' || b === 'jungle') { rect(x, y, 2, 1, se === 0 ? 'P' : (h >>> 9) % 2 ? 'O' : 'o'); rect(x + 1, y + 1, 1, 1, se === 0 ? 'p' : 'n'); }
     }
-    if (night < 0.35 && (b === 'meadow' || b === 'forest' || b === 'highland') && h % 3 === 0) {
-      for (let n = 0; n < 2; n++) {
-        const x = sx(n * 2, 1), y = sy(n * 2, 1) - Math.round(Math.abs(Math.sin(t * 3 + n)) * 3), col = ['P', 'y', 'c', 'O', 'w'][(h >>> 20) % 5], f = Math.floor(t * 9 + n) % 2;
+    if (night < 0.35 && (b === 'meadow' || b === 'forest' || b === 'highland') && h % 4 === 0) { // a lone butterfly here and there, never a yellow fleck that reads as a drop
+      for (let n = 0; n < 1; n++) {
+        const x = sx(n * 2, 1), y = sy(n * 2, 1) - Math.round(Math.abs(Math.sin(t * 3 + n)) * 3), col = ['P', 'c', 'O', 'w'][(h >>> 20) % 4], f = Math.floor(t * 9 + n) % 2;
         shadow(x, y + 10, 3); rect(x, y, 1, 1, '0'); rect(x - 1 - f, y - 1, 1 + f, 1 + f, col); rect(x + 1, y - 1, 1 + f, 1 + f, col);
       }
     } else if (night > 0.4 && (b === 'forest' || b === 'swamp' || b === 'jungle' || b === 'meadow') && h % 2 === 0) {

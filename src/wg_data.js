@@ -268,8 +268,8 @@ const BIOMES = {
   desert: { name: 'DESERT', col: 'A', ground: 'sand', dens: 0.07, veg: [['cactus', 5], ['deadbush', 5], ['sandpile', 3], ['bones', 0.5], ['pebbles', 1.5], ['boulder', 0.5], ['dead', 0.6]] },
   snow: { name: 'SNOWFIELD', col: 'L', ground: 'snow', dens: 0.14, veg: [['snowpine', 8], ['pine', 3], ['iceblock', 2], ['pebbles', 1], ['boulder', 0.7], ['tallgrass', 1]] },
   swamp: { name: 'SWAMP', col: 't', ground: 'mud', dens: 0.26, veg: [['willow', 5], ['reeds', 8], ['lilypad', 0], ['mush_red', 2], ['mush_brown', 2], ['fern', 3], ['cobweb', 0.6], ['dead', 1.5], ['clayrock', 1.2]] },
-  mountain: { name: 'MOUNTAINS', col: 'm', ground: 'rock', dens: 0.20, veg: [['boulder', 8], ['pine', 3], ['ore_coal', 1.4], ['ore_copper', 1], ['ore_iron', 0.5], ['pebbles', 2], ['tallgrass', 1], ['ore_crystal', 0.15]] },
-  highland: { name: 'HIGHLAND', col: 'l', ground: 'rock', dens: 0.18, veg: [['boulder', 8], ['iceblock', 2], ['ore_iron', 1], ['ore_crystal', 0.5], ['ore_star', 0.08], ['pebbles', 2]] },
+  mountain: { name: 'MOUNTAINS', col: 'm', ground: 'rock', dens: 0.15, veg: [['boulder', 5], ['pine', 3], ['ore_coal', 1.4], ['ore_copper', 1], ['ore_iron', 0.5], ['pebbles', 2], ['tallgrass', 1], ['ore_crystal', 0.15]] },
+  highland: { name: 'HIGHLAND', col: 'l', ground: 'rock', dens: 0.14, veg: [['boulder', 5], ['iceblock', 2], ['ore_iron', 1], ['ore_crystal', 0.5], ['ore_star', 0.08], ['pebbles', 2]] },
   volcano: { name: 'VOLCANO', col: 'o', ground: 'ash', dens: 0.18, veg: [['obsidian', 4], ['boulder', 2], ['ore_coal', 3], ['ore_iron', 1.2], ['geyser', 0.5], ['deadbush', 1], ['bones', 0.5]] },
 };
 const BIOME_ORDER = ['ocean', 'beach', 'meadow', 'forest', 'jungle', 'desert', 'snow', 'swamp', 'mountain', 'highland', 'volcano'];

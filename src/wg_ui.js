@@ -15,7 +15,11 @@ function wgDrawPlay() {
     ctx.strokeStyle = o ? 'rgba(255,224,120,0.9)' : 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1;
     const c = Math.floor(WGS.t * 3) % 2; ctx.strokeRect(sx + 0.5, sy + 0.5, 15, 15); if (c && o) { rect(sx - 1, sy - 1, 2, 2, 'Y'); rect(sx + 15, sy - 1, 2, 2, 'Y'); rect(sx - 1, sy + 15, 2, 2, 'Y'); rect(sx + 15, sy + 15, 2, 2, 'Y'); }
     if (m && m.tx === T.tx && m.ty === T.ty) { const f = 1 - m.hp / OBJ[o].hp; rect(sx, sy + 17, 16, 3, '0'); rect(sx + 1, sy + 18, Math.round(14 * f), 1, 'Y'); }
-    if (o) wtext(OBJ[o].name, sx + 8, sy - 7, 'w', 2, 1);
+    if (o) { // the name shows when the aim lands on something and while it is mined, then fades so it never sits on the hero
+      const k = T.tx + ',' + T.ty; if (WGS.tgtK !== k) { WGS.tgtK = k; WGS.tgtT = WGS.t; }
+      const age = WGS.t - WGS.tgtT, a = m && m.tx === T.tx && m.ty === T.ty ? 1 : wgClamp((1.6 - age) * 3, 0, 1);
+      if (a > 0) { ctx.globalAlpha = a; wtext(OBJ[o].name, sx + 8, sy - 7, 'w', 2, 1); ctx.globalAlpha = 1; }
+    }
   }
   const F = WGS.fish; if (F) { const sx = F.tx * 16 + 8 - cx0, sy = F.ty * 16 + 8 - cy0 + Math.round(Math.sin(WGS.t * 5)); ctx.strokeStyle = 'rgba(240,239,255,0.8)'; ctx.beginPath(); ctx.moveTo(Math.round(WGS.p.x - cx0) + 5, Math.round(WGS.p.y - cy0) - 16); ctx.lineTo(sx, sy); ctx.stroke(); rect(sx - 1, sy - 1, 3, 3, 'r'); rect(sx, sy - 1, 1, 1, 'w'); if (F.t < 0.8) { rect(sx - 4, sy + 2, 9, 1, 'C'); } }
   wgDrawAmbient(cx0, cy0); wgDrawLight(cx0, cy0); wgDrawSky();
@@ -37,7 +41,9 @@ function wgFood(x, y, full) {
   for (let j = 0; j < 6; j++) for (let i = 0; i < 7; i++) if (shape[j][i] === '#') rect(x + i, y + j, 1, 1, full === 2 ? (j < 2 ? 'O' : 'n') : full === 1 && i > 3 ? 'x' : full === 1 ? 'O' : 'x');
 }
 function wgSlot(x, y, s, sel, big) {
-  rect(x, y, 18, 18, '0'); rect(x + 1, y + 1, 16, 16, sel ? 'Y' : '3'); rect(x + 2, y + 2, 14, 14, sel ? 'y' : '1');
+  // the chosen slot: a gold frame round a lighter well, so its item stays easy to read
+  if (sel) { rect(x - 1, y - 1, 20, 20, '0'); rect(x, y, 18, 18, 'Y'); rect(x + 1, y + 1, 16, 16, 'o'); rect(x + 2, y + 2, 14, 14, '2'); }
+  else { rect(x, y, 18, 18, '0'); rect(x + 1, y + 1, 16, 16, '3'); rect(x + 2, y + 2, 14, 14, '1'); }
   if (s) { ctx.drawImage(wgIcon(s.id), x + 1, y + 1); if (s.n > 1) wtext(String(s.n), x + 17, y + 11, 'w', 2, 2); const it = WGI[s.id], mx = wgDurMax(it); if (s.d && mx) { const f = 1 - s.d / mx; rect(x + 2, y + 13, 14, 3, '0'); rect(x + 3, y + 14, Math.max(1, Math.round(12 * f)), 1, f > 0.5 ? 'G' : f > 0.2 ? 'y' : 'r'); } }
 }
 function wgDrawHud() {
@@ -45,7 +51,7 @@ function wgDrawHud() {
   // hotbar, centred at the bottom
   const bx = Math.round((L + R) / 2 - 9 * 19 / 2), by = B - 22;
   for (let i = 0; i < 9; i++) wgSlot(bx + i * 19, by, WGS.inv[i], i === WGS.sel);
-  ctx.globalAlpha = 0.7; for (let i = 0; i < 9; i++) if (!WGS.inv[i]) wtext(String(i + 1), bx + i * 19 + 9, by + 5, i === WGS.sel ? 'n' : 'm', 0, 1); ctx.globalAlpha = 1; // the key that picks each empty slot
+  ctx.globalAlpha = 0.7; for (let i = 0; i < 9; i++) if (!WGS.inv[i]) wtext(String(i + 1), bx + i * 19 + 9, by + 5, i === WGS.sel ? 'Y' : 'm', 0, 1); ctx.globalAlpha = 1; // the key that picks each empty slot
   if (Input.mouseHit && Input.my >= by && Input.my < by + 18) { const i = Math.floor((Input.mx - bx) / 19); if (i >= 0 && i < 9 && WGS.scr === 'play') { WGS.sel = i; Input.mouseHit = false; } }
   { const g = p.grave; // an arrow toward the pack you dropped when you fell, gone once you are back at it
     if (g && g.dim === WGS.dim) {

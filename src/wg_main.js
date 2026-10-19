@@ -275,7 +275,7 @@ function wgGrowTick(dt) {
       const k = Math.floor(Math.random() * CS * CS), id = ch.o[k]; if (!id) continue;
       const o = OBJ[id]; if (!o) continue;
       const tx = ch.cx * CS + k % CS, ty = ch.cy * CS + Math.floor(k / CS);
-      if (o.kind === 'crop' && ch.m[k] < 3) { const wet = WGS.weather || (WGS.wet && WGS.wet.has(WGS.dim + tx + ',' + ty)); if (Math.random() < (wet ? 2 : 1) * ([0.5, 1, 2][(WGS.world.meta.rules || {}).grow === undefined ? 1 : WGS.world.meta.rules.grow]) / CROP[o.crop] * CS * CS / 6) { ch.o[k] = id; ch.m[k]++; ch.mod = ch.artDirty = true; } }
+      if (o.kind === 'crop' && ch.m[k] < 3) { const wet = WGS.weather || (WGS.wet && WGS.wet.has(WGS.dim + tx + ',' + ty)); if (Math.random() < (wet ? 2 : 1) * ([0.5, 1, 2][(WGS.world.meta.rules || {}).grow === undefined ? 1 : WGS.world.meta.rules.grow]) / CROP[o.crop] * CS * CS / 6) { ch.o[k] = id; ch.m[k]++; ch.mod = true; } }
       else if (o.ripe && Math.random() < 0.02) { wgSetObj(w, WGS.dim, tx, ty, O_ID[o.ripe]); }
       else if (o.kind === 'sapling' && Math.random() < 0.01) { const t = O_ID[o.grow === 'oak' ? 'oak' : o.grow]; if (t) wgSetObj(w, WGS.dim, tx, ty, t); }
     }

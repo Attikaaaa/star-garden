@@ -3,7 +3,8 @@
 // animated water and lava, oblique wall blocks, trees, rocks, plants, crops, furniture and item icons.
 // Light always comes from the top left; every standing thing has a 1px '0' outline.
 const WGA = { cache: Object.create(null), ov: Object.create(null), wall: Object.create(null) };
-function wgCv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; return [c, g]; }
+// rd: the canvas is read back (ground textures, edge overlays), so it stays on the CPU where that is cheap
+function wgCv(w, h, rd) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d', rd ? { willReadFrequently: true } : undefined); g.imageSmoothingEnabled = false; return [c, g]; }
 const wgCol = (k) => PAL[k] || k;
 function wgPx(g, x, y, k) { g.fillStyle = wgCol(k); g.fillRect(x, y, 1, 1); }
 function wgRc(g, x, y, w, h, k) { g.fillStyle = wgCol(k); g.fillRect(x, y, w, h); }
@@ -44,33 +45,45 @@ function wgGroundTex(gid, v, tone) {
   const se0 = (GROUND[gid].id === 'grass' || GROUND[gid].id === 'jungle') && WGS.dim === 'o' ? wgSeason() : 0; // autumn and winter recolour the leaves of the ground
   const key = 'g' + gid + '_' + v + (tone ? 't' + tone : '') + (se0 > 1 ? 's' + se0 : '');
   if (WGA.cache[key]) return WGA.cache[key];
-  const gr = GROUND[gid], R = se0 === 2 ? ['#6f7a2a', '#98932f', '#b8a23a', '#d9892b'] : se0 === 3 ? ['#5f8f78', '#a4c9b8', '#d3e8e2', '#ffffff'] : gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16);
+  const gr = GROUND[gid], R = se0 === 2 ? ['#6f7a2a', '#98932f', '#b8a23a', '#d9892b'] : se0 === 3 ? ['#5f8f78', '#a4c9b8', '#d3e8e2', '#ffffff'] : gr.ramp, rng = wgRng(gid * 131 + v * 17 + 7), [c, g] = wgCv(16, 16, true);
   const base = { cloud: 1, dirt: 1, mud: 0, snow: 2, ice: 1, cave: 0, path: 1, tilled: 1, ash: 1, moss: 1, rock: 1, sand: 1, grass: 1, jungle: 1, deep: 1, shallow: 1, lava: 1 }[gr.id];
   const sc = (n, col, w, h) => { for (let i = 0; i < n; i++) wgRc(g, Math.floor(rng() * 16), Math.floor(rng() * 16), w || 1, h || 1, col); };
   const b = base === undefined ? 1 : base;
   wgRc(g, 0, 0, 16, 16, R[b]);
+  // Natural ground stays calm: a flat base and at most a feature or two per tile (a tuft, a
+  // pebble, a ripple), so heroes, animals and drops stand out against it.
+  const tuft = (col, hi) => { const x = 2 + Math.floor(rng() * 12), y = 4 + Math.floor(rng() * 10); wgPx(g, x, y, col); wgPx(g, x - 1, y - 1, hi); wgPx(g, x + 1, y - 1, hi); };
+  const lump = (hi, lo) => { const x = 1 + Math.floor(rng() * 12), y = 2 + Math.floor(rng() * 12); wgRc(g, x, y, 3, 1, hi); wgRc(g, x + 1, y + 1, 3, 1, lo); };
   switch (gr.id) {
-    case 'grass': case 'jungle': {
-      sc(5, R[0]); sc(2, R[2]);
-      // tufts: a 3 px blade fan, darker at the root
-      for (let i = 0; i < 1; i++) { const x = 1 + Math.floor(rng() * 13), y = 3 + Math.floor(rng() * 11); wgPx(g, x, y, R[0]); wgPx(g, x - 1, y - 1, R[2]); wgPx(g, x + 1, y - 1, R[2]); wgPx(g, x, y - 1, R[3]); }
+    case 'grass': case 'jungle':
+      if (v === 1) tuft(R[0], R[2]);
+      else if (v === 2) sc(2, R[0]);
+      else if (v === 3) wgRc(g, 3 + Math.floor(rng() * 10), 3 + Math.floor(rng() * 10), 2, 1, R[2]);
       break;
-    }
-    case 'sand': sc(8, R[0]); sc(5, R[2]); sc(1, R[3]); for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 14), y = Math.floor(rng() * 14); wgRc(g, x, y, 2, 1, R[0]); wgPx(g, x, y - 1, R[2]); } break;
-    case 'dirt': case 'path': sc(8, R[0]); sc(5, R[2]); sc(2, R[3]); for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 13), y = Math.floor(rng() * 13); wgRc(g, x, y, 2, 2, R[3]); wgRc(g, x + 1, y + 1, 1, 1, R[0]); } break;
-    case 'snow': sc(14, R[1]); sc(10, R[3]); sc(3, 'c'); break;
-    case 'rock': {
-      sc(10, R[0]); sc(12, R[2]); sc(3, R[3]);
-      for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 10) + 2, y = Math.floor(rng() * 12) + 2; wgRc(g, x, y, 4, 1, R[0]); wgPx(g, x + 4, y + 1, R[0]); wgRc(g, x + 1, y + 1, 3, 1, R[2]); }
+    case 'sand':
+      if (v === 1) { const x = Math.floor(rng() * 12), y = 3 + Math.floor(rng() * 11); wgRc(g, x, y, 3, 1, R[0]); wgRc(g, x + 1, y - 1, 2, 1, R[2]); }
+      else if (v === 2) sc(2, R[0]);
       break;
-    }
-    case 'mud': sc(16, R[1]); sc(8, R[0]); sc(4, R[2]); if (rng() < 0.6) { const x = 2 + Math.floor(rng() * 9), y = 2 + Math.floor(rng() * 9); wgRc(g, x, y, 4, 2, R[2]); wgRc(g, x + 1, y, 2, 1, R[3]); } break;
-    case 'ash': sc(7, R[0]); sc(5, R[2]); sc(2, R[3]); if (v === 1 || v === 3) { let x = 1 + Math.floor(rng() * 6), y = 2 + Math.floor(rng() * 10); for (let i = 0; i < 7; i++) { wgPx(g, x, y, i % 3 ? 'o' : 'O'); x += 1 + (rng() < 0.4 ? 1 : 0); y += rng() < 0.5 ? 1 : rng() < 0.5 ? -1 : 0; } } break; // glowing cracks
-    case 'moss': sc(7, R[2]); sc(5, R[0]); sc(3, R[3]); break;
-    case 'cave': sc(14, R[1]); sc(8, R[2]); sc(2, R[3]); break;
-    case 'cloud': sc(10, R[2]); sc(6, R[0]); sc(3, R[3]); for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 11), y = Math.floor(rng() * 13); wgRc(g, x, y, 4, 1, R[3]); wgRc(g, x + 1, y + 1, 3, 1, R[2]); } break;
+    case 'dirt': case 'path':
+      if (v === 1) { const x = 2 + Math.floor(rng() * 11), y = 2 + Math.floor(rng() * 11); wgRc(g, x, y, 2, 1, R[2]); wgRc(g, x, y + 1, 2, 1, R[0]); }
+      else if (v === 2) sc(3, R[0]);
+      else if (v === 3) sc(1, R[2]);
+      break;
+    case 'snow': if (v === 1) lump(R[3], R[1]); else if (v === 2) sc(1, R[1]); break;
+    case 'rock':
+      if (v === 1) { const x = Math.floor(rng() * 10) + 2, y = Math.floor(rng() * 12) + 2; wgRc(g, x, y, 4, 1, R[0]); wgPx(g, x + 4, y + 1, R[0]); wgRc(g, x + 1, y + 1, 3, 1, R[2]); }
+      else if (v === 2) { sc(2, R[0]); sc(1, R[2]); }
+      break;
+    case 'mud':
+      if (v === 1) { const x = 2 + Math.floor(rng() * 10), y = 3 + Math.floor(rng() * 10); wgRc(g, x, y, 3, 1, R[1]); wgPx(g, x + 1, y - 1, R[1]); } // a clod, never a teal fleck that reads as a drop
+      else if (v === 2) sc(2, R[1]);
+      break;
+    case 'ash': sc(3, R[0]); if (v === 1 || v === 3) { let x = 1 + Math.floor(rng() * 6), y = 2 + Math.floor(rng() * 10); for (let i = 0; i < 7; i++) { wgPx(g, x, y, i % 3 ? 'o' : 'O'); x += 1 + (rng() < 0.4 ? 1 : 0); y += rng() < 0.5 ? 1 : rng() < 0.5 ? -1 : 0; } } break; // glowing cracks
+    case 'moss': if (v === 1) sc(3, R[2]); else if (v === 2) wgRc(g, 4 + Math.floor(rng() * 8), 4 + Math.floor(rng() * 8), 2, 1, R[3]); break;
+    case 'cave': if (v === 1) sc(3, R[2]); else if (v === 2) { const x = 3 + Math.floor(rng() * 9), y = 3 + Math.floor(rng() * 9); wgRc(g, x, y, 2, 1, R[3]); wgRc(g, x, y + 1, 2, 1, R[0]); } break;
+    case 'cloud': sc(3, R[2]); for (let i = 0; i < 2; i++) { const x = Math.floor(rng() * 11), y = Math.floor(rng() * 13); wgRc(g, x, y, 4, 1, R[3]); wgRc(g, x + 1, y + 1, 3, 1, R[2]); } break;
     case 'ice': for (let i = 0; i < 3; i++) { const x = Math.floor(rng() * 12), y = Math.floor(rng() * 14); wgRc(g, x, y, 4, 1, R[2]); wgPx(g, x + 4, y + 1, R[3]); } sc(4, R[3]); break;
-    case 'tilled': for (let y = 2; y < 16; y += 5) { wgRc(g, 0, y, 16, 2, R[0]); wgRc(g, 0, y + 2, 16, 1, R[2]); } sc(10, R[3]); break;
+    case 'tilled': for (let y = 2; y < 16; y += 5) { wgRc(g, 0, y, 16, 2, R[0]); wgRc(g, 0, y + 2, 16, 1, R[2]); } sc(3, R[3]); break;
     case 'deep': case 'shallow': case 'lava': break; // drawn as animated backdrop
     case 'f_wood': {
       wgRc(g, 0, 0, 16, 16, R[1]);
@@ -95,9 +108,9 @@ function wgGroundTex(gid, v, tone) {
       wgRc(g, 6, 6, 4, 4, R[2]); wgPx(g, 7, 7, R[3]); sc(4, R[2]); break;
     }
   }
-  if (tone) { // broad patches of shade (1) and sun (2): a loose pixel dither over the base
-    const col = tone === 1 ? R[0] : R[2];
-    for (let y = 0; y < 16; y += 2) for (let x = 0; x < 16; x += 2) if (((x + y) >> 1) % 2 === 0 && rng() < 0.5) wgRc(g, x + (rng() < 0.3 ? 1 : 0), y, 1, 1, col);
+  if (tone) { // broad patches of shade (1) and sun (2): one more small clump of that shade per tile
+    const col = tone === 1 ? R[0] : R[2], x = 2 + Math.floor(rng() * 11), y = 2 + Math.floor(rng() * 11);
+    wgRc(g, x, y, 3, 1, col); wgPx(g, x + 1, y - 1, col);
   }
   WGA.cache[key] = c;
   return c;
@@ -109,16 +122,17 @@ function wgLiquid(kind, f) {
   const [c, g] = wgCv(32, 32), rng = wgRng(kind === 'lava' ? 91 : 53);
   const R = kind === 'lava' ? ['r', 'o', 'O', 'y'] : kind === 'shallow' ? ['B', 'c', 'C', 'w'] : ['b', 'B', 'c', 'C'];
   wgRc(g, 0, 0, 32, 32, R[1]);
-  const spots = [];
-  for (let i = 0; i < 22; i++) spots.push([Math.floor(rng() * 32), Math.floor(rng() * 32), 3 + Math.floor(rng() * 4)]);
+  const spots = [], lava = kind === 'lava';
+  for (let i = 0, n = lava ? 18 : 11; i < n; i++) spots.push([Math.floor(rng() * 32), Math.floor(rng() * 32), 3 + Math.floor(rng() * 4)]); // water stays calm: a few long ripples
   for (const [x, y, w] of spots) { // wave streaks drift sideways; the frame moves them one pixel
     const xx = (x + f) % 32;
     wgRc(g, xx, y, w, 1, R[0]); wgRc(g, (xx + 1) % 32, (y + 1) % 32, w - 1, 1, R[2]);
     if (w > 4) wgPx(g, (xx + 2) % 32, (y + 2) % 32, R[3]);
   }
-  for (let i = 0; i < 10; i++) wgPx(g, Math.floor(rng() * 32), Math.floor(rng() * 32), R[0]);
-  if (kind === 'lava') for (let i = 0; i < 6; i++) { const x = (Math.floor(rng() * 28) + f * 2) % 32, y = Math.floor(rng() * 30); wgRc(g, x, y, 3, 1, 'y'); wgPx(g, x + 1, y + 1, 'O'); }
-  else if (f % 2 === 0) for (let i = 0; i < 4; i++) wgPx(g, Math.floor(rng() * 32), Math.floor(rng() * 32), 'w');
+  if (lava) {
+    for (let i = 0; i < 10; i++) wgPx(g, Math.floor(rng() * 32), Math.floor(rng() * 32), R[0]);
+    for (let i = 0; i < 6; i++) { const x = (Math.floor(rng() * 28) + f * 2) % 32, y = Math.floor(rng() * 30); wgRc(g, x, y, 3, 1, 'y'); wgPx(g, x + 1, y + 1, 'O'); }
+  } else if (f === 0) wgPx(g, Math.floor(rng() * 32), Math.floor(rng() * 32), 'w'); // one glint now and then
   WGA.cache[key] = c;
   return c;
 }
@@ -130,7 +144,7 @@ function wgOverlay(nid, nbits, v, foam) {
   const key = nid + '_' + nbits + '_' + v + (foam ? 'f' : '');
   let c = WGA.ov[key];
   if (c) return c;
-  const [cv, g] = wgCv(16, 16), tex = wgGroundTex(nid, v), rng = wgRng(nbits * 31 + nid);
+  const [cv, g] = wgCv(16, 16, true), tex = wgGroundTex(nid, v), rng = wgRng(nbits * 31 + nid);
   const td = tex.getContext('2d').getImageData(0, 0, 16, 16).data;
   const out = g.getImageData(0, 0, 16, 16);
   const W = 2.6, noise = [];

@@ -13,71 +13,10 @@
 //   node tools/dev.mjs room [land] [js] [ms] [type]  screenshot of a room in that land (first
 //                                           normal room, or the given type) after an optional expression
 //
-// The browser: CHROME=/path/to/chrome, else Playwright's headless shell or Google Chrome.
-import { spawn } from 'node:child_process';
+// The browser: see tools/browser.mjs (CHROME=/path/to/chrome to pick one).
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(os.tmpdir(), 'star-garden');
-fs.mkdirSync(OUT, { recursive: true });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function chrome() {
-  if (process.env.CHROME) return process.env.CHROME;
-  const pw = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-  const found = [];
-  if (fs.existsSync(pw)) for (const d of fs.readdirSync(pw).filter((d) => d.startsWith('chromium_headless_shell')).sort().reverse())
-    for (const b of ['chrome-headless-shell-mac-arm64', 'chrome-headless-shell-mac-x64', 'chrome-linux']) found.push(path.join(pw, d, b, 'chrome-headless-shell'));
-  found.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/chromium', '/usr/bin/google-chrome');
-  const bin = found.find((f) => fs.existsSync(f));
-  if (!bin) throw new Error('no Chromium found: set CHROME');
-  return bin;
-}
-
-async function open({ w = 1152, h = 648 } = {}) {
-  const port = 9400 + Math.floor(Math.random() * 400), dir = path.join(OUT, 'profile');
-  fs.rmSync(dir, { recursive: true, force: true });
-  const proc = spawn(chrome(), ['--headless=new', '--remote-debugging-port=' + port, '--user-data-dir=' + dir, '--allow-file-access-from-files',
-    '--autoplay-policy=no-user-gesture-required', '--window-size=' + w + ',' + h, 'about:blank'], { stdio: 'ignore' });
-  let list = [];
-  for (let i = 0; i < 80 && !list.find((t) => t.type === 'page'); i++) {
-    await sleep(100);
-    try { list = await (await fetch('http://127.0.0.1:' + port + '/json')).json(); } catch (e) { /* not up yet */ }
-  }
-  const ws = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl);
-  await new Promise((r) => (ws.onopen = r));
-  let id = 0;
-  const wait = new Map(), errors = [];
-  ws.onmessage = (m) => {
-    const d = JSON.parse(m.data);
-    if (d.id && wait.has(d.id)) { wait.get(d.id)(d); wait.delete(d.id); }
-    if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
-    if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map((a) => a.value ?? a.description).join(' '));
-  };
-  const cmd = (method, params = {}) => new Promise((r) => { const i = ++id; wait.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-  await cmd('Runtime.enable');
-  await cmd('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
-  await cmd('Page.navigate', { url: 'file://' + path.join(ROOT, 'index.html') });
-  const ev = async (expr) => {
-    const r = await cmd('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
-    if (r.result?.exceptionDetails) throw new Error((r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text) + '\n  in: ' + expr.slice(0, 160));
-    return r.result?.result?.value;
-  };
-  // wait for the last script (net.js), then a moment for the title to settle; a busy machine is slow
-  for (let i = 0; i < 300 && !(await ev('typeof NET !== "undefined" && typeof G !== "undefined"')); i++) await sleep(100);
-  await sleep(1000);
-  const shot = async (file) => {
-    const r = await cmd('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync(path.join(OUT, file), Buffer.from(r.result.data, 'base64'));
-    return path.join(OUT, file);
-  };
-  // file:// cannot fetch live.json; that one error is expected
-  const realErrors = () => errors.filter((e) => !/live\.json|Failed to fetch/.test(e));
-  return { ev, shot, realErrors, close: () => { try { ws.close(); } catch (e) { /* gone */ } proc.kill(); } };
-}
+import { ROOT, OUT, sleep, open } from './browser.mjs';
 
 // ---------- layouts ----------
 // Every top-level const whose name ends in LAYOUT or LAYOUTS, in any source file.

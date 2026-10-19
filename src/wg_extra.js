@@ -16,7 +16,7 @@
   for (const [id, name, drop] of [['driftwood', 'DRIFTWOOD', 'wood'], ['starfish', 'STARFISH', 'shell'], ['beachgrass', 'BEACH GRASS', 'fiber']]) wgObj(id, { name, kind: 'plant', solid: 0, hp: 1, drops: [DR(drop, 1, 1)] });
   for (const [id, name, drop, tool] of [['fallen_log', 'FALLEN LOG', 'wood', 'axe'], ['frostbush', 'FROST BUSH', 'stick'], ['snowdrift', 'SNOWDRIFT', 'fiber']]) if (!OBJ[id]) wgObj(id, tool ? { name, kind: 'plant', solid: 1, tool, hp: 3, drops: [DR(drop, 1, 2)] } : { name, kind: 'plant', solid: 0, hp: 1, drops: [DR(drop, 1, 1)] });
   BIOMES.forest.veg.push(['fallen_log', 1.1]); BIOMES.snow.veg.push(['frostbush', 1.6], ['snowdrift', 1.4]);
-  Object.assign(BIOMES.beach, { dens: 0.17 }); Object.assign(BIOMES.desert, { dens: 0.12 }); Object.assign(BIOMES.meadow, { dens: 0.18 }); Object.assign(BIOMES.snow, { dens: 0.18 }); BIOMES.beach.veg.push(['driftwood', 1.4], ['starfish', 1.1], ['beachgrass', 5], ['palm', 1.5]);
+  Object.assign(BIOMES.beach, { dens: 0.17 }); Object.assign(BIOMES.desert, { dens: 0.12 }); Object.assign(BIOMES.meadow, { dens: 0.15 }); Object.assign(BIOMES.snow, { dens: 0.16 }); BIOMES.beach.veg.push(['driftwood', 1.4], ['starfish', 1.1], ['beachgrass', 5], ['palm', 1.5]);
   dec('beehive', 'BEEHIVE', { kind: 'hive', tick: 1, tool: 'axe', hp: 4 }, [1, { wood: 6, fiber: 4 }], 'bench');
   dec('sprinkler', 'SPRINKLER', { kind: 'sprinkler', tick: 1, hp: 4, anim: 1 }, [1, { copper: 3, glass: 1 }], 'anvil');
   dec('lamppost', 'LAMP POST', { kind: 'light', light: 120, hp: 6 }, [1, { iron: 2, glass: 1, torch: 1 }], 'anvil');

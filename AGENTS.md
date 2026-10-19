@@ -26,7 +26,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 
 | File | Contents |
 |---|---|
-| `wg_*.js`, `lang_hu_wg.js` | **Wildgrove** survival mode (`G.state === 'wg'`), self-contained: `wg_data` (items/objects/recipes, append-only ids), `wg_world` (seeded chunks, caves), `wg_art`/`wg_art2` (sprites), `wg_game` (session `WGS`, mining, use), `wg_mobs`, `wg_render`, `wg_ui`, `wg_main` (screens, play loop), `wg_store` (IndexedDB, `.sgworld` export/import), `wg_net` (host-authoritative MQTT+WebRTC). Server: `tools/wg-server.mjs`. Tests: `sh qa/_wg_all.sh` |
+| `wg_*.js`, `lang_hu_wg.js` | **Wildgrove** survival mode (`G.state === 'wg'`), self-contained: `wg_data` (items/objects/recipes, append-only ids), `wg_world` (seeded chunks, caves), `wg_art`/`wg_art2` (sprites), `wg_game` (session `WGS`, mining, use), `wg_mobs`, `wg_render`, `wg_ui`, `wg_main` (screens, play loop), `wg_store` (IndexedDB, `.sgworld` export/import), `wg_net` (host-authoritative MQTT+WebRTC). Server: `tools/wg-server.mjs`. Each chunk's ground is baked once (`wgChunkArt`); a ground change repaints only that tile and its neighbours (`wgDirty(..., true)` lists them, `wgChunkReady` paints), an object change repaints nothing, chunks next to the view are baked ahead and far ones let go (`wgChunkUpkeep`). Natural ground stays calm: one small feature per tile at most. Tests: `sh qa/_wg_all.sh` (generation and density, save and reload, every item obtainable, frame cost, co-op join...) |
 | `palette.js` | `PAL` (the one palette), `THEMES` (per-land tile colour slots and land names) |
 | `save.js` | `Save`: settings, lifetime stats, found items, vault, Garden levels, wands, name, robe (localStorage, fails soft) |
 | `gfx.js` | sprite registry, atlas baking, `drawS` / `drawFeet` / `drawGlow`, shadow, ring; art tools `sculpt`, `stamp`, `autoOutline`, `grid` |
@@ -84,6 +84,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 nothing ships): `layouts` (every `*LAYOUT(S)` const: size, door lanes, BFS reachability),
 `sheet [regex]` (sprite contact sheet at 3x) and `bot [land] [floors] [items]` (an invulnerable bot
 clears a run, holding the given items, and reports errors and frame times). Run `layouts` after touching any layout.
+The headless browser itself lives in `tools/browser.mjs` (`open()` gives `ev`, `shot`, `press`, `realErrors`,
+`close`; it finds Chrome or Edge, or takes `CHROME=`); the `qa/` scripts import it through `qa/lib.mjs`.
 
 `tools/casino_check.mjs` works out every casino game's return to player from its real
 tables (reel strips, paytables, all 216 Sic Bo rolls); run it after touching any odds. Chips
