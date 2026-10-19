@@ -189,7 +189,7 @@ function drawWellArcs(ox, oy, room) {
 // ---------- Moving water / twinkling void in pits ----------
 function drawPitLife(room, theme, ox, oy) {
   if (!room.pits || theme === 'cloud') return; // the open sky is still
-  const crystal = theme === 'crystal' || theme === 'well', key = crystal ? 'Y' : THEMES[theme].h;
+  const crystal = !!(PIT[theme] && PIT[theme].glint), key = crystal ? 'Y' : THEMES[theme].h; // chasms and sky twinkle
   for (const [x, y, h] of room.pits) {
     if (room.tiles[((y - OY) >> 4) * COLS + (x >> 4)] !== T_PIT) continue; // frozen over, filled in
     // keep clear of the far bank (scenery.js draws it along a pool's top edge)

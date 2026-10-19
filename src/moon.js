@@ -58,8 +58,9 @@ const MN_ = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); retur
 const _mnRock = rockArt;
 rockArt = function (room, c, r, theme) { return theme === 'moon' && room.wellIdx && room.wellIdx.has(r * COLS + c) ? 'rock_moonw' : _mnRock(room, c, r, theme); };
 
-// moss tufts, fallen petals and the odd star in the grass
-THEMES.moon.paint = function (g, room) {
+// moss tufts, fallen petals and the odd star in the grass (with scenery, the ground has its own)
+THEMES.moon.paint = function (g, room, scn) {
+  if (scn) return;
   const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
   for (let r = 2; r <= 11; r++) for (let c = 1; c <= 22; c++) {
     const i = r * COLS + c, x = c * 16, y = OY + r * 16, h = hash(c, r, room.seed);
@@ -806,3 +807,110 @@ function drawPond(o, x, y) {
   for (let i = 0; i < 3; i++) if (Math.floor(G.time * 2 + i * 1.7) % 3 === 0) rect(x - 6 + i * 6, y - 6 + (i % 2) * 2, 1, 1, 'w');
   if (!o.used && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 2, y - 14);
 }
+// ---------- Scenery (scenery.js) ----------
+// A night garden on the moon: violet moss with a few shallow craters, ponds of sky, silver
+// trees, crescent pillars, standing stones and a moon dial; moon-stone walls with round windows.
+(function moonArt() {
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  const soften = (rows, k) => rows.map((row, y) => row.split('').map((c, x) => {
+    if (c !== '0') return c;
+    const at = (i, j) => (rows[j] && rows[j][i]) || '.';
+    return at(x - 1, y) !== '.' && at(x + 1, y) !== '.' && at(x, y - 1) !== '.' && at(x, y + 1) !== '.' && at(x - 1, y - 1) !== '.' && at(x + 1, y + 1) !== '.' ? k : c;
+  }).join(''));
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  const rowsOf = (name) => _defs.find(d => d.name === name).rows;
+  // a silver tree: a round crown of pale leaves on a dark trunk, white blossoms in it
+  const crown = sculpt(42, 46, [
+    { e: [21, 14, 15, 11], ramp: 'dmlL' },
+    { e: [10, 20, 8.5, 7], ramp: 'dmlL' }, { e: [32, 20, 8.5, 7], ramp: 'dmlL' },
+    { e: [16, 25, 8, 6], ramp: 'dmlL' }, { e: [27, 25, 8, 6], ramp: 'dmlL' },
+    { e: [15, 9, 7, 5.5], ramp: 'dmlL' },
+  ]);
+  const trunk = sculpt(42, 46, [
+    { e: [21, 43.5, 10, 2.5], ramp: '1123' },
+    { r: [17, 25, 8, 19, 3], ramp: '1123' },
+  ]);
+  const flowers = [[13, 7], [26, 9], [8, 16], [34, 15], [20, 18], [29, 23], [12, 24]];
+  def('gi_mtree', comp(42, 46, [
+    [trunk, 0, 0],
+    [['.1.', '11.'], 19, 35],
+    [soften(crown, 'd'), 0, 0],
+    ...flowers.map(([x, y]) => [['.w.', 'wYw', '.w.'], x, y]),
+    [['3.....2', '2.3..32'], 7, 43],
+  ]));
+  def('gi_mtree2', rowsOf('gi_mtree'), { legend: { w: 'q', Y: 'P' } });
+  // a slender pillar with a gold crescent on top (a 1x2 post)
+  const pil = grid(16, 46).fill((x, y) => {
+    const d = x + 0.5 - 8;
+    // the crescent: a disc with a bite out of its upper right
+    const cx = d, cy = y - 7.5;
+    if (Math.hypot(cx, cy) <= 5.5 && Math.hypot(cx - 2.8, cy + 0.8) > 4.4) return cx < -2 ? 'Y' : cy > 3 ? 'o' : 'y';
+    if (y >= 13 && y <= 15 && Math.abs(d) <= 3) return y === 13 ? 'L' : d > 1.5 ? 'm' : 'l';
+    if (y > 15 && y < 39 && Math.abs(d) <= 2.5) return d < -1 ? 'L' : d > 1 ? 'm' : 'l';
+    if (y >= 39 && y <= 43 && Math.abs(d) <= 6) return y === 39 || d < -4.5 ? 'L' : d > 4 || y === 43 ? 'm' : 'l';
+    return null;
+  }).rows();
+  def('gi_mpillar', comp(16, 46, [[autoOutline(pil), 0, 0], [['d', '.', 'd', '.', 'd'], 8, 22], [['CC'], 7, 36]]));
+  // a standing stone with a crescent cut into it, a moon dial, a pot of silver flowers
+  A('ob_mstone', [
+    '................',
+    '................',
+    '......LLl.......',
+    '.....LlllLm.....',
+    '.....LlCCllm....',
+    '.....LCClllm....',
+    '.....LCllllm....',
+    '.....LCClllm....',
+    '.....LlCCllm....',
+    '.....Llllllm....',
+    '.....Llllllm....',
+    '....3Llllllmd...',
+    '...32Lllllmmd2..',
+    '....2ddddddd2...',
+    '................',
+    '................']);
+  A('ob_moondial', [
+    '................',
+    '................',
+    '................',
+    '.......y........',
+    '......yo........',
+    '.....LyoLLm.....',
+    '...LLlllllllm...',
+    '...lLLlLlLllm...',
+    '....mmmmmmmm....',
+    '......lllm......',
+    '......Lllm......',
+    '......Lllm......',
+    '.....LLlllm.....',
+    '....mmmmmmmd....',
+    '................',
+    '................']);
+  def('bk_mpot', stamp(sculpt(16, 16, [
+    { e: [5.5, 5, 3.2, 3], ramp: 'dmlL' }, { e: [10.5, 5, 3.2, 3], ramp: 'dmlL' }, { e: [8, 3.5, 3, 2.5], ramp: 'dmlL' },
+    { r: [4, 9, 8, 6, 2], ramp: '1233' },
+    { r: [3, 7, 10, 3, 1], ramp: '1234', hi: false },
+  ]), 4, 2, '.w....\nwYw.w.\n.w.wYw\n....w.'));
+  // on the wall: a crescent moon, a round window full of night sky
+  A('fc_crescent', [
+    '.........',
+    '....Yyy..',
+    '...Yy....',
+    '..Yy.....',
+    '..Yy.....',
+    '..yo.....',
+    '...oo....',
+    '....ooo..',
+    '.........']);
+  A('fc_moonwin', [
+    '...........',
+    '...mmmmm...',
+    '..m10101m..',
+    '.m0001000m.',
+    '.m00000Y0m.',
+    '.m0w00000m.',
+    '.m0000010m.',
+    '..m00w00m..',
+    '...mmmmm...',
+    '...........']);
+})();

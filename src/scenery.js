@@ -5,7 +5,7 @@
 // same way. It is baked into the room's static canvas (renderRoomStatic); tall pieces
 // (trees, palms, pillars) are drawn with the actors so heroes can walk behind them.
 // Lands not in SCN_LANDS keep their tile renderer (renderRoomPlain, level.js).
-const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun']);
+const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun', 'moon']);
 
 // ---------- Noise (pure functions of position and seed) ----------
 const _u = (h) => h / 4294967296;
@@ -117,6 +117,7 @@ const SCN_GROUND = {
   beach: { base: 'a', dark: 'A', light: 'e', tuft: { a: 'e', A: 'a', e: 'N' }, speck: { a: 'A', A: 'w', e: 'a' }, hi: 0.64, lo: 0.2 },
   crystal: { base: 'l', dark: 'm', light: 'L', tuft: { l: 'm', m: 'd', L: 'l' }, speck: { l: 'L', m: 'l', L: 'w' }, hi: 0.72, lo: 0.2 },
   well: { base: '2', dark: '1', light: '3', tuft: { 2: '1', 1: '0', 3: '2' }, speck: { 2: '3', 1: '2', 3: '4' }, hi: 0.75, lo: 0.22 },
+  moon: { base: '2', dark: '1', light: '3', tuft: { 2: '1', 1: '0', 3: '2' }, speck: { 2: '3', 1: '2', 3: '4' }, hi: 0.86, lo: 0.22 },
   sun: { base: 'a', dark: 'e', light: 'A', tuft: { a: 'e', e: 'N', A: 'a' }, speck: { a: 'A', e: 'a', A: 'w' }, hi: 0.78, lo: 0.26 },
   snow: { base: 'L', dark: 'l', light: 'w', tuft: { L: 'l', l: 'C', w: 'L' }, speck: { L: 'w', l: 'L', w: 'C' }, hi: 0.8, lo: 0.24 },
 };
@@ -173,6 +174,21 @@ const GROUND_TEX = {
       if (w > 0.95 && vnoise(x, y, 9, s + 5) > 0.56) {
         const c = cls[y * VW + x];
         b.px[y * VW + x] = p32(c === 1 ? 'a' : c === 2 ? 'N' : 'e');
+      }
+    }
+  },
+  // a few shallow craters in the moss: shade inside the upper left rim, light on the lower right
+  moon(b, cls, s) {
+    const r = scnRand(s ^ 0xc4a7), n = 2 + Math.floor(r() * 3);
+    for (let k = 0; k < n; k++) {
+      const R = 4 + r() * 6, cx = IN_X0 + 20 + r() * (IN_X1 - IN_X0 - 40), cy = IN_Y0 + 16 + r() * (IN_Y1 - IN_Y0 - 32);
+      for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R * 1.5); x <= cx + R * 1.5; x++) {
+        const dx = (x + 0.5 - cx) / 1.5, dy = y + 0.5 - cy, d = Math.hypot(dx, dy), i = y * VW + x;
+        if (d > R + 1) continue;
+        const up = (dx + dy) / (d || 1) < -0.2, down = (dx + dy) / (d || 1) > 0.2;
+        if (d > R) { if (up) b.px[i] = p32('3'); else if (down) b.px[i] = p32('1'); }
+        else if (d > R - 1.6) b.px[i] = p32(up ? '1' : down ? '3' : '2');
+        else if (d < R * 0.5 && cls[i] !== 1) b.px[i] = p32('2');
       }
     }
   },
@@ -273,6 +289,17 @@ const SCN_DECALS = {
     ],
     wall: [_G('.d. dmd'), _G('.C. cB.'), _G('m. dm')],
   },
+  moon: {
+    cluster: [[_G('.4. 4w4 .4.'), 3], [_G('.l. lql .l.'), 2]], // moonflowers
+    single: [
+      [_G('q. .q'), 2], // fallen petals
+      [_G('4.4 .4.'), 2], // silver grass
+      [_G('.lm. lLlm .md.'), 3], // a moonstone
+      [_G('.CC. CwCC ..l.'), 1], // a glow cap
+      [_G('3.3. .3.3'), 1], // a rabbit's tracks
+    ],
+    wall: [_G('.3.3 3.3.'), _G('3.3 .3.'), _G('.4. 4w4 .4.')],
+  },
   sun: {
     cluster: [[_G('.A. AaA'), 3], [_G('..A. .AaA AaaA'), 2]],
     single: [
@@ -351,7 +378,7 @@ function scatterDecals(b, room, theme, cls) {
 // ---------- Wall caps: one endless texture per land ----------
 // A pure function of play-view position, so the room's caps and the screen margins
 // around it (drawBackdrop) meet without a seam.
-const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606 };
+const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606, moon: 707 };
 const CAP = {
   // a clipped hedge: big leafy clumps lit from the top left, now and then a flower
   meadow(x, y, s) {
@@ -387,6 +414,17 @@ const CAP = {
     }
     const v = litBump(w.dx, w.dy, 8.5) - ((id >>> 8) & 3) * 0.07;
     return v > 0.8 ? '4' : v > 0.35 ? '3' : v > -0.15 ? '2' : '1';
+  },
+  // moon rock: big pale boulders, a small crater now and then
+  moon(x, y, s) {
+    const w = worley(x, y, 12, s, 0.8), id = w.id;
+    if (w.f2 - w.f1 < 1.2) return 'd';
+    if ((id & 7) === 2) {
+      const d = Math.hypot(w.dx + 1, w.dy + 1);
+      if (d < 2.6) return d < 1.4 ? 'm' : w.dx + w.dy < -2 ? 'd' : 'L';
+    }
+    const v = litBump(w.dx, w.dy, 8.5) - ((id >>> 8) & 3) * 0.07;
+    return v > 0.75 ? 'L' : v > 0.3 ? 'l' : v > -0.15 ? 'm' : 'd';
   },
   // the temple's roof of sandstone blocks, a turquoise inlay now and then, sand drifted over it
   sun(x, y, s) {
@@ -466,6 +504,7 @@ const PIT = {
   beach: { face: ['A', 'a', 'e', 'N'], shade: 't', body: 'T', deep: 'T', ripple: 'C', edge: 'C', foam: 'w', wet: 'e' },
   crystal: { face: ['L', 'l', 'm', 'm', 'd', 'd', '1', '1', '0'], glint: ['1', '1', '1', '2', 'c'], tooth: _G('0C0 0c0 .0.') },
   well: { face: ['4', '3', '2', '2', '1', '1', '0'], glint: ['1', '2', 'Y', 'w', 'c'], tooth: _G('0Y0 .0.') },
+  moon: { face: ['l', 'm', 'd', 'd', '1', '1', '0'], glint: ['Y', 'w', '4', 'c', 'Y'], shade: '1', gn: 127 },
   sun: { face: ['A', 'a', 'e', 'N', 'n'], shade: 't', body: 'T', deep: 't', ripple: 'C', edge: 'C', foam: 'w', wet: 'e' },
   snow: { face: ['w', 'L', 'l', 'C', 'c'], shade: 'b', body: 'B', deep: 'b', ripple: 'c', edge: 'C', foam: 'w', wet: 'C' },
 };
@@ -499,8 +538,8 @@ function drawPitsPx(b, room, theme) {
       // short ripples, in rows
       if (k === P.body && y % 3 === 0 && (hash((x + y * 5) >> 2, y, s) & 7) === 0) k = P.ripple;
     } else {
-      k = '0';
-      if (up > F + 2 && (hash(x, y, s + 1) & 255) === 0) k = P.glint[hash(x, y, s + 2) % P.glint.length];
+      k = P.shade && up - wob < F + 3 ? P.shade : '0';
+      if (up > F + 2 && (hash(x, y, s + 1) & (P.gn || 255)) === 0) k = P.glint[hash(x, y, s + 2) % P.glint.length];
     }
     b.px[i] = p32(k);
   }
@@ -559,6 +598,8 @@ const RIDGE = {
   },
   crystal: { top: '1234', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '1' : '2'; } },
   well: { top: '0123', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '0' : '1'; } },
+  // a low wall of moon stone, pitted
+  moon: { top: 'dmlL', cell: 10, h: 7, front(x, y, row, s) { return row === 6 || (hash(x >> 1, row >> 1, s) & 7) === 0 ? 'd' : row === 0 ? 'l' : 'm'; } },
   // sandstone blocks under a gold and turquoise trim
   sun: {
     top: 'nNaA', cell: 10, h: 7,
@@ -655,6 +696,7 @@ const FACE_GROW = {
   crystal: { foot: ['C', 'c'], n: 0.1 },
   well: { foot: ['Y', '3'], n: 0.06 },
   snow: { foot: ['w', 'L'], n: 0.35, spill: ['w', 'l'], drip: { k: ['w', 'C'], n: 0.12 } },
+  moon: { foot: ['3', '2'], n: 0.35, ivy: ['1', '3', '4'] },
   // a frieze of gold pyramids on turquoise over two courses of sandstone blocks
   sun: {
     foot: ['A', 'a'], n: 0.3,
@@ -685,8 +727,9 @@ const FACE_THINGS = {
   well: [['fc_rune', 3, 5, 9], ['fc_lamp', 1, 3, 9, [3, 3]]],
   snow: [['fc_wreath', 2, 4, 11], ['fc_frost', 2, 4, 10], ['fc_lamp', 0.6, 4, 9, [3, 3]]],
   sun: [['fc_sundisc', 1, 7, 17], ['fc_cartouche', 2, 2, 10], ['fc_sconce', 0.8, 2, 9, [3, 3]]],
+  moon: [['fc_crescent', 2, 3, 9], ['fc_moonwin', 2, 3, 11], ['fc_lamp', 0.6, 3, 9, [3, 3]]],
 };
-const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce' };
+const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce', moon: 'fc_lamp' };
 // `F`: where the strip goes ({ x0, x1, y0 }) and the door gap to keep bare ([from, to]).
 const FACE_ROOM = { x0: 16, x1: VW - 16, y0: OY + 16, gap: [160, 224] };
 function drawFacePx(b, room, theme, things, F) {
@@ -731,16 +774,17 @@ function drawFacePx(b, room, theme, things, F) {
     for (let j = 0; j < len; j++) put(x, top + j, G.drip.k[j === len - 1 ? 0 : 1]);
     put(x, top + len, '0'); x += 2;
   }
-  // ivy hanging from the top in the meadow, a fishing net on the shore
+  // ivy hanging from the top in the meadow (moonlit vines in the Moon Garden), a fishing net on the shore
+  const IV = G.ivy === true ? ['g', 'G', 'h'] : G.ivy;
   if (G.ivy) for (let n = 0, m = Math.max(3, Math.round((X1 - X0) / 120)); n < m; n++) {
     const x = X0 + 4 + Math.floor(r() * (X1 - X0 - 8)), len = 5 + Math.floor(r() * 8);
     if (!free(x - 2, 5)) continue;
     for (let j = 0; j < len; j++) {
       const X = x + (((j + 1) >> 2) & 1);
-      put(X, y0 + 1 + j, 'g');
-      if (j % 2 === 1) put(X + (j % 4 === 1 ? -1 : 1), y0 + 1 + j, j % 4 === 1 ? 'G' : 'h');
+      put(X, y0 + 1 + j, IV[0]);
+      if (j % 2 === 1) put(X + (j % 4 === 1 ? -1 : 1), y0 + 1 + j, j % 4 === 1 ? IV[1] : IV[2]);
     }
-    put(x + 1, y0 + len, 'G');
+    put(x + 1, y0 + len, IV[1]);
   }
   if (G.net && r() < 0.6) {
     const w = 18 + Math.floor(r() * 10), x0 = X0 + 8 + Math.floor(r() * (X1 - X0 - 16 - w));
@@ -782,6 +826,7 @@ const OBSTACLES = {
   well: ['rock_well', 'ob_pillar'],
   snow: ['rock_snow', 'ob_iceblock', 'ob_snowstump'],
   sun: ['rock_sun', 'ob_column', 'ob_sprout'],
+  moon: ['rock_moon', 'ob_mstone', 'ob_moondial'],
 };
 const BREAKABLES = {
   meadow: ['brk_meadow', 'bk_pot', 'bk_hay'],
@@ -790,6 +835,7 @@ const BREAKABLES = {
   well: ['brk_well', 'bk_jar_well'],
   snow: ['brk_snow', 'bk_cratesnow'],
   sun: ['brk_sun', 'bk_basket'],
+  moon: ['brk_moon', 'bk_mpot'],
 };
 // What flies when a breakable breaks.
 const BRK_BITS = {
@@ -797,10 +843,10 @@ const BRK_BITS = {
   brk_beach: ['r', 'R', 'y'], bk_crate: ['N', 'n', 'O'], bk_amphora: ['n', 'N', 'O'],
   brk_crystal: ['2', '3', 'c'], bk_jar: ['C', 'c', 'q'], brk_well: ['2', '3', 'Y'], bk_jar_well: ['C', 'c', 'Y'],
   bk_vein: ['C', 'c', 'w', '3'], brk_snow: ['r', 'R', 'y'], bk_cratesnow: ['N', 'n', 'w'],
-  brk_sun: ['n', 'o', 'O'], bk_basket: ['O', 'o', 'y'],
+  brk_sun: ['n', 'o', 'O'], bk_basket: ['O', 'o', 'y'], brk_moon: ['l', '4', 'y'], bk_mpot: ['2', '3', 'L'],
 };
 // A land's own room shapes built of breakables (or rocks) are built of one kind (LAND_LAYOUTS).
-const LAY_BRK = { maze: 'brk_meadow', wreck: 'bk_crate', vein: 'bk_vein', scarab: 'brk_sun' }, LAY_ROCK = { slalom: 'ob_flag', oasis: 'ob_sprout' };
+const LAY_BRK = { maze: 'brk_meadow', wreck: 'bk_crate', vein: 'bk_vein', scarab: 'brk_sun', petal: 'brk_moon' }, LAY_ROCK = { slalom: 'ob_flag', oasis: 'ob_sprout' };
 const TALL = {
   meadow: ['gi_tree', 'gi_tree', 'gi_bloom'],
   beach: ['gi_palm', 'gi_castle'],
@@ -808,11 +854,12 @@ const TALL = {
   well: ['gi_obelisk'],
   snow: ['gi_pine'],
   sun: ['gi_spyramid', 'gi_palm'],
+  moon: ['gi_mtree', 'gi_mtree2'],
 };
 // A land room's own tall piece (the village's cabins).
 const LAY_TALL = { village: 'gi_hut' };
 // Lands where two rocks stacked in a column stand as one tall post (an obelisk).
-const POST = { sun: ['gi_sobelisk'] };
+const POST = { sun: ['gi_sobelisk'], moon: ['gi_mpillar'] };
 // Each room uses two of a land's kinds, so a room looks planned rather than random.
 function roomPick(list, room, salt, c, r) {
   const s = room.seed | 0, n = list.length, a = hash(salt, 1, s) % n, b = n > 1 ? (a + 1 + hash(salt, 2, s) % (n - 1)) % n : a;
@@ -833,6 +880,7 @@ const RING = {
   well: { line: '1', dot: ['Y', 'w', 'c'] },
   snow: { line: 'l', dot: ['c', 'C', 'B'] },
   sun: { line: 'e', dot: ['y', 'T', 'O'] },
+  moon: { line: '1', dot: ['Y', '4', 'c'] },
 };
 function drawRingPx(b, theme) {
   const R = RING[theme] || RING.meadow, cx = VW / 2, cy = OY + 112;
