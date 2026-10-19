@@ -1,4 +1,5 @@
-// Wildgrove's little wishes: three different ones a day, the same for the same day and seed, not the same every day;
+// Wildgrove's little wishes: three different ones a day, the same for the same day and seed, not the same every day, a
+// word when a new day brings them;
 // chopping, breaking, picking, cutting, eating, an emote and a walk are counted (a jump is no walk); all three granted
 // bring one gift, not two; a new day starts over; the card beside the pause menu; LITTLE HELPER; Hungarian; a look.
 import { open, waitFor, sleep } from './lib.mjs';
@@ -28,12 +29,15 @@ r = await g.ev(`(() => { const S = wgWishState(), L = wgWishesToday(), inv = () 
 ok(r[0] === '1,0,0' && r[1] === 'WISH GRANTED!', 'a wish granted: ' + JSON.stringify(r.slice(0, 2)));
 ok(r[2] === '1,1,1' && r[3] === 1 && r[4] && r[5] === 1 && r[6] === 'ALL WISHES GRANTED! A GIFT FROM THE FROG' && r[7] && r[8] === 1, 'all three bring one gift, not two: ' + JSON.stringify(r.slice(2, 9)));
 ok(r[9] === '0,0,0' && r[10] === 0 && r[11] === 0, 'a new day starts over: ' + JSON.stringify(r.slice(9)));
+r = await g.ev(`(() => { WGS.scr = 'play'; updateWG(1 / 60); WGS.toast = null; const d0 = WGS.day; WGS.day = d0 + 1; updateWG(1 / 60); const a = WGS.toast && WGS.toast.msg, wait = WGWI.tell - WGS.t;
+  WGWI.tell = WGS.t - 0.01; updateWG(1 / 60); const b = WGS.toast && WGS.toast.msg; WGS.day = d0; updateWG(1 / 60); WGWI.tell = 0; WGS.toast = null; return [a, wait > 3, b]; })()`);
+ok(r[0] !== 'THE FROG HAS NEW WISHES' && r[1] && r[2] === 'THE FROG HAS NEW WISHES', 'a new day brings a word about the new wishes, a little later: ' + JSON.stringify(r));
 r = await g.ev(`(() => { const W = wtext; let seen = []; wtext = function (s) { seen.push(String(s)); return W.apply(this, arguments); };
   try { WGS.scr = 'pause'; WGS.ui = {}; wgDrawPause(); const a = seen.includes('WISHES'); seen = []; WGS.ui = { set: true }; wgDrawPause(); return [a, seen.includes('WISHES')]; } finally { wtext = W; WGS.scr = 'play'; WGS.ui = {}; } })()`);
 ok(r[0] && !r[1], 'the card beside the pause menu, not over its settings: ' + JSON.stringify(r));
 r = await g.ev(`(() => { const m = WGS.world.meta; m.ach = {}; m.stats.wishes = 4; wgAchTick(); const a = !!m.ach.wishes; m.stats.wishes = 5; wgAchTick(); return [a, !!m.ach.wishes]; })()`);
 ok(!r[0] && r[1], 'LITTLE HELPER after five: ' + JSON.stringify(r));
-const EN = await g.ev(`WG_WISHES.map(wgWishText).concat('WISHES', 'WISH GRANTED!', 'ALL WISHES GRANTED! A GIFT FROM THE FROG', 'LITTLE HELPER', 'GRANT THE FROG ALL THREE WISHES FIVE TIMES')`);
+const EN = await g.ev(`WG_WISHES.map(wgWishText).concat('WISHES', 'WISH GRANTED!', 'ALL WISHES GRANTED! A GIFT FROM THE FROG', 'LITTLE HELPER', 'GRANT THE FROG ALL THREE WISHES FIVE TIMES', 'THE FROG HAS NEW WISHES')`);
 r = await g.ev(`(() => { Save.settings.lang = 'hu'; const a = ${JSON.stringify(EN)}.map(s => tr(s)); Save.settings.lang = 'en'; return a; })()`);
 ok(r.every((s, i) => s !== EN[i]), 'Hungarian: ' + JSON.stringify(r));
 // a look: the pause menu with today's wishes, one granted, one along the way

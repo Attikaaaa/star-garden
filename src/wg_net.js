@@ -82,7 +82,7 @@ function wgnHostMsg(L, m) {
   else if (m.t === 'ping') wgnSend(L, { t: 'pong', s: m.s });
   else if (m.t === 'chat' && String(m.msg || '')[0] === '/') { const r = wgnPerm().ops.includes(L.rj) ? wgnCmd(m.msg, L) : 'ONLY OPERATORS CAN DO THAT'; wgnSend(L, { t: 'chat', who: '', msg: r }); }
   else if (m.t === 'chat') { const msg = String(m.msg || '').slice(0, 60); wgnAll({ t: 'chat', who: L.name, msg }, null); WGN.chat.push({ who: L.name, msg, t: 8 }); }
-  else if (m.t === 'sign') { if (wgSignSet(m.k, m.v)) wgnAll({ t: 'sign', k: m.k, v: WGS.signs[m.k] || '' }, L); }
+  else if (m.t === 'sign') { const at = /^([a-z])(-?\d+),(-?\d+)$/.exec(String(m.k || '')); if (at && at[1] === L.dim && Math.hypot(+at[2] * 16 + 8 - L.x, +at[3] * 16 + 8 - L.y) < 16 * 8 && wgSignSet(m.k, m.v)) wgnAll({ t: 'sign', k: m.k, v: WGS.signs[m.k] || '' }, L); }
   else if (m.t === 'bye') wgnDrop(L, false);
 }
 // host / operator commands, typed in chat: /KICK name, /BAN name, /UNBAN name, /OP name, /WHITE ON|OFF|ADD name|DEL name, /PASS word|OFF, /TIME DAY|NIGHT, /LIST, /SAY text

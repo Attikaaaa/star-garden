@@ -45,8 +45,10 @@ const _wgUpdWish = updateWG;
 updateWG = function (dt) {
   _wgUpdWish(dt);
   const w = WGS.world, p = WGS.p; if (!w || !p) { WGWI.w = null; return; }
-  if (WGWI.w !== w || WGWI.d !== WGS.dim) { WGWI.w = w; WGWI.d = WGS.dim; WGWI.x = p.x; WGWI.y = p.y; }
+  if (WGWI.w !== w || WGWI.d !== WGS.dim) { WGWI.w = w; WGWI.d = WGS.dim; WGWI.x = p.x; WGWI.y = p.y; WGWI.day = WGS.day; }
+  if (WGWI.day !== WGS.day) { WGWI.day = WGS.day; WGWI.tell = WGS.t + 4; } // a new day: a word about the new wishes, once the morning's own words are read
   if (WGS.scr !== 'play') return;
+  if (WGWI.tell && WGS.t >= WGWI.tell) { WGWI.tell = 0; wgToast('THE FROG HAS NEW WISHES', 3); }
   const d = Math.hypot(p.x - WGWI.x, p.y - WGWI.y); WGWI.x = p.x; WGWI.y = p.y;
   if (d > 0 && d < 24) { WGWI.acc = (WGWI.acc || 0) + d / 16; if (WGWI.acc >= 1) { const n = Math.floor(WGWI.acc); WGWI.acc -= n; wgWishCount('walk', n); } } // a jump (a waystone, the feather) is no walk
   const S = wgWishState(), L = wgWishesToday();

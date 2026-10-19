@@ -37,17 +37,19 @@ r = await g.ev(`(() => { const { x, y, k } = _pa, w = WGS.world, d = WGS.dim, v 
   try { wgDrawObj(O_ID.easel, x + 1, y - 1, 100, 100); } finally { ctx.drawImage = D; } const px = C.getContext('2d').getImageData(4, 9, 1, 1).data.slice(0, 3).join();
   wgSetObj(w, d, x + 1, y - 1, 0); const gone = !(k in w.meta.paints); wgSetObj(w, d, x + 1, y - 1, O_ID.easel); wgPaintSet(k, v); return [n, px, gone]; })()`);
 ok(r[0] === 1 && r[1] === '60,196,90' && r[2], 'the picture stands on the easel, and goes with a broken easel: ' + JSON.stringify(r));
-r = await g.ev(`(() => { const role = WGN.role, A = wgnAll, S = wgnSend, sent = [], L = { pid: 2 }, { x, y, k } = _pa, res = {}, v = '1'.repeat(144);
+r = await g.ev(`(() => { const role = WGN.role, A = wgnAll, S = wgnSend, sent = [], { x, y, k } = _pa, L = { pid: 2, dim: WGS.dim, x: x * 16, y: y * 16 }, res = {}, v = '1'.repeat(144);
   wgnAll = (m, ex) => sent.push(['all', m.t, m.k, ex === L ? 'L' : ex === null ? 'none' : '?']); wgnSend = (to, m) => sent.push(['send', m.t, m.k]);
   try {
     WGN.role = 'host'; wgnHostMsg(L, { t: 'paint', k, v }); wgnHostMsg(L, { t: 'paint', k, v: '2'.repeat(144) }); res.host = [WGS.world.meta.paints[k][0], JSON.stringify(sent)];
     sent.length = 0; L.paintT = 0; wgnHostMsg(L, { t: 'paint', k, v: '9'.repeat(144) }); L.paintT = 0; wgnHostMsg(L, { t: 'paint', k, v: '1'.repeat(10) }); L.paintT = 0; wgnHostMsg(L, { t: 'paint', k: 'o0,0', v });
-    res.bad = [sent.length, 'o0,0' in WGS.world.meta.paints];
+    const n0 = WGS.world.chunks.size; L.paintT = 0; wgnHostMsg(L, { t: 'paint', k: WGS.dim + '90000,90000', v }); L.paintT = 0; wgnHostMsg(L, { t: 'paint', k: 'q' + x + ',' + y, v });
+    L.x += 16 * 20; L.paintT = 0; wgnHostMsg(L, { t: 'paint', k, v: '4'.repeat(144) }); L.x -= 16 * 20;
+    res.bad = [sent.length, 'o0,0' in WGS.world.meta.paints, WGS.world.chunks.size - n0, WGS.world.meta.paints[k][0]];
     const wl = wgnWelcome({ pid: 3, guest: null }); res.welcome = !!(wl.paints && wl.paints[k]);
     WGN.role = 'client'; wgnClientMsg({}, { t: 'paint', k, v: '3'.repeat(144) }); res.guest = WGS.world.meta.paints[k][0];
   } finally { WGN.role = role; wgnAll = A; wgnSend = S; } return res; })()`);
 ok(r.host[0] === '1' && r.host[1] === JSON.stringify([['all', 'paint', await g.ev('_pa.k'), 'L']]), "the host checks a guest's picture and passes it on, not twice in a breath: " + JSON.stringify(r.host));
-ok(r.bad[0] === 0 && !r.bad[1] && r.welcome && r.guest === '3', "a bad one is dropped; the welcome carries them; a guest takes the host's: " + JSON.stringify(r));
+ok(r.bad[0] === 0 && !r.bad[1] && r.bad[2] === 0 && r.bad[3] === '1' && r.welcome && r.guest === '3', "a bad one, a far one or one from far from the guest is dropped, no ground woken; the welcome carries them; a guest takes the host's: " + JSON.stringify(r));
 r = await g.ev(`(() => { const m = WGS.world.meta; m.ach = {}; m.stats.paint = 1; wgAchTick(); return !!m.ach.paint; })()`);
 ok(r, 'LITTLE ARTIST');
 r = await g.ev(`wgTipLines({ id: 'easel', n: 1 })`);

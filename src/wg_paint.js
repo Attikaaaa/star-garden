@@ -40,6 +40,8 @@ wgnHostMsg = function (L, m) {
   _wgnHostPaint(L, m);
   if (!m || m.t !== 'paint' || !(L.pid > 0)) return;
   const now = performance.now(); if (now - (L.paintT || 0) < 500) return; L.paintT = now;
+  const at = WG_PAINT_KEY.exec(String(m.k || '')); // only an easel beside the guest's hero, so a message never wakes far ground
+  if (!at || at[1] !== L.dim || !(Math.hypot(+at[2] * 16 + 8 - L.x, +at[3] * 16 + 8 - L.y) < 16 * 8)) return;
   if (wgPaintSet(m.k, m.v)) wgnAll({ t: 'paint', k: m.k, v: m.v }, L);
 };
 const _wgnClientPaint = wgnClientMsg;

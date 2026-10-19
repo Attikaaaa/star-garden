@@ -66,6 +66,12 @@ ok(r[0] === '' && r[1] === 0, 'a broken sign loses its words: ' + JSON.stringify
 // a client: the welcome's signs come in, a host message sets one
 r = await g.ev(`(() => { const old = WGN.role; WGN.role = 'client'; WGS.signs = {}; wgSignSet('o1,2', 'HELLO'); const a = WGS.signs['o1,2']; WGN.role = old; return a; })()`);
 ok(r === 'HELLO', 'a client takes the words of the host: ' + JSON.stringify(r));
+// the host takes a guest's words for a sign beside the guest's hero only, and never wakes far ground for one
+r = await g.ev(`(() => { const w = WGS.world, d = WGS.dim, [x, y] = __s, role = WGN.role, A = wgnAll, sent = [], L = { pid: 2, dim: d, x: x * 16, y: y * 16 + 20 }, k = d + x + ',' + y;
+  wgSetObj(w, d, x, y, O_ID.sign); WGS.signs = {}; wgnAll = (m) => sent.push(m.v); const n0 = w.chunks.size;
+  try { WGN.role = 'host'; wgnHostMsg(L, { t: 'sign', k, v: 'NEAR' }); wgnHostMsg(L, { t: 'sign', k: d + '90000,90000', v: 'FAR' }); L.x += 16 * 20; wgnHostMsg(L, { t: 'sign', k, v: 'AWAY' }); }
+  finally { WGN.role = role; wgnAll = A; } return [WGS.signs[k], sent.join(), w.chunks.size - n0]; })()`);
+ok(r[0] === 'NEAR' && r[1] === 'NEAR' && r[2] === 0, "the host takes a guest's words beside the guest only: " + JSON.stringify(r));
 console.log(out.join('\n'));
 console.log('errors', JSON.stringify(g.realErrors()).slice(0, 300));
 const pass = out.every(l => l.startsWith('ok')) && !g.realErrors().length;
