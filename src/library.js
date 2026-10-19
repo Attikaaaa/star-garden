@@ -22,8 +22,9 @@ const libOut = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); re
   def('brk_library', stamp(b, 5, 3, 'r..r\n.rr.'));
 })();
 
-// the floor is a page: faint ruled lines and a pink margin
-THEMES.library.paint = function (g) {
+// the floor is a page: faint ruled lines and a pink margin (the scenery draws its own)
+THEMES.library.paint = function (g, room, scn) {
+  if (scn) return;
   g.fillStyle = PAL.e;
   for (let y = OY + 43; y < OY + 192; y += 12) for (let x = 16; x < VW - 16; x += 2) g.fillRect(x, y, 1, 1);
   g.fillStyle = PAL.q;
@@ -1073,3 +1074,152 @@ function drawLectern(o, x, y) {
   drawFeet(S(o.shut || o.done ? 'lectern_c' : 'lectern_' + o.col), x, y + 1);
   if (!o.shut && !o.done && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 5, y - 24);
 }
+// ---------- Scenery (scenery.js) ----------
+// The Story Library as a room: a page for a floor (ruled lines, the pink margin, a paragraph in
+// pencil), shelves of books in the room's own three colours (bookPx), tall bookcases, reading
+// tables with a green lamp, armchairs, a globe, card catalogue drawers, a grandfather clock,
+// and paper trees in the Pop-up Page.
+(function libArt() {
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  // a tall bookcase (a 2x2 giant): a cornice, four shelves, feet; `low` makes the bottom shelf a cupboard
+  const bookcase = (seed, set, low) => autoOutline(grid(32, 48).fill((x, y) => {
+    if (y < 1 || y > 46 || x < 1 || x > 30) return null;
+    if (y <= 4) return y === 1 ? 'N' : y === 4 ? 'u' : x === 1 ? 'N' : x === 30 ? 'u' : 'n';
+    if (x < 2 || x > 29) return null;
+    if (y >= 45) return x <= 5 ? (x === 2 ? 'n' : 'u') : x >= 26 ? (x === 26 ? 'n' : 'u') : null;
+    if (x <= 3) return x === 2 ? 'N' : 'n';
+    if (x >= 28) return x === 28 ? 'n' : 'u';
+    const k = Math.floor((y - 5) / 10), row = (y - 5) % 10;
+    if (row === 8) return 'N';
+    if (row === 9) return 'n';
+    if (low && k === 3) return x === 15 || x === 16 || row === 0 ? 'u' : (x === 13 || x === 18) && row === 4 ? 'y' : x === 4 || x === 17 ? 'N' : 'n';
+    return bookPx(x - 4 + k * 24, row, seed, set);
+  }).rows());
+  def('gi_bookcase', bookcase(11, [BOOKS[0], BOOKS[1], BOOKS[2]], false));
+  def('gi_bookcase2', bookcase(23, [BOOKS[3], BOOKS[4], BOOKS[5]], true));
+  // a round reading table (a 2x2 giant in the Reading Room): an open book and a green lamp on it
+  const book = autoOutline([
+    '.............',
+    '.wwwwwmLLLLL.',
+    '.wmmmwmLlllL.',
+    '.wwwwwmLLLLL.',
+    '.wmmwwmLllLL.',
+    '.nnnnnnnnnnn.',
+    '.............']);
+  const lamp = autoOutline([
+    '..........',
+    '...GGGG...',
+    '..GhhhhG..',
+    '.GGGGGGGg.',
+    '....yo....',
+    '....Oo....',
+    '...OOOo...',
+    '..........']);
+  def('gi_rtable', comp(40, 36, [
+    [sculpt(40, 36, [
+      { e: [20, 32, 9, 2.5], ramp: 'unnN' },
+      { r: [17, 20, 6, 12, 1], ramp: 'unnN' },
+      { e: [20, 17, 18, 7], ramp: 'uunn' },
+      { e: [20, 15, 18, 7], ramp: 'nNNA' },
+    ]), 0, 0],
+    [book, 6, 11], [lamp, 22, 3],
+  ]));
+  // a red armchair, a globe on a brass stand, a paper tree for the Pop-up Page
+  def('ob_chair', sculpt(16, 17, [
+    { r: [3, 13, 2, 3, 0], ramp: 'uunn' }, { r: [11, 13, 2, 3, 0], ramp: 'uunn' },
+    { r: [3, 1, 10, 10, 3], ramp: 'nrRq' },
+    { r: [4, 8, 8, 5, 1], ramp: 'nrRR' },
+    { r: [1, 6, 4, 8, 2], ramp: 'nrRq' }, { r: [11, 6, 4, 8, 2], ramp: 'nrRq' },
+  ]));
+  let gl = sculpt(16, 20, [
+    { e: [8, 18, 5, 1.6], ramp: 'nnoO' },
+    { r: [7, 12, 2, 6, 0], ramp: 'nnoO' },
+    { e: [8, 7, 6, 6], ramp: 'bBcC' },
+  ]);
+  gl = stamp(gl, 4, 4, 'GG.\nGhG\n.G.');
+  gl = stamp(gl, 9, 7, '.GG\nGgg\n.g.');
+  def('ob_globe', gl);
+  A('ob_popup', grid(16, 22).fill((x, y) => {
+    for (let k = 2; k >= 0; k--) {
+      const ap = 1 + k * 4, base = 6 + k * 4, hw = 3 + k * 2, dx = x + 0.5 - 8;
+      if (y < ap || y > base) continue;
+      const half = (y - ap + 1) * hw / (base - ap + 1);
+      if (Math.abs(dx) > half) continue;
+      return y === base ? 'g' : dx < -half * 0.4 ? 'h' : dx > half * 0.6 ? 'g' : 'G';
+    }
+    if (y >= 15 && y <= 17) return x === 7 ? 'N' : x === 8 ? 'n' : null;
+    if (y === 18) return x >= 3 && x <= 12 ? 'L' : null;
+    if (y >= 19 && y <= 20) return x >= 2 && x <= 13 ? (y === 19 ? 'l' : 'm') : null;
+    return null;
+  }).rows());
+  // a card catalogue cabinet: four drawers with labels and brass pulls
+  A('bk_drawer', [
+    '................',
+    '.NNNNNNNNNNNNNn.',
+    '.Nnnnnnnnnnnnnu.',
+    '.uuuuuuuuuuuuuu.',
+    '.NNNNNNuNNNNNNu.',
+    '.NnAAnnuNnAAnnu.',
+    '.NnnynnuNnnynnu.',
+    '.uuuuuuuuuuuuuu.',
+    '.NNNNNNuNNNNNNu.',
+    '.NnAAnnuNnAAnnu.',
+    '.NnnynnuNnnynnu.',
+    '.uuuuuuuuuuuuuu.',
+    '.uu..........uu.',
+    '................']);
+  // a grandfather clock (a 1x2 post): a hood with the dial, a pendulum behind glass, a plinth
+  A('gi_gclock', grid(18, 47).fill((x, y) => {
+    const edge = (x0, x1) => x === x0 ? 'N' : x === x1 ? 'u' : 'n';
+    if (y >= 1 && y <= 12) {
+      if (x < 2 || x > 15) return null;
+      const ax = x + 0.5 - 9, ay = y + 0.5 - 6;
+      if (y < 6 && ax * ax / 49 + ay * ay / 25 > 1) return null;
+      const d = Math.hypot(x + 0.5 - 9, y + 0.5 - 7);
+      if (d < 3.6) return (x === 8 && y >= 4 && y <= 7) || (y === 7 && x >= 8 && x <= 10) ? 'u' : x + y > 17 ? 'l' : 'L';
+      if (d < 4.6) return d < 4.1 && x + y < 16 ? 'O' : 'o';
+      return y === 12 ? 'u' : edge(2, 15);
+    }
+    if (y >= 13 && y <= 38) {
+      if (x < 4 || x > 13) return null;
+      if (x >= 7 && x <= 10 && y >= 16 && y <= 34) {
+        if (y >= 29 && y <= 32 && Math.hypot(x + 0.5 - 9, y + 0.5 - 30.5) < 2.2) return x < 9 && y < 31 ? 'y' : 'O';
+        if ((x === 8 || x === 9) && y < 30) return x === 8 ? 'O' : 'o';
+        return '1';
+      }
+      return edge(4, 13);
+    }
+    if (y >= 39 && y <= 44) return x < 3 || x > 14 ? null : y === 39 ? 'N' : edge(3, 14);
+    if (y === 45) return x === 3 || x === 4 || x === 13 || x === 14 ? 'u' : null;
+    return null;
+  }).rows());
+  // on the shelves: a ladder, a potted plant
+  def('fc_ladder', [
+    '.0.....0.',
+    '0N0...0n0',
+    '0NNNNNNn0',
+    '0N0...0n0',
+    '0N0...0n0',
+    '0NNNNNNn0',
+    '0N0...0n0',
+    '0N0...0n0',
+    '0NNNNNNn0',
+    '0N0...0n0',
+    '0N0...0n0',
+    '0NNNNNNn0',
+    '0N0...0n0',
+    '0N0...0n0',
+    '0u0...0u0',
+    '.0.....0.']);
+  A('fc_plant', [
+    '.........',
+    '...h.h...',
+    '..hGhGg..',
+    '.hGGhGGg.',
+    '..gGGGg..',
+    '..NNNNn..',
+    '...Nnu...',
+    '...nnu...',
+    '.........']);
+})();

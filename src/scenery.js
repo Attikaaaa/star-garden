@@ -5,7 +5,7 @@
 // same way. It is baked into the room's static canvas (renderRoomStatic); tall pieces
 // (trees, palms, pillars) are drawn with the actors so heroes can walk behind them.
 // Lands not in SCN_LANDS keep their tile renderer (renderRoomPlain, level.js).
-const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun', 'moon', 'lantern', 'deep']);
+const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun', 'moon', 'lantern', 'deep', 'library']);
 
 // ---------- Noise (pure functions of position and seed) ----------
 const _u = (h) => h / 4294967296;
@@ -117,6 +117,7 @@ const SCN_GROUND = {
   beach: { base: 'a', dark: 'A', light: 'e', tuft: { a: 'e', A: 'a', e: 'N' }, speck: { a: 'A', A: 'w', e: 'a' }, hi: 0.64, lo: 0.2 },
   crystal: { base: 'l', dark: 'm', light: 'L', tuft: { l: 'm', m: 'd', L: 'l' }, speck: { l: 'L', m: 'l', L: 'w' }, hi: 0.72, lo: 0.2 },
   well: { base: '2', dark: '1', light: '3', tuft: { 2: '1', 1: '0', 3: '2' }, speck: { 2: '3', 1: '2', 3: '4' }, hi: 0.75, lo: 0.22 },
+  library: { base: 'a', dark: 'e', light: 'A', tuft: { a: 'e', e: 'N', A: 'a' }, speck: { a: 'A', e: 'a', A: 'w' }, hi: 0.97, lo: 0.08 },
   deep: { base: '1', dark: '0', light: '2', tuft: { 1: '0', 0: '1', 2: '1' }, speck: { 1: '2', 0: '1', 2: '3' }, hi: 0.95, lo: 0.13 },
   lantern: { base: 'g', dark: 't', light: 'G', tuft: { g: 't', t: 'b', G: 'g' }, speck: { g: 'G', t: 'g', G: 'h' }, hi: 0.88, lo: 0.16 },
   moon: { base: '2', dark: '1', light: '3', tuft: { 2: '1', 1: '0', 3: '2' }, speck: { 2: '3', 1: '2', 3: '4' }, hi: 0.86, lo: 0.22 },
@@ -126,7 +127,7 @@ const SCN_GROUND = {
 const TUFTS = [_G('x.x .x.'), _G('x .'), _G('.x. x.x'), _G('x..x .xx.')];
 // stone floors get chips and grit instead of tufts
 const CHIPS = [_G('xx'), _G('x. .x'), _G('.x x.'), _G('x')];
-SCN_GROUND.crystal.glyphs = SCN_GROUND.well.glyphs = SCN_GROUND.sun.glyphs = SCN_GROUND.deep.glyphs = CHIPS;
+SCN_GROUND.crystal.glyphs = SCN_GROUND.well.glyphs = SCN_GROUND.sun.glyphs = SCN_GROUND.deep.glyphs = SCN_GROUND.library.glyphs = CHIPS;
 // little lumps of snow
 SCN_GROUND.snow.glyphs = [_G('xx'), _G('.x. x.x'), _G('x')];
 function bakeGround(room, theme) {
@@ -178,6 +179,31 @@ const GROUND_TEX = {
         b.px[y * VW + x] = p32(c === 1 ? 'a' : c === 2 ? 'N' : 'e');
       }
     }
+  },
+  // a page: faint ruled lines, a paragraph in pencil here and there, the pink margin
+  library(b, cls, s) {
+    const r = scnRand(s ^ 0xb00c), paras = [];
+    for (let k = 0, n = 2 + Math.floor(r() * 2); k < n; k++) {
+      const x0 = IN_X0 + 52 + Math.floor(r() * 200), l0 = 1 + Math.floor(r() * 9);
+      paras.push([x0, x0 + 60 + Math.floor(r() * 50), l0, l0 + 2 + Math.floor(r() * 3)]);
+    }
+    for (let l = 0, y = OY + 43; y < IN_Y1; l++, y += 12) {
+      for (let x = IN_X0; x < IN_X1; x++) b.px[y * VW + x] = p32('e');
+      for (const [x0, x1, l0, l1] of paras) {
+        if (l < l0 || l > l1) continue;
+        // words: runs of pencil two pixels high, the last line of a paragraph shorter
+        const end = l === l1 ? x0 + (x1 - x0) * 0.5 : x1;
+        for (let x = x0; x < end;) {
+          const w = 3 + hash(x, l, s) % 8;
+          for (let i = 0; i < w && x + i < end; i++) {
+            b.px[(y - 2) * VW + x + i] = p32('e');
+            if (hash(x + i, l + 50, s) & 1) b.px[(y - 3) * VW + x + i] = p32('e');
+          }
+          x += w + 3;
+        }
+      }
+    }
+    for (let y = IN_Y0; y < IN_Y1; y++) { b.px[y * VW + 56] = p32('q'); b.px[y * VW + 58] = p32('q'); }
   },
   // long low ripples in the sea sand, a shade darker
   deep(b, cls, s) {
@@ -299,6 +325,17 @@ const SCN_DECALS = {
     ],
     wall: [_G('.d. dmd'), _G('.C. cB.'), _G('m. dm')],
   },
+  library: {
+    cluster: [[_G('A. .A'), 3], [_G('.A AA'), 2]], // scraps of paper
+    single: [
+      [_G('.mm. m..m m.m. .mm.'), 1], // a paperclip
+      [_G('.ee. e..e e..e .ee.'), 1], // a cup ring
+      [_G('.b. .b. b.b'), 2], // a ribbon bookmark
+      [_G('.G. GgG .g.'), 1], // a pressed leaf
+      [_G('LLl. LLLl lll.'), 2], // a torn page
+    ],
+    wall: [_G('.e. e.e'), _G('A. .A'), _G('e.e .e.')],
+  },
   deep: {
     cluster: [[_G('t.t .t.'), 3], [_G('.t. t.t .t.'), 2]], // sea grass
     single: [
@@ -409,7 +446,7 @@ function scatterDecals(b, room, theme, cls) {
 // ---------- Wall caps: one endless texture per land ----------
 // A pure function of play-view position, so the room's caps and the screen margins
 // around it (drawBackdrop) meet without a seam.
-const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606, moon: 707, lantern: 808, deep: 909 };
+const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606, moon: 707, lantern: 808, deep: 909, library: 1010 };
 const CAP = {
   // a clipped hedge: big leafy clumps lit from the top left, now and then a flower
   meadow(x, y, s) {
@@ -453,6 +490,13 @@ const CAP = {
     const v = litBump(w.dx, w.dy, 9.5) - ((id >>> 8) & 3) * 0.08;
     if ((id & 7) === 3) return v > 0.7 ? 'O' : v > 0.25 ? 'o' : 'n';
     return v > 0.75 ? 'T' : v > 0.3 ? 't' : v > -0.1 ? 'g' : 'b';
+  },
+  // the top of the shelves: dressed purple stone
+  library(x, y, s) {
+    const row = Math.floor(y / 8), yy = y - row * 8, bx = x + hash(row, 2, s) % 16, col = Math.floor(bx / 16), xx = bx - col * 16;
+    if (yy === 7 || xx === 15) return '1';
+    if (yy === 0 || xx === 0) return '3';
+    return '2';
   },
   // the reef above: knobbly purple rock, a tuft of coral or a kelp clump now and then
   deep(x, y, s) {
@@ -552,6 +596,7 @@ const PIT = {
   beach: { face: ['A', 'a', 'e', 'N'], shade: 't', body: 'T', deep: 'T', ripple: 'C', edge: 'C', foam: 'w', wet: 'e' },
   crystal: { face: ['L', 'l', 'm', 'm', 'd', 'd', '1', '1', '0'], glint: ['1', '1', '1', '2', 'c'], tooth: _G('0C0 0c0 .0.') },
   well: { face: ['4', '3', '2', '2', '1', '1', '0'], glint: ['1', '2', 'Y', 'w', 'c'], tooth: _G('0Y0 .0.') },
+  library: { face: ['A', 'e', 'A', 'e'], shade: '0', body: '1', deep: '0', ripple: '1', edge: '2', foam: null },
   deep: { face: ['3', '2', '2', '1', '1', '0'], glint: ['T', 'c', 'P', 'T', 'C'], shade: '0', gn: 127 },
   lantern: { face: ['G', 'g', 'u', 'u', '0'], shade: '0', body: 'b', deep: 'b', ripple: 'B', edge: 'B', foam: null },
   moon: { face: ['l', 'm', 'd', 'd', '1', '1', '0'], glint: ['Y', 'w', '4', 'c', 'Y'], shade: '1', gn: 127 },
@@ -631,6 +676,29 @@ function shallowLayer(room) {
   }));
 }
 
+// Books on a shelf (the Story Library's walls, low shelves and bookcases): the colour at column
+// x, row y of a row 8 tall; books stand 6 to 8 high, now and then a gap. set: [light, body, dark].
+const BOOKS = [['R', 'r', 'n'], ['B', 'b', '1'], ['T', 't', 'g'], ['3', '2', '1'], ['O', 'o', 'n'], ['h', 'G', 'g'], ['q', 'p', 'v']];
+const BOOK_SPLIT = [[3, 3, 3, 3], [2, 3, 4, 3], [4, 2, 3, 3], [3, 4, 2, 3], [2, 2, 4, 4], [3, 2, 3, 4]];
+let _bookS = null, _bookV = null;
+// a room's three colours
+function bookSet(s) {
+  if (_bookS === s) return _bookV;
+  const a = hash(1, 9, s) % 7, b = (a + 1 + hash(2, 9, s) % 3) % 7, c = (b + 1 + hash(3, 9, s) % 3) % 7;
+  _bookS = s;
+  return (_bookV = [BOOKS[a], BOOKS[b], BOOKS[c]]);
+}
+function bookPx(x, y, s, set) {
+  const blk = Math.floor(x / 12), W = BOOK_SPLIT[hash(blk, 3, s) % BOOK_SPLIT.length];
+  let i = x - blk * 12, k = 0;
+  while (i >= W[k]) i -= W[k++];
+  const h = hash(blk * 4 + k, 5, s), w = W[k], top = h % 3;
+  if ((h >>> 4) % 11 === 0 || y < top) return 'u';
+  const c = set[(h >>> 8) % set.length];
+  if (w > 2 && i > 0 && i < w - 1 && y === top + 2 && (h >>> 12) % 3 === 0) return 'A';
+  return i === 0 ? c[0] : i === w - 1 && w > 2 ? c[2] : c[1];
+}
+
 // Rock groups of two or more tiles become one built shape: a hedge, a stone wall, a rock
 // ridge. A top that catches the light, a lit lip, then the front face below it.
 const RIDGE = {
@@ -648,6 +716,12 @@ const RIDGE = {
   },
   crystal: { top: '1234', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '1' : '2'; } },
   well: { top: '0123', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '0' : '1'; } },
+  // a low shelf of books under a wooden top (s is the room's seed + 77)
+  library: {
+    top: 'unAA', cell: 10, h: 9,
+    topAt(x, y) { return (y - OY) % 5 === 4 ? 'n' : 'N'; },
+    front(x, y, row, s) { return row === 8 ? 'n' : bookPx(x, row, s, bookSet(s - 77)); },
+  },
   // a reef wall, a polyp of coral here and there
   deep: {
     top: '0123', cell: 10, h: 7,
@@ -755,6 +829,21 @@ const FACE_GROW = {
   snow: { foot: ['w', 'L'], n: 0.35, spill: ['w', 'l'], drip: { k: ['w', 'C'], n: 0.12 } },
   moon: { foot: ['3', '2'], n: 0.35, ivy: ['1', '3', '4'] },
   deep: { foot: ['T', 't'], n: 0.3, ivy: ['g', 't', 'T'] },
+  // a shelf of books in the room's three colours over a wooden wainscot
+  library: {
+    foot: ['u', 'u'], n: 0,
+    wall(put, X0, X1, y0, s) {
+      const set = bookSet(s);
+      for (let x = X0; x < X1; x++) {
+        put(x, y0 + 1, 'N');
+        for (let j = 0; j < 8; j++) put(x, y0 + 2 + j, bookPx(x, j, s, set));
+        put(x, y0 + 10, 'N');
+        const p = (x + 8) % 24;
+        for (let j = 11; j <= 13; j++) put(x, y0 + j, p === 0 ? 'u' : p === 1 && j < 13 ? 'N' : 'n');
+        put(x, y0 + 14, 'u');
+      }
+    },
+  },
   // a row of old trunks, bark streaked, a dark gap between them
   lantern: {
     foot: ['G', 'g'], n: 0.4, ivy: true,
@@ -802,8 +891,9 @@ const FACE_THINGS = {
   moon: [['fc_crescent', 2, 3, 9], ['fc_moonwin', 2, 3, 11], ['fc_lamp', 0.6, 3, 9, [3, 3]]],
   lantern: [['fc_lamp', 1.2, 3, 9, [3, 3]], ['fc_shelf', 2, 6, 9], ['fc_knot', 1.5, 4, 8]],
   deep: [['fc_coralfan', 2, 3, 11], ['fc_anem', 2, 7, 9], ['fc_pearl', 0.8, 4, 11]],
+  library: [['fc_lamp', 0.8, 3, 9, [3, 3]], ['fc_ladder', 1.5, 0, 9], ['fc_plant', 1.5, 2, 9]],
 };
-const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce', moon: 'fc_lamp', lantern: 'fc_lamp', deep: 'fc_pearl' };
+const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce', moon: 'fc_lamp', lantern: 'fc_lamp', deep: 'fc_pearl', library: 'fc_lamp' };
 // `F`: where the strip goes ({ x0, x1, y0 }) and the door gap to keep bare ([from, to]).
 const FACE_ROOM = { x0: 16, x1: VW - 16, y0: OY + 16, gap: [160, 224] };
 function drawFacePx(b, room, theme, things, F) {
@@ -903,6 +993,7 @@ const OBSTACLES = {
   moon: ['rock_moon', 'ob_mstone', 'ob_moondial'],
   lantern: ['ob_mossrock', 'ob_fern'],
   deep: ['rock_deep', 'ob_coral', 'ob_anchor'],
+  library: ['rock_library', 'ob_globe', 'ob_chair'],
 };
 const BREAKABLES = {
   meadow: ['brk_meadow', 'bk_pot', 'bk_hay'],
@@ -914,6 +1005,7 @@ const BREAKABLES = {
   moon: ['brk_moon', 'bk_mpot'],
   lantern: ['bk_mushcap', 'bk_firewood'],
   deep: ['brk_deep', 'bk_crate'],
+  library: ['brk_library', 'bk_drawer'],
 };
 // What flies when a breakable breaks.
 const BRK_BITS = {
@@ -923,10 +1015,10 @@ const BRK_BITS = {
   bk_vein: ['C', 'c', 'w', '3'], brk_snow: ['r', 'R', 'y'], bk_cratesnow: ['N', 'n', 'w'],
   brk_sun: ['n', 'o', 'O'], bk_basket: ['O', 'o', 'y'], brk_moon: ['l', '4', 'y'], bk_mpot: ['2', '3', 'L'],
   brk_lantern: ['o', 'O', 'G'], bk_mushcap: ['r', 'R', 'w'], bk_firewood: ['n', 'N', 'O'],
-  brk_deep: ['n', 'N', 'O'],
+  brk_deep: ['n', 'N', 'O'], brk_library: ['L', 'w', 'r'], bk_drawer: ['n', 'N', 'A'],
 };
 // A land's own room shapes built of breakables (or rocks) are built of one kind (LAND_LAYOUTS).
-const LAY_BRK = { maze: 'brk_meadow', wreck: 'bk_crate', vein: 'bk_vein', scarab: 'brk_sun', petal: 'brk_moon', ring: 'bk_mushcap', field: 'brk_lantern', hull: 'brk_deep' }, LAY_ROCK = { slalom: 'ob_flag', oasis: 'ob_sprout', kelp: 'rock_deep' };
+const LAY_BRK = { maze: 'brk_meadow', wreck: 'bk_crate', vein: 'bk_vein', scarab: 'brk_sun', petal: 'brk_moon', ring: 'bk_mushcap', field: 'brk_lantern', hull: 'brk_deep', catalogue: 'bk_drawer' }, LAY_ROCK = { slalom: 'ob_flag', oasis: 'ob_sprout', kelp: 'rock_deep', reading: 'ob_chair', popup: 'ob_popup' };
 const TALL = {
   meadow: ['gi_tree', 'gi_tree', 'gi_bloom'],
   beach: ['gi_palm', 'gi_castle'],
@@ -937,11 +1029,12 @@ const TALL = {
   moon: ['gi_mtree', 'gi_mtree2'],
   lantern: ['gi_wtree', 'gi_wtree', 'gi_wtree_a'],
   deep: ['gi_coral', 'gi_kelp'],
+  library: ['gi_bookcase', 'gi_bookcase2'],
 };
 // A land room's own tall piece (the village's cabins).
-const LAY_TALL = { village: 'gi_hut' };
+const LAY_TALL = { village: 'gi_hut', reading: 'gi_rtable' };
 // Lands where two rocks stacked in a column stand as one tall post (an obelisk).
-const POST = { sun: ['gi_sobelisk'], moon: ['gi_mpillar'], lantern: ['gi_birch'], deep: ['gi_kelpp'] };
+const POST = { sun: ['gi_sobelisk'], moon: ['gi_mpillar'], lantern: ['gi_birch'], deep: ['gi_kelpp'], library: ['gi_gclock'] };
 // Each room uses two of a land's kinds, so a room looks planned rather than random.
 function roomPick(list, room, salt, c, r) {
   const s = room.seed | 0, n = list.length, a = hash(salt, 1, s) % n, b = n > 1 ? (a + 1 + hash(salt, 2, s) % (n - 1)) % n : a;
@@ -965,6 +1058,7 @@ const RING = {
   moon: { line: '1', dot: ['Y', '4', 'c'] },
   lantern: { line: 't', dot: ['O', 'y', 'q'] },
   deep: { line: '0', dot: ['T', 'c', 'P'] },
+  library: { line: 'e', dot: ['b', 'r', 't'] },
 };
 function drawRingPx(b, theme) {
   const R = RING[theme] || RING.meadow, cx = VW / 2, cy = OY + 112;
