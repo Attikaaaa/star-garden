@@ -126,6 +126,38 @@ r = await g.ev(`(() => { const was = Save.settings.lang; Save.settings.lang = 'h
 ok(!r[0].startsWith('NEAR') && !r[1].startsWith('MADE') && /20$/.test(r[1]) && !r[2].startsWith('MADE') && r[3] !== '3 KILÉPETT' && r[4] === 'RENDEZ', 'Hungarian patterns: ' + JSON.stringify(r));
 await g.ev(`Save.settings.lang = 'hu'; WGS.scr = 'pause'; WGS.ui = { help: true }; 0`); await sleep(200);
 console.log('help hu', await g.shot('wg_help_hu.png'));
+// the tip under the pointer says what a thing does
+r = await g.ev(`[wgTipLines({ id: 'stew', n: 1 }), wgTipLines({ id: 'sword_iron', n: 1, d: 10 }), wgTipLines({ id: 'coal', n: 3 }), wgTipLines({ id: 'chest', n: 1 }), wgTipLines({ id: 'helmet_x', n: 1 }), wgTipLines({ id: 'head_iron', n: 1 }),
+  tr('+14 FOOD'), tr('70 / 80 USES LEFT'), tr('USED IN 4 RECIPES'), tr('NEAR: ' + tr('NOTHING') + ' + 1 CHEST')]`);
+ok(r[0].join() === '+14 FOOD,HEALS OVER TIME' && r[1][0] === 'DAMAGE 6' && /USES LEFT$/.test(r[1][1]) && r[2][0] === 'BURNS AS FUEL' && /^USED IN \d+ RECIPES?$/.test(r[2][1]) && r[3].join() === 'KEEPS YOUR THINGS'
+  && !r[4].length && /^DEFENSE \+\d$/.test(r[5][0]) && r[6] === '+14 ÉTEL' && r[7] === 'MÉG 70 / 80 HASZNÁLAT' && r[8] === '4 RECEPTHEZ KELL' && r[9] === 'KÖZELBEN: SEMMI + 1 LÁDA', 'item tips: ' + JSON.stringify(r));
+await g.ev(`var inv = WGS.inv; for (let i = 0; i < 36; i++) inv[i] = null; inv[9] = { id: 'sword_iron', n: 1, d: 10 }; inv[10] = { id: 'stew', n: 2 }; inv[17] = { id: 'coal', n: 5 }; WGS.scr = 'inv'; WGS.ui = {}; WGS.cur = null; Input.lastAim = 'mouse'; Input.mx = 24 + 9; Input.my = 18 + 36 + 9; 0`); await sleep(250);
+console.log('tip hu', await g.shot('wg_tip_hu.png'));
+await g.ev(`Input.mx = 24 + 8 * 19 + 9; 0`); await sleep(200);
+console.log('tip edge', await g.shot('wg_tip_edge.png'));
+// pinning a recipe: a right click pins it, a tap on the pin toggles without making it, the HUD box shows it, it is saved, making it unpins it
+await g.ev(`Save.settings.lang = 'en'; window.__rclick = (mx, my) => new Promise(res => {
+  const r = cv.getBoundingClientRect(), x = r.left + (mx + SCR.ox) / SCR.w * r.width, y = r.top + (my + SCR.oy) / SCR.h * r.height;
+  cv.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true }));
+  setTimeout(() => { cv.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, button: 2, bubbles: true }));
+    setTimeout(() => { window.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, button: 2, bubbles: true })); setTimeout(res, 120); }, 80); }, 60);
+});
+  var inv = WGS.inv; for (let i = 0; i < 36; i++) inv[i] = null; inv[9] = { id: 'wood', n: 1 }; WGS.p.seen = { wood: 1 }; WGS.p.track = null; WGU.rq.v = ''; WGS.nearC = null;
+  WGS.scr = 'inv'; WGS.ui = {}; WGS.cur = null; 0`);
+await sleep(200);
+await g.ev(`__click(352, 18 + 20 + 17)`);
+r = await g.ev(`[WGS.p.track, wgInvCount(WGS.inv, 'wood')]`);
+ok(r[0] && r[0].out === 'stick' && r[1] === 1, 'a tap on the pin pins without making: ' + JSON.stringify(r));
+await g.ev(`__rclick(260, 18 + 20 + 27 + 8)`);
+r = await g.ev(`[WGS.p.track, wgSnapshot().st.p.track]`);
+ok(r[0] && r[0].out === 'chest' && r[1] && r[1].out === 'chest', 'a right click pins another, the save keeps it: ' + JSON.stringify(r));
+await sleep(150); console.log('pin row', await g.shot('wg_pin_row.png'));
+await g.ev(`WGS.scr = 'play'; 0`); await sleep(250);
+console.log('tracker', await g.shot('wg_track.png'));
+await g.ev(`WGS.inv[10] = { id: 'wood', n: 8 }; WGS.scr = 'inv'; WGS.ui = {}; 0`); await sleep(200);
+await g.ev(`__click(260, 18 + 20 + 27 + 4)`);
+r = await g.ev(`[WGS.p.track, wgInvCount(WGS.inv, 'chest'), wgInvCount(WGS.inv, 'wood')]`);
+ok(!r[0] && r[1] === 1 && r[2] === 1, 'making the pinned recipe unpins it: ' + JSON.stringify(r));
 await g.ev(`Save.settings.lang = 'en'; WGS.scr = 'play'; 0`);
 console.log(out.join('\n'));
 console.log('errors', JSON.stringify(g.realErrors()).slice(0, 300));

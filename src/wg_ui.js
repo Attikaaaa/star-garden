@@ -74,6 +74,7 @@ function wgDrawHud() {
   wtext('DAY ' + (WGS.day + 1), cx, cy + 13, 'w', 2, 1); wtext(WG_SEASONS[wgSeason()], cx, cy + 21, 'l', 2, 1);
   if (WGN.role) wtext((WGN.role === 'host' ? 'CODE ' + WGN.code + (WGN.pub ? ' PUBLIC' : '') : 'ONLINE') + '  ' + (1 + (WGN.role === 'host' ? WGN.peers.filter(q => q.pid > 0).length : WGS.remote.length + 0)) + ' IN WORLD', L + 4, T0 + 4, 'Y', 2, 0);
   { const k = WGS.mobs.find(m => WG_MOBS[m.type].boss && Math.hypot(m.x - WGS.p.x, m.y - WGS.p.y) < 320); if (k) { const D = WG_MOBS[k.type], bw = 140, bx2 = (L + R) / 2 - bw / 2, f = Math.max(0, k.hp / D.hp); rect(bx2 - 1, T0 + 44, bw + 2, 8, '0'); rect(bx2, T0 + 45, bw, 6, 'x'); rect(bx2, T0 + 45, Math.round(bw * f), 6, D.star ? 'o' : 'r'); rect(bx2, T0 + 45, Math.round(bw * f), 1, D.star ? 'Y' : 'R'); wtext(D.name, (L + R) / 2, T0 + 54, 'w', 2, 1); } }
+  if (WGS.scr === 'play' && !WGU.chatOpen) wgDrawTrack(L, T0);
   if (WGS.toast) wtext(WGS.toast.msg, (L + R) / 2, T0 + 14, 'Y', 3, 1);
   { const m = WGS.world.meta, H = !m.hintDone && WG_HINTS[m.hint || 0]; if (H && WGS.scr === 'play') { const tw = textW(tr(H[0]), 1) + 12; rect((L + R) / 2 - tw / 2, T0 + 26, tw, 12, '0'); rect((L + R) / 2 - tw / 2 + 1, T0 + 27, tw - 2, 10, '1'); wtext(H[0], (L + R) / 2, T0 + 29, 'Y', 0, 1); } }
   for (const k in p.buff) { /* potion buffs are listed under the dial */ }
@@ -201,15 +202,68 @@ function wgSmallBtn(label, x, y, w, h) {
   if (inside && Input.mouseHit) { Input.mouseHit = false; Audio_.sfx('confirm'); return true; }
   return false;
 }
+// What a thing does, in a line or two under its name (each line is its own string, so a language can match it).
+const WG_BUFF_TIP = { regen: 'HEALS OVER TIME', speed: 'RUN FASTER FOR A WHILE', night: 'SEE IN THE DARK', dig: 'DIG FASTER FOR A WHILE' };
+const WG_TOOL_TIP = { hoe: 'TILLS GRASS AND DIRT', rod: 'CAST IT INTO WATER', can: 'WATERS TILLED SOIL', shears: 'SHEARS SHEEP' };
+const WG_KIND_TIP = { light: 'GIVES LIGHT', storage: 'KEEPS YOUR THINGS', station: 'UNLOCKS RECIPES NEARBY', bed: 'SLEEP HERE, WAKE UP HERE', door: 'OPENS AND CLOSES',
+  wall: 'KEEPS FOES OUT', sapling: 'GROWS INTO A TREE', sign: 'WRITE ON IT' };
+const _wgUses = {};
+function wgTipLines(s) {
+  const it = WGI[s.id], L = []; if (!it) return L;
+  if (it.kind === 'food') { L.push('+' + it.food + ' FOOD'); if (it.buff && WG_BUFF_TIP[it.buff]) L.push(WG_BUFF_TIP[it.buff]); else if (it.bad) L.push('BETTER COOKED'); }
+  else if (it.kind === 'weapon') {
+    const dmg = TIERS[it.tier || 0].dmg + (it.bonus || 0) + (it.weapon === 'bow' ? 2 : it.weapon === 'wand' ? 1 : 0);
+    L.push('DAMAGE ' + dmg); if (it.weapon === 'bow') L.push('SHOOTS ARROWS'); else if (it.weapon === 'wand') L.push('NEEDS NO ARROWS');
+  } else if (it.kind === 'armor') L.push('DEFENSE +' + it.def);
+  else if (it.kind === 'seed') L.push('PLANT ON TILLED SOIL');
+  else if (it.kind === 'tool') { if (WG_TOOL_TIP[it.tool]) L.push(WG_TOOL_TIP[it.tool]); else if (it.tool === 'bucket') L.push(it.full ? 'POURS THE WATER OUT' : 'SCOOPS UP WATER'); }
+  else if (it.kind === 'place') { const o = it.place && OBJ[O_ID[it.place]]; if (o && WG_KIND_TIP[o.kind]) L.push(WG_KIND_TIP[o.kind]); }
+  const mx = wgDurMax(it); if (mx) L.push((mx - (s.d || 0)) + ' / ' + mx + ' USES LEFT');
+  if (it.fuel) L.push('BURNS AS FUEL');
+  if (it.grow) L.push('HURRIES CROPS AND TREES');
+  if (it.kind === 'res') { const n = _wgUses[s.id] !== undefined ? _wgUses[s.id] : (_wgUses[s.id] = RECIPES.filter(r => r.in[s.id]).length); if (n) L.push(n > 1 ? 'USED IN ' + n + ' RECIPES' : 'USED IN 1 RECIPE'); }
+  return L;
+}
+// A pinned recipe (p.track: { out, at }) stays in a small box at the top left while you gather for it; making it unpins it.
+const WG_AT = { bench: 'AT A WORKBENCH', furnace: 'AT A FURNACE', anvil: 'AT AN ANVIL', alch: 'AT THE ALCHEMY TABLE', loom: 'AT A LOOM', fire: 'AT A FIRE' };
+function wgTracked() { const t = WGS.p && WGS.p.track; return t ? RECIPES.find(r => r.out === t.out && r.at === t.at) || null : null; }
+function wgHaveNear(id) { let n = wgInvCount(WGS.inv, id); for (const q of wgNearChests()) n += wgInvCount(q.c, id); return n; }
+function wgPinGlyph(x, y, on) { // a thumbtack: red when pinned, a pale ghost on the row under the pointer
+  const a = on ? ['R', 'r', 'w'] : ['m', 'd', 'l'];
+  rect(x + 1, y, 4, 1, '0'); rect(x, y + 1, 6, 2, '0'); rect(x + 1, y + 3, 4, 1, '0'); rect(x + 1, y + 1, 4, 2, a[0]); rect(x + 4, y + 2, 1, 1, a[1]); rect(x + 1, y + 1, 1, 1, a[2]);
+  rect(x + 2, y + 4, 2, 3, '0'); rect(x + 2, y + 4, 1, 2, 'l');
+}
+function wgDrawTrack(L, T0) {
+  const r = wgTracked(); if (!r) return;
+  let y = T0 + 4 + (WGN.role ? 11 : 0) + (wgOpt().info && WGS.scr === 'play' ? 38 : 0); if (Input.lastAim === 'touch') y = Math.max(y, T0 + 30);
+  const st = wgStations(), lines = [];
+  let ready = true;
+  for (const k in r.in) { const n = wgHaveNear(k), ok = n >= r.in[k]; if (!ok) ready = false; lines.push([Math.min(n, 999) + '/' + r.in[k] + ' ' + tr(WGI[k].name), ok ? 'h' : 'w']); }
+  if (r.at !== 'hand' && !st[r.at]) { ready = false; lines.push([WG_AT[r.at] || '', 'l']); }
+  const title = tr(WGI[r.out].name) + (r.n > 1 ? ' X' + r.n : ''), w = Math.max(textW(title, 1), ...lines.map(l => textW(l[0], 0))) + 26, h = 14 + lines.length * 9;
+  ctx.globalAlpha = 0.92; rect(L + 3, y, w, h, '0'); rect(L + 4, y + 1, w - 2, h - 2, '1'); rect(L + 4, y + 1, w - 2, 1, '2'); ctx.globalAlpha = 1;
+  ctx.drawImage(wgIcon(r.out), L + 5, y + 2); wgPinGlyph(L + w - 4, y - 2, true);
+  wtext(title, L + 23, y + 4, ready ? 'Y' : 'w', 1, 0);
+  lines.forEach((l, i) => wtext(l[0], L + 23, y + 14 + i * 9, l[1], 0, 0));
+}
+// The tip box: the name in white, the lines under it, kept on screen.
+function wgDrawTip() {
+  if (!WGS.tip) return;
+  const L = WGS.tipL || [], w = Math.max(textW(WGS.tip, 1), ...L.map(l => textW(l, 0))) + 8, h = 11 + L.length * 9;
+  const x = Math.min(Math.round(Input.mx + 8), -SCR.ox + SCR.w - w - 2), y = Math.max(Math.round(Input.my - 12 - L.length * 9), -SCR.oy + 2);
+  if (!L.length) { wtext(WGS.tip, x, y, 'w', 2, 0); return; }
+  rect(x - 3, y - 3, w, h + 2, '0'); rect(x - 2, y - 2, w - 2, h, '1'); rect(x - 2, y - 2, w - 2, 1, '2');
+  wtext(WGS.tip, x + 1, y, 'w', 1, 0); L.forEach((l, i) => wtext(l, x + 1, y + 10 + i * 9, 'l', 0, 0));
+}
 function wgSlotGrid(arr, x, y, cols, n, from) {
   for (let k = 0; k < n; k++) {
     const i = from + k, sx = x + (k % cols) * 19, sy = y + Math.floor(k / cols) * 19, inside = Input.mx >= sx && Input.mx < sx + 18 && Input.my >= sy && Input.my < sy + 18;
     wgSlot(sx, sy, arr[i], inside || (arr === WGS.inv && i === WGS.sel && false));
-    if (inside) { if (Input.mouseHit) { if (wgShift() && !WGS.cur && arr[i]) wgShiftMove(arr, i); else wgSlotClick(arr, i); } if (arr[i]) WGS.tip = WGI[arr[i].id].name; if (Input.rHit && !WGS.cur && arr[i] && arr[i].n > 1) { const h = Math.ceil(arr[i].n / 2); WGS.cur = { id: arr[i].id, n: h }; arr[i].n -= h; } }
+    if (inside) { if (Input.mouseHit) { if (wgShift() && !WGS.cur && arr[i]) wgShiftMove(arr, i); else wgSlotClick(arr, i); } if (arr[i]) { WGS.tip = WGI[arr[i].id].name; WGS.tipL = wgTipLines(arr[i]); } if (Input.rHit && !WGS.cur && arr[i] && arr[i].n > 1) { const h = Math.ceil(arr[i].n / 2); WGS.cur = { id: arr[i].id, n: h }; arr[i].n -= h; } }
   }
 }
 function wgDrawInv() {
-  dim(0.6); WGS.tip = '';
+  dim(0.6); WGS.tip = ''; WGS.tipL = null;
   const x0 = 24, y0 = 18; panel(x0 - 8, y0 - 8, 348, 192);
   wtext('BACKPACK', x0, y0 - 2, 'Y', 1);
   if (wgSmallBtn('SORT', x0 + 132, y0 - 4, 38)) wgSortPack();
@@ -239,7 +293,10 @@ function wgDrawInv() {
     ctx.drawImage(wgIcon(r.out), rx + 2, y + 5);
     wtext(tr(WGI[r.out].name) + (r.n > 1 ? ' X' + r.n : ''), rx + 20, y + 3, can ? (inside ? '0' : 'w') : 'm', 0);
     let cx = rx + 20; for (const k2 in r.in) { const have = wgInvCount(pool, k2) >= r.in[k2]; ctx.globalAlpha = have ? 1 : 0.55; ctx.drawImage(wgIcon(k2), cx, y + 10); ctx.globalAlpha = 1; wtext(String(r.in[k2]), cx + 15, y + 17, have ? (inside ? '0' : 'h') : 'R', 2, 2); cx += 22; }
-    if (inside) WGS.tip = Object.keys(r.in).map(k2 => r.in[k2] + ' ' + tr(WGI[k2].name)).join(', ');
+    const tk = WGS.p.track, pinned = !!tk && tk.out === r.out && tk.at === r.at, onPin = inside && Input.mx >= rx + 134 && Input.my >= y + 12;
+    if (pinned || inside) wgPinGlyph(rx + 141, y + 16, pinned);
+    if (inside) { WGS.tip = Object.keys(r.in).map(k2 => r.in[k2] + ' ' + tr(WGI[k2].name)).join(', '); WGS.tipL = [Input.lastAim === 'pad' ? (pinned ? 'X: UNPIN' : 'X: PIN IT') : Input.lastAim === 'touch' ? 'TAP THE PIN' : pinned ? 'RIGHT CLICK: UNPIN' : 'RIGHT CLICK: PIN IT']; }
+    if ((inside && Input.rHit) || (onPin && Input.mouseHit)) { Input.rHit = false; Input.mouseHit = false; WGS.p.track = pinned ? null : { out: r.out, at: r.at }; Audio_.sfx('select'); wgToast(pinned ? 'UNPINNED' : 'PINNED'); }
     if (inside && can && Input.mouseHit) { // shift-click makes up to five at once
       let made = 0;
       for (let t = wgShift() ? 5 : 1; t > 0 && wgCanCraft(chests.length ? WGS.inv.concat(...chests.map(q => q.c)) : WGS.inv, r); t--) {
@@ -248,6 +305,7 @@ function wgDrawInv() {
         made += r.n;
       }
       Audio_.sfx(r.at === 'anvil' ? 'anvil' : 'confirm'); wgToast('MADE ' + WGI[r.out].name + (made > r.n ? ' X' + made : ''));
+      if (pinned) WGS.p.track = null; // made it: the pin has done its job
     }
   }
   wgField('', WGU.rq, rx + 90, y0 - 6, 60);
@@ -255,11 +313,11 @@ function wgDrawInv() {
   if (wgSmallBtn('up', rx + 118, y0 + 155, 15)) ui.scroll = Math.max(0, ui.scroll - 1);
   if (wgSmallBtn('dn', rx + 135, y0 + 155, 15)) ui.scroll = Math.min(Math.max(0, list.length - rows), ui.scroll + 1);
   if (WGS.cur) { ctx.drawImage(wgIcon(WGS.cur.id), Input.mx - 8, Input.my - 8); if (WGS.cur.n > 1) wtext(String(WGS.cur.n), Input.mx + 8, Input.my + 2, 'w', 2, 2); }
-  else if (WGS.tip) wtext(WGS.tip, Input.mx + 8, Input.my - 12, 'w', 2, 0);
+  else wgDrawTip();
   if (pressed(wgKey('bag'), 'Escape') && WGS.cur) { wgInvAdd(WGS.inv, WGS.cur.id, WGS.cur.n); WGS.cur = null; }
 }
 function wgDrawChest() {
-  dim(0.6); WGS.tip = '';
+  dim(0.6); WGS.tip = ''; WGS.tipL = null;
   const ch = WGS.chest, arr = wgCont(WGS.world, ch.dim, ch.tx, ch.ty, true);
   for (let i = 0; i < 27; i++) if (arr[i] === undefined) arr[i] = null;
   const x0 = 96, y0 = 22; panel(x0 - 8, y0 - 8, 204, 188);
@@ -274,7 +332,7 @@ function wgDrawChest() {
   WGS.world && (wgChunkAt(WGS.world, ch.dim, ch.tx, ch.ty).mod = true);
   if (Input.mouseHit && WGN.role) wgNetChest(ch.dim, ch.tx, ch.ty, arr);
   if (WGS.cur) { ctx.drawImage(wgIcon(WGS.cur.id), Input.mx - 8, Input.my - 8); if (WGS.cur.n > 1) wtext(String(WGS.cur.n), Input.mx + 8, Input.my + 2, 'w', 2, 2); }
-  else if (WGS.tip) wtext(WGS.tip, Input.mx + 8, Input.my - 12, 'w', 2, 0);
+  else wgDrawTip();
 }
 
 function wgDrawSettings(ui, client) {
