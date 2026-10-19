@@ -888,28 +888,6 @@ for (let k = 0; k < 4; k++) {
 // whole. Tiles change through setTile, so every screen sees the same holes.
 const PUFF_LOAD = 0.4, PUFF_WOB = 1, HOLE_T = 4, HOP_T = 0.55, HOP_V = 102, HOP_Z = 14, HOP_HANG = 0.5;
 const CLOUD_BURST = ['w', 'L', 'l', 'C'];
-// cloud floor tiles: white lumps shaded bottom right, wrapping so the tiles join seamlessly
-function cloudTile(lumps, specks) {
-  const lump = (x, y, cx, cy, rx, ry) => {
-    const dx = ((x - cx + 24) % 16) - 8, dy = ((y - cy + 24) % 16) - 8;
-    return (dx / rx) ** 2 + (dy / ry) ** 2 <= 1;
-  };
-  const rows = [];
-  for (let y = 0; y < 16; y++) {
-    let s = '';
-    for (let x = 0; x < 16; x++) {
-      const hi = lumps.some(([cx, cy, rx, ry]) => lump(x, y, cx, cy, rx, ry));
-      const lo = lumps.some(([cx, cy, rx, ry]) => lump(x - 1, y - 1, cx, cy, rx, ry));
-      s += hi ? 'w' : lo ? 'l' : specks.some(([sx, sy]) => sx === x && sy === y) ? 'l' : 'L';
-    }
-    rows.push(s);
-  }
-  return rows;
-}
-def('cloud_0', cloudTile([[3, 3, 3, 2], [11, 7, 2.6, 2], [4, 12, 2.4, 1.6]], [[13, 13], [8, 1]]), { flip: true });
-def('cloud_1', cloudTile([[8, 4, 3.5, 2.2], [2, 11, 2, 1.6], [12, 12, 2.6, 1.8]], [[5, 8], [14, 3]]), { flip: true });
-def('cloud_2', cloudTile([[5, 7, 4, 2.6], [13, 2, 2, 1.4]], [[11, 11], [2, 14], [14, 9]]), { flip: true });
-def('cloud_3', cloudTile([[12, 5, 2.8, 2], [5, 10, 3, 2], [2, 2, 1.6, 1.2]], [[9, 14], [7, 3]]), { flip: true });
 // sunstone: pale sand slabs lit from the top left; one in a few carries a gold sun
 function sunTile(sun) {
   const rows = [];
@@ -1037,7 +1015,6 @@ function dithered(key, v, lvl) {
   _dith.set(id, c);
   return c;
 }
-const cloudOf = (room, c, r) => { const h = hash(c, r, room.seed + 11); return ['cloud_' + (h & 3), (h >> 2) & 1]; };
 const cellAt = (x, y) => Math.floor((y - 1 - OY) / 16) * COLS + Math.floor(x / 16); // the tile under feet at x, y
 // the slabs that never puff (1) and the vents (2), worked out alike on every screen from the room
 // itself (clients never build rooms: they get their tiles from the host)
@@ -1063,13 +1040,15 @@ function skyStone(room) {
   }
   return (room.stone = st);
 }
-// the floor: clouds, and sunstone with a 1px outline where it meets cloud (renderRoomStatic)
+// sunstone on the scenery's cloud, with a 1px outline where it meets cloud (renderRoomStatic); a
+// rock or a sky hole keeps its own look
 THEMES.cloud.paint = function (g, room) {
   const st = skyStone(room);
-  const isSt = (c, r) => c < 1 || r < 2 || c > COLS - 2 || r > ROWS - 2 || (st && st[r * COLS + c]);
+  const stAt = (c, r) => st && st[r * COLS + c] && room.tiles[r * COLS + c] !== T_ROCK && room.tiles[r * COLS + c] !== T_PIT;
+  const isSt = (c, r) => c < 1 || r < 2 || c > COLS - 2 || r > ROWS - 2 || stAt(c, r);
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
-    const x = c * 16, y = OY + r * 16, s = st && st[r * COLS + c];
-    if (!s) { const [k, v] = cloudOf(room, c, r); blit(g, S(k), x, y, v); continue; }
+    const x = c * 16, y = OY + r * 16, s = stAt(c, r);
+    if (!s) continue;
     blit(g, S(hash(c, r, room.seed + 5) % 5 ? 'sunstone_0' : 'sunstone_1'), x, y);
     g.fillStyle = PAL['0'];
     if (!isSt(c, r - 1)) g.fillRect(x, y, 16, 1);
@@ -1078,6 +1057,13 @@ THEMES.cloud.paint = function (g, room) {
     if (!isSt(c, r + 1)) { g.fillRect(x, y + 15, 16, 1); g.fillStyle = PAL.l; g.fillRect(x + 1, y + 16, 14, 1); } // a soft shade on the cloud below
     if (s === 2) blit(g, S('vent'), x, y);
   }
+};
+// the scenery's sky holes: the layout's own, worked out alike on every screen (rebuildMech)
+LAND_MECH.cloud = {
+  build(room) {
+    room.pit0 = new Set();
+    for (let i = 0; i < room.tiles.length; i++) if (room.tiles[i] === T_PIT) room.pit0.add(i);
+  },
 };
 // makes the cloud at tile i wobble now (bosses and foes use it too); host / solo
 function puffAt(room, i) {
@@ -1089,7 +1075,7 @@ function puffAt(room, i) {
 }
 // not while a boss's name card holds everyone still
 const puffLive = room => !room.cleared && !G.tut && !G.first && !G.cine && !!skyStone(room);
-LAND_MECH.cloud = {
+Object.assign(LAND_MECH.cloud, {
   // host / solo: lingering heroes weigh clouds down; wobbling clouds puff, holes fill back in
   update(dt, room) {
     if (room.type === 'slide') { slideUpdate(room); return; }
@@ -1196,12 +1182,11 @@ LAND_MECH.cloud = {
         const j = u > PUFF_WOB * 0.6 && Math.floor(G.time * 20) % 2 ? 1 : 0; // a late shiver
         { const [k, v] = skyOf(room, c, r); ctx.drawImage(dithered(k, v, lvl), x + j, y); }
       } else if (t === T_PIT && u > HOLE_T - 0.6 && u < HOLE_T + 1) {
-        const [k, v] = cloudOf(room, c, r);
-        ctx.drawImage(dithered(k, v, Math.min(15, Math.floor((u - HOLE_T + 0.6) / 0.6 * 16))), x, y);
+        if (room.base) ctx.drawImage(baseDither(room, c, r, Math.min(15, Math.floor((u - HOLE_T + 0.6) / 0.6 * 16))), x, y);
       }
     }
   },
-};
+});
 
 // ---------- Cloud Steps items ----------
 // Found only on the Cloud Steps (itemPool reads `land`).
@@ -1377,4 +1362,150 @@ function slideDraw(ox, oy, room, layer) {
     drawS(sp, ox + x - (sp.w >> 1), oy + y - sp.h, !star && f === 3 ? 1 : 0);
   }
   if (u > CHEST_T) { const x = Math.max(CHEST_X, VW + 16 - (u - CHEST_T) * SLIDE_V); shadow(ox + x, oy + SLIDE_MID + 8, 12); drawFeet(S('chest_0'), ox + x, oy + SLIDE_MID + 9); }
+}
+// ---------- Scenery (scenery.js) ----------
+// The Cloud Steps as a room: a soft white floor of billows with feathers and candy-floss bits,
+// a lavender cloud bank above a gold wall with cloud spilling over it, rainbows and bells hung
+// on it, sky through the holes, sunstone walls, a gazebo, cloud stacks, marble columns and gold
+// harps. A cloud that puffs away stays out of the baked base (SCN_TILE): the hole is drawn over
+// it (SCN_OVER) and grows back from the base itself (baseDither).
+(function cloudArt() {
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  A('fc_rainbow', grid(17, 10).fill((x, y) => {
+    const d = Math.hypot(x + 0.5 - 8.5, y + 0.5 - 9), B = ['B', 'G', 'y', 'o', 'r'];
+    if (y >= 6 && (x <= 3 || x >= 13) && Math.hypot(x + 0.5 - (x <= 3 ? 2.5 : 14.5), y + 0.5 - 8) < 2.6) return y < 7 ? 'w' : 'L';
+    if (y > 8 || d < 3 || d >= 8) return null;
+    return B[Math.floor(d - 3)];
+  }).rows());
+  A('fc_bell', [
+    '.........',
+    '....n....',
+    '...yYy...',
+    '..yYYyo..',
+    '..yYyyo..',
+    '.yYyyyyo.',
+    '.ooooooo.',
+    '....o....',
+    '.........']);
+  // a golden harp: a column, a curved neck, a soundboard; the strings go on after the outline
+  const harp = autoOutline(grid(15, 20).fill((x, y) => {
+    if (y >= 17 && y <= 18) return x >= 1 && x <= 9 ? (y === 17 ? 'o' : 'n') : null;
+    if (x >= 2 && x <= 3 && y >= 2 && y <= 16) return x === 2 ? 'Y' : 'y';
+    const ny = 1 + Math.round(Math.pow((x - 2) / 10, 2) * 5);
+    if (x >= 2 && x <= 12 && (y === ny || y === ny + 1)) return y === ny ? 'Y' : 'o';
+    const sx = Math.round(12 - (y - 7) * 8 / 10);
+    if (y >= 7 && y <= 16 && (x === sx || x === sx + 1)) return x === sx ? 'O' : 'o';
+    return null;
+  }).rows());
+  def('ob_harp', harp.map((row, y) => [...row].map((ch, x) => {
+    const ny = 1 + Math.round(Math.pow((x - 2) / 10, 2) * 5), sx = Math.round(12 - (y - 7) * 8 / 10);
+    return ch === '.' && (x === 6 || x === 9) && y > ny + 2 && x < sx - 1 ? 'w' : ch;
+  }).join('')));
+  // a little gazebo (a 2x2 giant): a gold dome on four white columns, a bell in the middle, two steps
+  A('gi_ctemple', grid(40, 46).fill((x, y) => {
+    if (y >= 1 && y <= 2 && x >= 19 && x <= 20) return x === 19 ? 'Y' : 'y';
+    if (y >= 3 && y <= 14) {
+      const dx = (x + 0.5 - 20) / 15, dy = (y + 0.5 - 15) / 12;
+      if (dx * dx + dy * dy > 1) return null;
+      return dx + dy < -0.9 ? 'Y' : dx + dy < -0.1 ? 'y' : dx + dy < 0.6 ? 'O' : 'o';
+    }
+    if (y >= 15 && y <= 17) return x >= 3 && x <= 36 ? (y === 15 ? 'O' : y === 16 ? 'o' : 'n') : null;
+    if (y >= 18 && y <= 37) {
+      if (x < 4 || x > 35) return null;
+      for (const c of [4, 13, 23, 32]) if (x >= c && x <= c + 3) return x === c ? 'w' : x === c + 3 ? 'l' : 'L';
+      // the bell under the dome, on a short cord
+      if (y <= 21 && x === 20) return 'n';
+      const bd = Math.abs(x + 0.5 - 20.5);
+      if (y >= 22 && y <= 26 && bd <= (y - 20) * 0.6) return y === 26 ? 'o' : x < 20 ? 'Y' : 'y';
+      if (y === 27 && x === 20) return 'o';
+      return y < 21 ? 'd' : 'm';
+    }
+    if (y >= 38 && y <= 40) return x >= 2 && x <= 37 ? (y === 38 ? 'w' : 'L') : null;
+    if (y >= 41 && y <= 43) return x >= 0 && x <= 39 ? (y === 41 ? 'w' : y === 43 ? 'l' : 'L') : null;
+    return null;
+  }).rows());
+  // a marble fountain (a 2x2 giant): a round basin of water, a bowl on a pillar, a little jet
+  A('gi_cfount', grid(40, 44).fill((x, y) => {
+    const px = x + 0.5 - 20, py = y + 0.5;
+    const top = (px / 18) ** 2 + ((py - 31) / 7) ** 2, inner = (px / 15) ** 2 + ((py - 31) / 5) ** 2;
+    // the jet and the top bowl
+    if (Math.abs(px) < 1.6 && y >= 3 && y <= 8) return y === 3 ? 'w' : x < 20 ? 'C' : 'c';
+    const bowl = (px / 7) ** 2 + ((py - 11) / 2.6) ** 2;
+    if (bowl <= 1) return (px / 5) ** 2 + ((py - 10.8) / 1.6) ** 2 <= 1 ? (px < 0 ? 'C' : 'c') : py < 11 ? 'L' : 'l';
+    if (y >= 12 && y <= 15 && Math.abs(px) < 7 && py > 11 + 2.6 * Math.sqrt(Math.max(0, 1 - (px / 7) ** 2))) return null;
+    if (Math.abs(px) <= 2 && y >= 12 && y < 31) return px < -1 ? 'w' : px < 1 ? 'L' : 'l';
+    if (inner <= 1) return py < 28 ? 'B' : (hash(x, y, 7) & 7) === 0 ? 'C' : 'c';
+    if (top <= 1) return px + (py - 31) * 2 < 0 ? 'L' : 'l';
+    if (Math.abs(px) <= 18 && py > 31 && py <= 31 + 7 * Math.sqrt(Math.max(0, 1 - (px / 18) ** 2)) + 6) {
+      const lip = 31 + 7 * Math.sqrt(Math.max(0, 1 - (px / 18) ** 2));
+      return py > lip + 5 ? 'd' : px > 12 ? 'm' : 'l';
+    }
+    return null;
+  }).rows());
+  // a marble column with a gold orb (a 1x2 post)
+  A('gi_cpillar', grid(18, 44).fill((x, y) => {
+    const o = Math.hypot(x + 0.5 - 9, y + 0.5 - 4);
+    if (o < 3.2) return x + y < 12 ? 'Y' : o < 2.2 ? 'y' : 'o';
+    if (y >= 7 && y <= 9) return x >= 3 && x <= 14 ? (y === 7 ? 'w' : y === 9 ? 'l' : 'L') : null;
+    if (y >= 10 && y <= 37) return x >= 5 && x <= 12 ? ((x - 5) % 3 === 2 ? 'l' : x === 5 ? 'w' : 'L') : null;
+    if (y >= 38 && y <= 41) return x >= 3 && x <= 14 ? (y === 38 ? 'w' : y === 41 ? 'l' : 'L') : null;
+    return null;
+  }).rows());
+})();
+
+// A cloud that puffed away (a hole that was not there when the room was built, room.pit0) is
+// still cloud to the base; the hole is drawn over it, as the plain renderer draws a pit.
+SCN_TILE.cloud = (room, i, t) => (t === T_PUFF || (t === T_PIT && room.pit0 && !room.pit0.has(i)) ? T_FLOOR : t);
+SCN_OVER.cloud = (g, room) => {
+  if (!room.pit0) return;
+  const hole = (c, r) => tileAt(room, c, r) === T_PIT && !room.pit0.has(r * COLS + c);
+  const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
+  for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
+    if (!hole(c, r)) continue;
+    const x = c * 16, y = OY + r * 16, [k, v] = skyOf(room, c, r);
+    const up = hole(c, r - 1), dn = hole(c, r + 1), lf = hole(c - 1, r), rt = hole(c + 1, r);
+    blit(g, S(k), x, y, v);
+    // a pale rim inside, the far bank's cloud seen from above, then the outline
+    if (!lf) f(x + 1, y, 1, 16, 'C');
+    if (!rt) f(x + 14, y, 1, 16, 'C');
+    if (!dn) f(x, y + 14, 16, 1, 'C');
+    if (!up) { f(x, y + 1, 16, 1, 'L'); f(x, y + 2, 16, 1, 'l'); f(x, y + 3, 16, 1, 'm'); f(x, y, 16, 1, '0'); }
+    if (!lf) f(x, y, 1, 16, '0');
+    if (!rt) f(x + 15, y, 1, 16, '0');
+    if (!dn) f(x, y + 15, 16, 1, '0');
+  }
+};
+// little clouds far down in the layout's own sky (the base sees only those pits)
+SCN_BASE.cloud = (b, room, s) => {
+  if (!room.tiles.includes(T_PIT)) return;
+  const m = regionMask(room, t => t === T_PIT, 3, 0), r = scnRand(s ^ 0x5c1d), F = PIT.cloud.face.length, sky = p32('c');
+  const PUFFS = [_G('..ww.. .wwww. wwwwww .CCCC.'), _G('.ww... wwwww. .CCCC.')];
+  for (let i = 0; i < room.tiles.length; i++) {
+    if (room.tiles[i] !== T_PIT || r() > 0.25) continue;
+    const g = PUFFS[Math.floor(r() * PUFFS.length)], x = (i % COLS) * 16 + Math.floor(r() * 10), y = OY + ((i / COLS) | 0) * 16 + Math.floor(r() * 10);
+    let ok = true;
+    for (let j = -2; j < g.length + 2 && ok; j++) for (let k = -2; k < g[0].length + 2; k++) {
+      if (!inM(m, x + k, y + j) || b.px[(y + j) * VW + x + k] !== sky || scnRun(m, x + k, y + j, 0, -1, 12) < F + 3) { ok = false; break; }
+    }
+    if (ok) glyph(b, g, x, y);
+  }
+};
+// a hole growing back: the floor under it, from the base, through a dither
+const _bdCv = document.createElement('canvas'), _bdMask = [];
+_bdCv.width = _bdCv.height = 16;
+function baseDither(room, c, r, lvl) {
+  if (!_bdMask[lvl]) {
+    const m = _bdMask[lvl] = document.createElement('canvas');
+    m.width = m.height = 16;
+    const g = m.getContext('2d');
+    g.fillStyle = '#fff';
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (BAYER4[(y & 3) * 4 + (x & 3)] < lvl) g.fillRect(x, y, 1, 1);
+  }
+  const g = _bdCv.getContext('2d');
+  g.globalCompositeOperation = 'copy';
+  g.drawImage(room.base, c * 16, OY + r * 16, 16, 16, 0, 0, 16, 16);
+  g.globalCompositeOperation = 'destination-in';
+  g.drawImage(_bdMask[lvl], 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  return _bdCv;
 }

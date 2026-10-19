@@ -58,19 +58,6 @@ const MN_ = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); retur
 const _mnRock = rockArt;
 rockArt = function (room, c, r, theme) { return theme === 'moon' && room.wellIdx && room.wellIdx.has(r * COLS + c) ? 'rock_moonw' : _mnRock(room, c, r, theme); };
 
-// moss tufts, fallen petals and the odd star in the grass (with scenery, the ground has its own)
-THEMES.moon.paint = function (g, room, scn) {
-  if (scn) return;
-  const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
-  for (let r = 2; r <= 11; r++) for (let c = 1; c <= 22; c++) {
-    const i = r * COLS + c, x = c * 16, y = OY + r * 16, h = hash(c, r, room.seed);
-    if (room.tiles[i] !== T_FLOOR) continue;
-    if (h % 4 === 0) { f(x + 3 + h % 9, y + 6 + (h >> 4) % 6, 1, 2, '1'); f(x + 4 + h % 9, y + 5 + (h >> 4) % 6, 1, 3, '1'); }
-    if (h % 9 === 0) f(x + 5 + (h >> 3) % 6, y + 3 + (h >> 6) % 8, 2, 1, 'q');
-    if (h % 23 === 0) { const sx = x + 6 + (h >> 2) % 4, sy = y + 6 + (h >> 5) % 4; f(sx, sy - 1, 1, 3, 'Y'); f(sx - 1, sy, 3, 1, 'Y'); }
-  }
-};
-
 // ---------- Rooms ----------
 LAND_LAYOUTS.moon = {
   // Stepping Moons: rock islands in a sea of night sky

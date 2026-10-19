@@ -27,12 +27,6 @@ const tileXY = (i) => [(i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 + 8];
     if (Math.abs(x - y) < 1 && d < 5.5 || Math.abs(x + y - 15) < 1 && d < 5.5) return on ? 'O' : 'e';
     return on ? 'T' : 'a';
   }).rows());
-  // quicksand: rings of darker sand spiralling in
-  def('qsand', grid(16, 16).fill((x, y) => {
-    const d = Math.hypot(x - 7.5, y - 7.5), a = Math.atan2(y - 7.5, x - 7.5);
-    const k = (d + a * 1.2 + 20) % 4;
-    return d < 1.5 ? 'n' : k < 1 ? 'e' : k < 1.6 ? 'N' : 'a';
-  }).rows(), { flip: true });
   // the Sun Temple's gate: a sandstone door with a sun disc
   SN_('sgate', `
     nNNNNNNNNNNNNn
@@ -66,14 +60,13 @@ const tileXY = (i) => [(i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 + 8];
 const _sunTileArt = tileArt;
 tileArt = function (room, c, r, t) { return t === T_GATE && G.floor && G.floor.land.id === 'sun' ? 'sgate' : _sunTileArt(room, c, r, t); };
 
-// plates and quicksand, baked into the room's static layer (with scenery the base draws the
-// quicksand itself, below)
-THEMES.sun.paint = function (g, room, scn) {
+// the plates, baked into the room's static layer (the base draws the quicksand, below)
+THEMES.sun.paint = function (g, room) {
   for (let i = 0; i < room.tiles.length; i++) {
     const t = room.tiles[i];
-    if (t !== T_PLATE && t !== T_PLATEON && (t !== T_QSAND || scn)) continue;
+    if (t !== T_PLATE && t !== T_PLATEON) continue;
     const x = (i % COLS) * 16, y = OY + ((i / COLS) | 0) * 16;
-    blit(g, S(t === T_QSAND ? 'qsand' : t === T_PLATE ? 'plate_0' : 'plate_1'), x, y, t === T_QSAND ? hash(i, 5, room.seed) & 1 : 0);
+    blit(g, S(t === T_PLATE ? 'plate_0' : 'plate_1'), x, y);
     const k = room.glyph && room.glyph.indexOf(i);
     if (k >= 0) { const s = S('glyph_' + k); blit(g, s, x + 8 - (s.w >> 1), y + 8 - (s.h >> 1)); }
   }

@@ -22,15 +22,6 @@ const libOut = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); re
   def('brk_library', stamp(b, 5, 3, 'r..r\n.rr.'));
 })();
 
-// the floor is a page: faint ruled lines and a pink margin (the scenery draws its own)
-THEMES.library.paint = function (g, room, scn) {
-  if (scn) return;
-  g.fillStyle = PAL.e;
-  for (let y = OY + 43; y < OY + 192; y += 12) for (let x = 16; x < VW - 16; x += 2) g.fillRect(x, y, 1, 1);
-  g.fillStyle = PAL.q;
-  g.fillRect(56, OY + 32, 1, 160); g.fillRect(58, OY + 32, 1, 160);
-};
-
 // ---------- Pages ----------
 const PAGE_LAYOUTS = {
   // Reading Room: tables and armchairs

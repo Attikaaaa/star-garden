@@ -69,15 +69,9 @@ const DP_ = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); retur
 const _dpRock = rockArt;
 rockArt = function (room, c, r, theme) { return theme === 'deep' && room.lay === 'hull' ? 'hull_deep' : _dpRock(room, c, r, theme); };
 
-// sand ripples (the scenery draws its own), and the vents
-THEMES.deep.paint = function (g, room, scn) {
+// the vents
+THEMES.deep.paint = function (g, room) {
   const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
-  if (!scn) for (let r = 2; r <= 11; r++) for (let c = 1; c <= 22; c++) {
-    const i = r * COLS + c, x = c * 16, y = OY + r * 16, h = hash(c, r, room.seed);
-    if (room.tiles[i] !== T_FLOOR) continue;
-    if (h % 3 === 0) f(x + 2 + h % 8, y + 4 + (h >> 4) % 8, 5, 1, '2');
-    if (h % 11 === 0) f(x + 4 + (h >> 3) % 6, y + 10, 1, 1, 'T');
-  }
   for (const i of room.vents || []) {
     const x = (i % COLS) * 16, y = OY + ((i / COLS) | 0) * 16;
     f(x + 3, y + 5, 10, 8, '0'); f(x + 2, y + 6, 12, 6, '0'); f(x + 4, y + 6, 8, 6, '1'); f(x + 5, y + 7, 6, 4, 'b');

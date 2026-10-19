@@ -4,8 +4,7 @@
 // around all come from the room's seed and tiles, so every co-op screen dresses a room the
 // same way. It is baked into the room's static canvas (renderRoomStatic); tall pieces
 // (trees, palms, pillars) are drawn with the actors so heroes can walk behind them.
-// Lands not in SCN_LANDS keep their tile renderer (renderRoomPlain, level.js).
-const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun', 'moon', 'lantern', 'deep', 'library', 'forge', 'toy']);
+const SCN_LANDS = new Set(['meadow', 'beach', 'crystal', 'well', 'snow', 'sun', 'moon', 'lantern', 'deep', 'library', 'forge', 'toy', 'cloud']);
 
 // ---------- Noise (pure functions of position and seed) ----------
 const _u = (h) => h / 4294967296;
@@ -117,6 +116,7 @@ const SCN_GROUND = {
   beach: { base: 'a', dark: 'A', light: 'e', tuft: { a: 'e', A: 'a', e: 'N' }, speck: { a: 'A', A: 'w', e: 'a' }, hi: 0.64, lo: 0.2 },
   crystal: { base: 'l', dark: 'm', light: 'L', tuft: { l: 'm', m: 'd', L: 'l' }, speck: { l: 'L', m: 'l', L: 'w' }, hi: 0.72, lo: 0.2 },
   well: { base: '2', dark: '1', light: '3', tuft: { 2: '1', 1: '0', 3: '2' }, speck: { 2: '3', 1: '2', 3: '4' }, hi: 0.75, lo: 0.22 },
+  cloud: { base: 'L', dark: 'l', light: 'w', tuft: { L: 'l', l: 'm', w: 'l' }, speck: { L: 'w', l: 'L', w: 'L' }, hi: 2, lo: 0.12 },
   toy: { base: 'N', dark: 'N', light: 'N', tuft: { N: 'n' }, speck: { N: 'N' }, hi: 2, lo: -1 },
   forge: { base: 'V', dark: 'v', light: 'V', tuft: { V: 'v', v: 'x' }, speck: { V: 'v', v: 'V' }, hi: 0.96, lo: -1 },
   library: { base: 'a', dark: 'e', light: 'A', tuft: { a: 'e', e: 'N', A: 'a' }, speck: { a: 'A', e: 'a', A: 'w' }, hi: 0.97, lo: 0.08 },
@@ -130,8 +130,9 @@ const TUFTS = [_G('x.x .x.'), _G('x .'), _G('.x. x.x'), _G('x..x .xx.')];
 // stone floors get chips and grit instead of tufts
 const CHIPS = [_G('xx'), _G('x. .x'), _G('.x x.'), _G('x')];
 SCN_GROUND.crystal.glyphs = SCN_GROUND.well.glyphs = SCN_GROUND.sun.glyphs = SCN_GROUND.deep.glyphs = SCN_GROUND.library.glyphs = SCN_GROUND.forge.glyphs = SCN_GROUND.toy.glyphs = CHIPS;
-// little lumps of snow
+// little lumps of snow; the soft underside of a billow
 SCN_GROUND.snow.glyphs = [_G('xx'), _G('.x. x.x'), _G('x')];
+SCN_GROUND.cloud.glyphs = [_G('x...x .xxx.'), _G('x..x .xx.'), _G('x....x .xxxx.')];
 function bakeGround(room, theme) {
   const R = SCN_GROUND[theme] || SCN_GROUND.meadow, b = pixBuf(VW, VH), s = room.seed | 0;
   const cls = new Uint8Array(VW * VH); // 0 base, 1 dark patch, 2 light patch
@@ -349,6 +350,15 @@ const SCN_DECALS = {
     ],
     wall: [_G('.d. dmd'), _G('.C. cB.'), _G('m. dm')],
   },
+  cloud: {
+    cluster: [[_G('.ww. wLLw .ll.'), 3], [_G('.w. wlw'), 2]], // little cloudlets
+    single: [
+      [_G('...l ..wl .wl. wl.. l...'), 2], // a feather
+      [_G('.q. qPq .q.'), 1], // a tuft of candy floss
+      [_G('.CC. CccC .CC.'), 1], // a raindrop puddle
+    ],
+    wall: [_G('.ww. wLLw'), _G('.w. wLw')],
+  },
   toy: {
     cluster: [[_G('.e. eae'), 3], [_G('e. .e'), 2]], // dust
     single: [
@@ -490,7 +500,7 @@ function scatterDecals(b, room, theme, cls) {
 // ---------- Wall caps: one endless texture per land ----------
 // A pure function of play-view position, so the room's caps and the screen margins
 // around it (drawBackdrop) meet without a seam.
-const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606, moon: 707, lantern: 808, deep: 909, library: 1010, forge: 1111, toy: 1212 };
+const CAP_SEED = { meadow: 101, beach: 202, crystal: 303, well: 404, snow: 505, sun: 606, moon: 707, lantern: 808, deep: 909, library: 1010, forge: 1111, toy: 1212, cloud: 1313 };
 const CAP = {
   // a clipped hedge: big leafy clumps lit from the top left, now and then a flower
   meadow(x, y, s) {
@@ -534,6 +544,14 @@ const CAP = {
     const v = litBump(w.dx, w.dy, 9.5) - ((id >>> 8) & 3) * 0.08;
     if ((id & 7) === 3) return v > 0.7 ? 'O' : v > 0.25 ? 'o' : 'n';
     return v > 0.75 ? 'T' : v > 0.3 ? 't' : v > -0.1 ? 'g' : 'b';
+  },
+  // a bank of cloud in soft wide mounds lit from the top left, each one's top edge showing
+  // against the one behind it
+  cloud(x, y, s) {
+    const w = worley(x, y, 16, s, 0.6);
+    if (w.f2 - w.f1 < 1.1 && w.dy < -2) return 'm';
+    const v = litBump(w.dx, w.dy, 11) - ((w.id >>> 8) & 3) * 0.06;
+    return v > 0.7 ? 'w' : v > 0.15 ? 'L' : v > -0.3 ? 'l' : 'm';
   },
   // the eaves: dark planks, the joints staggered
   toy(x, y, s) {
@@ -653,6 +671,7 @@ const PIT = {
   beach: { face: ['A', 'a', 'e', 'N'], shade: 't', body: 'T', deep: 'T', ripple: 'C', edge: 'C', foam: 'w', wet: 'e' },
   crystal: { face: ['L', 'l', 'm', 'm', 'd', 'd', '1', '1', '0'], glint: ['1', '1', '1', '2', 'c'], tooth: _G('0C0 0c0 .0.') },
   well: { face: ['4', '3', '2', '2', '1', '1', '0'], glint: ['1', '2', 'Y', 'w', 'c'], tooth: _G('0Y0 .0.') },
+  cloud: { face: ['L', 'l', 'm'], shade: 'c', body: 'c', deep: 'c', ripple: 'c', edge: 'C', foam: 'w' },
   toy: { face: ['N', 'n', 'u', 'u'], glint: ['n', 'u', 'O'], shade: 'u', gn: 255 },
   forge: { face: ['X', 'x', 'n', 'r'], shade: 'r', body: 'o', deep: 'O', ripple: 'y', edge: 'r', foam: 'n' },
   library: { face: ['A', 'e', 'A', 'e'], shade: '0', body: '1', deep: '0', ripple: '1', edge: '2', foam: null },
@@ -779,6 +798,19 @@ const RIDGE = {
   },
   crystal: { top: '1234', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '1' : '2'; } },
   well: { top: '0123', cell: 10, h: 7, front(x, y, row, s) { return (hash(x >> 1, 3, s) & 3) === 0 || row === 6 ? '0' : '1'; } },
+  // a marble balustrade: a white rail on a row of balusters, the shade between them
+  cloud: {
+    top: 'mlwL', cell: 16, h: 9,
+    topAt(x, y) { return (y - OY) % 16 === 15 ? 'l' : 'L'; },
+    front(x, y, row) {
+      if (row === 0) return 'w';
+      if (row === 1) return 'l';
+      if (row === 8) return 'm';
+      if (row === 7) return 'l';
+      const i = x % 5;
+      return i === 0 ? 'm' : i === 1 ? 'd' : i === 2 ? 'w' : i === 3 ? 'L' : 'l';
+    },
+  },
   // a row of wooden ABC blocks: each face framed in a colour, its letter in the darker one
   toy: {
     top: 'eaAA', cell: 16, h: 9,
@@ -928,6 +960,7 @@ const FACE_GROW = {
       for (let x = X0 + 6, k = 0; x < X1 - 4; x += 16, k++) NOTE.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '#') put(x + i, y0 + (k & 1 ? 2 : 5) + j, 'p'); }));
     },
   },
+  cloud: { foot: ['w', 'L'], n: 0.3, spill: ['w', 'L'] },
   forge: { foot: ['X', 'x'], n: 0.12, drip: { k: ['X', 'x'], n: 0.06 } },
   // a shelf of books in the room's three colours over a wooden wainscot
   library: {
@@ -994,10 +1027,11 @@ const FACE_THINGS = {
   library: [['fc_lamp', 0.8, 3, 9, [3, 3]], ['fc_ladder', 1.5, 0, 9], ['fc_plant', 1.5, 2, 9]],
   forge: [['fc_gauge', 1.5, 3, 11], ['fc_tools', 2, 2, 13], ['fc_lamp', 0.8, 3, 9, [3, 3]]],
   toy: [['fc_awin', 1.5, 1, 13], ['fc_drawing', 2, 2, 11], ['fc_lamp', 0.6, 3, 9, [3, 3]]],
+  cloud: [['fc_rainbow', 1.5, 4, 17], ['fc_bell', 2, 3, 9], ['fc_lamp', 0.6, 3, 9, [3, 3]]],
 };
 // Stretches of the face a land keeps clear of hung things ([x0, x1], the forge's wall pipe).
 const FACE_KEEP = {};
-const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce', moon: 'fc_lamp', lantern: 'fc_lamp', deep: 'fc_pearl', library: 'fc_lamp', forge: 'fc_lamp', toy: 'fc_lamp' };
+const FACE_LAMP = { meadow: 'fc_lamp', beach: 'fc_lamp', crystal: 'fc_hang', well: 'fc_lamp', snow: 'fc_lamp', sun: 'fc_sconce', moon: 'fc_lamp', lantern: 'fc_lamp', deep: 'fc_pearl', library: 'fc_lamp', forge: 'fc_lamp', toy: 'fc_lamp', cloud: 'fc_lamp' };
 // `F`: where the strip goes ({ x0, x1, y0 }) and the door gap to keep bare ([from, to]).
 const FACE_ROOM = { x0: 16, x1: VW - 16, y0: OY + 16, gap: [160, 224] };
 function drawFacePx(b, room, theme, things, F) {
@@ -1101,6 +1135,7 @@ const OBSTACLES = {
   library: ['rock_library', 'ob_globe', 'ob_chair'],
   forge: ['rock_forge', 'ob_ingots', 'ob_bucket'],
   toy: ['rock_toy', 'ob_rings'],
+  cloud: ['rock_cloud', 'ob_harp'],
 };
 const BREAKABLES = {
   meadow: ['brk_meadow', 'bk_pot', 'bk_hay'],
@@ -1115,6 +1150,7 @@ const BREAKABLES = {
   library: ['brk_library', 'bk_drawer'],
   forge: ['brk_forge'],
   toy: ['brk_toy'],
+  cloud: ['brk_cloud'],
 };
 // What flies when a breakable breaks.
 const BRK_BITS = {
@@ -1124,7 +1160,7 @@ const BRK_BITS = {
   bk_vein: ['C', 'c', 'w', '3'], brk_snow: ['r', 'R', 'y'], bk_cratesnow: ['N', 'n', 'w'],
   brk_sun: ['n', 'o', 'O'], bk_basket: ['O', 'o', 'y'], brk_moon: ['l', '4', 'y'], bk_mpot: ['2', '3', 'L'],
   brk_lantern: ['o', 'O', 'G'], bk_mushcap: ['r', 'R', 'w'], bk_firewood: ['n', 'N', 'O'],
-  brk_deep: ['n', 'N', 'O'], brk_library: ['L', 'w', 'r'], bk_drawer: ['n', 'N', 'A'], brk_forge: ['r', 'R', 'y'], brk_toy: ['e', 'a', 'A'],
+  brk_deep: ['n', 'N', 'O'], brk_library: ['L', 'w', 'r'], bk_drawer: ['n', 'N', 'A'], brk_forge: ['r', 'R', 'y'], brk_toy: ['e', 'a', 'A'], brk_cloud: ['q', 'P', 'w'],
 };
 // A land's own room shapes built of breakables (or rocks) are built of one kind (LAND_LAYOUTS).
 const LAY_BRK = { maze: 'brk_meadow', wreck: 'bk_crate', vein: 'bk_vein', scarab: 'brk_sun', petal: 'brk_moon', ring: 'bk_mushcap', field: 'brk_lantern', hull: 'brk_deep', catalogue: 'bk_drawer' }, LAY_ROCK = { slalom: 'ob_flag', oasis: 'ob_sprout', kelp: 'rock_deep', reading: 'ob_chair', popup: 'ob_popup', anvil: 'rock_forge' };
@@ -1141,11 +1177,12 @@ const TALL = {
   library: ['gi_bookcase', 'gi_bookcase2'],
   forge: ['gi_furnace'],
   toy: ['gi_horse', 'gi_blocks'],
+  cloud: ['gi_ctemple', 'gi_cfount'],
 };
 // A land room's own tall piece (the village's cabins).
 const LAY_TALL = { village: 'gi_hut', reading: 'gi_rtable' };
 // Lands where two rocks stacked in a column stand as one tall post (an obelisk).
-const POST = { sun: ['gi_sobelisk'], moon: ['gi_mpillar'], lantern: ['gi_birch'], deep: ['gi_kelpp'], library: ['gi_gclock'], forge: ['gi_fpipe'], toy: ['gi_domino', 'gi_domino2'] };
+const POST = { sun: ['gi_sobelisk'], moon: ['gi_mpillar'], lantern: ['gi_birch'], deep: ['gi_kelpp'], library: ['gi_gclock'], forge: ['gi_fpipe'], toy: ['gi_domino', 'gi_domino2'], cloud: ['gi_cpillar'] };
 // Each room uses two of a land's kinds, so a room looks planned rather than random.
 function roomPick(list, room, salt, c, r) {
   const s = room.seed | 0, n = list.length, a = hash(salt, 1, s) % n, b = n > 1 ? (a + 1 + hash(salt, 2, s) % (n - 1)) % n : a;
@@ -1172,6 +1209,7 @@ const RING = {
   library: { line: 'e', dot: ['b', 'r', 't'] },
   forge: { line: 'v', dot: ['o', 'O', 'T'] },
   toy: { line: 'n', dot: ['r', 'B', 'G'] },
+  cloud: { line: 'l', dot: ['c', 'q', 'B'] },
 };
 function drawRingPx(b, theme) {
   const R = RING[theme] || RING.meadow, cx = VW / 2, cy = OY + 112;
@@ -1376,7 +1414,6 @@ function grassFront(o, ox, oy) {
 
 // ---------- The room's static layer: the base plus what can break ----------
 function renderRoomStatic(room, theme) {
-  if (!SCN_LANDS.has(theme)) return renderRoomPlain(room, theme);
   if (!room.canvas) {
     room.canvas = document.createElement('canvas');
     room.canvas.width = VW; room.canvas.height = VH;
@@ -1388,7 +1425,7 @@ function renderRoomStatic(room, theme) {
   g.drawImage(room.base, 0, 0);
   // a land's own floor marks (runes, belts, plates, quicksand, vents...) and passing changes
   const th = THEMES[theme];
-  if (th.paint) th.paint(g, room, true);
+  if (th.paint) th.paint(g, room);
   if (SCN_OVER[theme]) SCN_OVER[theme](g, room);
   // ice sheets: an edge where the ice meets other ground. A lone rock or crate out on the ice
   // (three sides or more) stands on ice too.
@@ -1418,7 +1455,7 @@ function renderRoomStatic(room, theme) {
     g.drawImage(ellipseSprite(14, 5, SHADOW), x + 1, y + 12);
     blit(g, sp, x, y + 16 - sp.h);
   }
-  // a land's own pieces (prisms, bells, the clock's gate), as the tile renderer draws them
+  // a land's own pieces (prisms, bells, the clock's gate, mirrors, lamps)
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const t = room.tiles[r * COLS + c];
     if (t < T_PRISM || t === T_PUFF || t === T_ICE || t >= T_QSAND) continue;

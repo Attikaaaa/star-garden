@@ -111,19 +111,12 @@ function chev(x, y, d, key) {
 }
 
 // ---------- The floor ----------
-// Floorboards two to a tile with staggered joints, a rug in quiet rooms, belts, piano keys and the
-// record, through a fill f(x, y, w, h, key). The scenery draws its own boards (scn) and bakes the
-// rest into the room's base (SCN_BASE), so the blocks stand on them.
-function toyFloor(f, room, scn) {
+// A rug in quiet rooms, belts, piano keys and the record, through a fill f(x, y, w, h, key), baked
+// into the room's base (SCN_BASE) over the scenery's floorboards, so the blocks stand on them.
+function toyFloor(f, room) {
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const i = r * COLS + c, x = c * 16, y = OY + r * 16;
     if (room.tiles[i] === T_PIT) continue;
-    if (!scn) for (let h = 0; h < 2; h++) {
-      const by = y + h * 8, j = r * 2 + h;
-      f(x, by, 16, 8, 'N'); f(x, by, 16, 1, 'e'); f(x, by + 7, 16, 1, 'n');
-      if ((c + j * 2) % 3 === 0) f(x, by, 1, 8, 'n');
-      if (hash(c, j, room.seed) % 13 === 0) f(x + 4 + hash(j, c, 3) % 8, by + 3, 2, 1, 'n');
-    }
     const d = room.belt && room.belt[i];
     if (d) {
       f(x, y, 16, 16, 'x');
@@ -168,13 +161,10 @@ function toyFloor(f, room, scn) {
     }
   }
 }
-THEMES.toy.paint = function (g, room, scn) {
-  if (!scn) toyFloor((x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); }, room, false);
-};
 SCN_BASE.toy = (b, room) => toyFloor((x, y, w, h, k) => {
   const c = p32(k);
   for (let j = 0; j < h; j++) b.px.fill(c, (y + j) * VW + x, (y + j) * VW + x + w);
-}, room, true);
+}, room);
 
 // ---------- Crayon lines ----------
 // A 'zap' marker with c: 'crayon' (h: seconds it is only a drawing); zapHit skips the harmless part.
