@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.15.2', lines: ['A RING IN YOUR OWN COLOUR UNDER EVERY HERO', 'IN CO-OP AN ARROW OVER YOU, NAMES OVER YOUR FRIENDS', 'TREES TURN SEE-THROUGH WHEN SOMEONE IS BEHIND THEM'] },
   { v: '1.15.0', lines: ['THE MEADOW, SHORE AND CRYSTAL CAVE REDRAWN: NEW GROUND, PONDS AND WALLS', 'TREES, HEDGES, CRYSTALS AND LAMPS IN THE ROOMS', 'TALL GRASS TO CUT WITH SHOTS AND ROLLS', 'SIX NEW ROOM SHAPES', 'A NEW TITLE SCREEN AND TIDIER TEXT IN EVERY MENU'] },
   { v: '1.14.0', lines: ['A NEW GAME ON THE TITLE SCREEN: WILDGROVE', 'AN ENDLESS SURVIVAL WORLD: CHOP, BUILD, FARM, FIGHT', 'PLAY WITH FRIENDS, SAVE AND SHARE YOUR WORLDS'] },
   { v: '1.13.0', lines: ['THE LAST LAND: THE MOON GARDEN, WHERE THE STAR ROAD ENDS', 'LOW GRAVITY: YOU SLIDE, AND GOLD ROCKS BEND YOUR SHOTS', 'BEAT THE NIGHT BLOOM TO OPEN ROAD+: THE SAME ROAD, A LITTLE WILDER', 'DAILY RUNS NOW VISIT THE WHOLE STAR ROAD', 'THE CASINO: A VIP LOUNGE, A FOUNTAIN, QUESTS AND A CONSTELLATION', "HOLD'EM IN THE LOUNGE: BEAT A FROG, AN OWL AND A FOX", 'A VELVET ROBE AT THE PRIZE COUNTER'] },
@@ -224,7 +225,7 @@ function drawEndScreen(title, col, sub) {
   if (team) {
     G.players.forEach((p, i) => {
       const cx = i % 2 ? x + w / 2 + 6 : x + 12, cy = ly + Math.floor(i / 2) * 10;
-      text(p.name, cx, cy, TAG_COL[p.skin], 1); text(String(p.kills), cx + w / 2 - 18, cy, 'w', 1, 2);
+      text(p.name, cx, cy, seatCol(p), 1); text(String(p.kills), cx + w / 2 - 18, cy, 'w', 1, 2);
     });
     ly += 10 * Math.ceil(G.players.length / 2);
   }

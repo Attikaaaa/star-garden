@@ -217,6 +217,13 @@
     [['3.3.3.3'], 12, 30],
   ]));
 
+  // See-through copies (every other pixel above the foot) for when someone stands behind a
+  // tall piece (scenery.js drawTall).
+  for (const d of _defs.filter(d => /^gi_/.test(d.name))) {
+    const n = d.rows.length;
+    def(d.name + '_d', d.rows.map((row, y) => y >= n - 9 ? row : row.replace(/./g, (c, x) => (x + y) & 1 ? c : '.')), d.opts);
+  }
+
   // ---------- On the top wall's face ----------
   // Bloom Meadow: a lamp (the flame is drawn live), a flower box, a little window
   A('fc_lamp', `

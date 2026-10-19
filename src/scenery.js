@@ -782,8 +782,17 @@ function bakeBase(room, theme) {
   }
   return c;
 }
-// The tall pieces of a room, for the display list (main.js) and room slides.
-function drawTall(t, ox, oy) { drawFeet(S(t.s), ox + t.x, oy + t.y); }
+// The tall pieces of a room, for the display list (main.js) and room slides. One that a hero
+// or a foe stands behind is drawn see-through, so nobody gets lost behind a tree.
+function tallHides(t, sp, list) {
+  const x0 = t.x - (sp.w >> 1) + 3, x1 = t.x + (sp.w >> 1) - 3, y0 = t.y - sp.h + 8;
+  for (const o of list) if (!o.dead && o.x > x0 && o.x < x1 && o.y < t.y - 3 && o.y > y0) return true;
+  return false;
+}
+function drawTall(t, ox, oy) {
+  const sp = S(t.s);
+  drawFeet(tallHides(t, sp, G.players) || tallHides(t, sp, G.enemies) ? S(t.s + '_d') : sp, ox + t.x, oy + t.y);
+}
 function drawTallTo(g, room, theme, ox, oy) { for (const t of room.tall || []) { const sp = S(t.s); blit(g, sp, ox + t.x - (sp.w >> 1), oy + t.y - sp.h); } }
 // Flames in the lamps.
 function drawSceneryLive(room, ox, oy) {

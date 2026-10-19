@@ -60,8 +60,9 @@ function drawCouchJoin() {
   const c = G.couch || [], x0 = VW / 2 - 140;
   c.forEach((k, i) => {
     const x = x0 + 18 + i * 22;
+    drawS(S('seat_ring_' + (i + 1)), x - 8, 52);
     drawFeet(S('hero_d0' + SKIN[(Save.skin + i + 1) % ROBES.length]), x, 56);
-    text('P' + (i + 2), x, 58, TAG_COL[(Save.skin + i + 1) % ROBES.length], 1, 1);
+    text('P' + (i + 2), x, 58, SEATS[i + 1], 1, 1);
   });
   if (c.length < 3 && freePads().some(i => !c.some(k => k.pad === i))) text('ANOTHER CONTROLLER: PRESS A TO JOIN', VW / 2, 206, Math.floor(G.time * 2) % 2 ? 'Y' : 'c', 2, 1);
 }

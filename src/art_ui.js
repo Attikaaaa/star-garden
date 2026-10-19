@@ -422,3 +422,20 @@ const LOGO = {
     ................
     ................`);
 })();
+
+// Who is who: a ring at a hero's feet and an arrow over your own head, one colour per seat
+// (entities.js SEATS). The far half of the ring is a shade darker, the near half sits on a dark lip.
+(function seatArt() {
+  const ring = grid(16, 9).fill((x, y) => {
+    const e = (rx, ry, cy) => ((x + 0.5 - 8) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+    const on = (cy) => e(8, 3.7, cy) <= 1 && e(6.3, 2.2, cy) > 1;
+    if (on(3.9)) return y < 4 ? 'O' : 'y';
+    return on(4.9) && y >= 4 ? '0' : null;
+  }).rows();
+  const arrow = ['0000000', '0Yyyyo0', '.0yyo0.', '..0o0..', '...0...'];
+  const SEAT_ART = [null, { O: 'B', y: 'c', Y: 'C', o: 'b' }, { O: 'p', y: 'P', Y: 'q', o: 'p' }, { O: 'n', y: 'o', Y: 'O', o: 'n' }];
+  SEAT_ART.forEach((legend, i) => {
+    def('seat_ring_' + i, ring, legend ? { legend } : undefined);
+    def('seat_arrow_' + i, arrow, legend ? { legend } : undefined);
+  });
+})();

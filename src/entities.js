@@ -351,6 +351,7 @@ function healPlayer(p, n) {
 const HERO_WALK = [1, 0, 2, 0];
 function drawPlayer(p, ox, oy) {
   const sk = SKIN[p.skin], hp = heroPre(p.hero), ly = Math.round(p.leapZ || 0);
+  seatMark(p, ox, oy);
   if (p.dead) {
     if (p.deadT < 0.9) {
       const f = ['d', 's', 'u', 's'][Math.floor(p.deadT * 12) % 4];
@@ -385,7 +386,37 @@ function drawPlayer(p, ox, oy) {
   if (p.umbOpen && !p.down) drawS(S('umb_open'), ox + p.x - 6, oy + p.y - 27 - (p.leapZ || 0)); // held just over the hat
   drawBuddies(p, ox, oy);
 }
-// Co-op: every hero's name over their head, in their robe colour.
+// ---------- Who is who ----------
+// Every hero has a seat colour by pid (the same on every screen): a ring at the feet, and the
+// name over the head, on the HUD, in the lobby and on the end screen in that colour. In an
+// online game your own hero has an arrow instead of a name. When a room starts (and when a
+// hero is back on their feet) a pulse shows where everyone stands. Settings: HERO MARKER.
+const SEATS = ['Y', 'c', 'P', 'O'], SEAT_RING = ['y', 'c', 'P', 'o'];
+const seatOf = (p) => ((p && p.pid) || 0) % SEATS.length;
+const seatCol = (p) => SEATS[seatOf(p)];
+const markOn = () => { const m = Save.settings.mark || 0; return m === 0 || (m === 1 && G.players.length > 1); };
+let _seatRoom = null, _seatT = 0;
+function seatMark(p, ox, oy) {
+  if (!markOn()) return;
+  if (G.room !== _seatRoom) { _seatRoom = G.room; _seatT = G.time; }
+  const up = !p.dead && !p.down;
+  if (up && p.wasDown) p.pulseT = G.time;
+  p.wasDown = !up;
+  if (p.dead || (G.warp && p === G.player) || (p.down && Math.floor(G.time * 4) % 2)) return;
+  const x = Math.round(ox + p.x), y = Math.round(oy + p.y), k = seatOf(p);
+  drawS(S('seat_ring_' + k), x - 8, y - 4);
+  // two rings spreading out, just after the room slid in or the hero got up
+  const a = G.time - Math.max(_seatT + 0.1, p.pulseT || 0);
+  for (let n = 0; n < 2; n++) {
+    const t = a - n * 0.16;
+    if (t < 0 || t >= 0.42) continue;
+    const r = Math.round(7 + t / 0.42 * 17);
+    ctx.drawImage(ringSprite(r, SEAT_RING[k]), x - r, y - Math.round(r * 0.6));
+  }
+}
+// Your own hero's arrow: always in an online game, and for a moment when a room starts.
+function seatArrow(p) { return markOn() && p === G.player && !p.down && (NET.role || G.time - _seatT < 1.4); }
+// Co-op: every hero's name over their head, in their seat colour.
 // Words over the heroes' heads: co-op names (or HELP! when down) and short potion / item
 // words. Labels of heroes standing close together stack instead of overlapping.
 const _tags = [];
@@ -407,9 +438,12 @@ function drawTags(ox, oy) {
   for (const p of order) {
     if (p.dead) continue;
     const top = p.y - (p.down ? 33 : 28);
-    if (G.players.length > 1) {
-      if (!p.down) put(p.name, p.x, top, TAG_COL[p.skin]);
-      else if (p.revive <= 0 && Math.floor(G.time * 2) % 2) put('HELP!', p.x, top, TAG_COL[p.skin]);
+    if (seatArrow(p)) {
+      drawS(S('seat_arrow_' + seatOf(p)), Math.round(ox + p.x) - 3, Math.round(oy + top) + 1 + (Math.floor(G.time * 3) % 2));
+      _tags.push({ x: p.x, y: top, w: 11 });
+    } else if (G.players.length > 1) {
+      if (!p.down) put(p.name, p.x, top, seatCol(p));
+      else if (p.revive <= 0 && Math.floor(G.time * 2) % 2) put('HELP!', p.x, top, seatCol(p));
       else _tags.push({ x: p.x, y: top, w: textW('HELP!') + 4 });
     }
     if (p.sayT > 0) put(p.sayMsg, p.x, top - (G.players.length > 1 ? 10 : 0) - Math.round((1.1 - p.sayT) * 6), 'Y');

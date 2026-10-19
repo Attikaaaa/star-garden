@@ -114,7 +114,7 @@ function drawHUD() {
 function drawTeam(y) {
   for (const q of G.players) {
     if (q === G.player) continue;
-    text(q.name, 5, y, TAG_COL[q.skin], 2);
+    text(q.name, 5, y, seatCol(q), 2);
     const bx = 9 + textW(q.name);
     if (q.down || q.dead) { if (Math.floor(G.time * 3) % 2) text('DOWN!', bx, y, 'R', 2); }
     else {
@@ -427,12 +427,12 @@ function drawTitle() {
 }
 
 // ---------- Settings ----------
-const SET_X = VW / 2 - 84, SET_Y = 64, BAR_X = SET_X + 98, VIBE = ['OFF', 'LOW', 'FULL'];
+const SET_X = VW / 2 - 84, BAR_X = SET_X + 98, VIBE = ['OFF', 'LOW', 'FULL'], MARKS = ['ALWAYS', 'CO-OP', 'OFF'];
 // Rows carry ids so a row can be hidden (no fullscreen or vibration on iPhone) without breaking the logic.
 function settingsRows() {
   const s = Save.settings, rows = [
     ['music', 'MUSIC', 'bar', s.music], ['sfx', 'EFFECTS', 'bar', s.sfx],
-    ['shake', 'SCREEN SHAKE', s.shake ? 'ON' : 'OFF'],
+    ['shake', 'SCREEN SHAKE', s.shake ? 'ON' : 'OFF'], ['mark', 'HERO MARKER', MARKS[s.mark || 0]],
   ];
   if (!IS_IOS) rows.push(['vibe', IS_TOUCH ? 'VIBRATION' : 'RUMBLE', VIBE[s.vibe]]);
   if (document.fullscreenEnabled) rows.push(['full', 'FULLSCREEN', document.fullscreenElement ? 'ON' : 'OFF']);
@@ -446,10 +446,12 @@ function settingsRows() {
   rows.push(['lang', 'LANGUAGE', (LANGS.find(l => l[0] === langId()) || LANGS[0])[1]], ['save', 'SAVE CODE', '>'], ['back', 'BACK', null]);
   return rows;
 }
-const setGap = (rows) => (rows.length > 10 ? 10 : rows.length > 9 ? 11 : rows.length > 7 ? 13 : 16);
-const SET_HELP = { shake: 'ALSO THE FLASHES AND THE PAGE TURNS', assist: 'A SLOWER GAME AND BEAT, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN', bright: 'LIGHTS UP THE LANTERN WOODS', metro: 'A SOFT TICK ON EVERY BEAT OF THE TOY ATTIC' };
+// rows as roomy as they fit; the panel stays centred and never runs off the screen
+const setGap = (rows) => (rows.length > 12 ? 11 : rows.length > 9 ? 12 : rows.length > 7 ? 13 : 16);
+const setTop = (rows) => Math.max(3, Math.min(40, Math.floor((VH - rows.length * setGap(rows) - 46) / 2)));
+const SET_HELP = { shake: 'ALSO THE FLASHES AND THE PAGE TURNS', mark: 'A COLOUR RING UNDER EACH HERO', assist: 'A SLOWER GAME AND BEAT, TWO MORE HEARTS', cb: 'A SHAPE FOR EACH BULLET COLOUR', lefty: 'MOVE ON THE RIGHT, AIM LEFT', keys: 'CHOOSE YOUR OWN KEYS', share: 'ANONYMOUS, TO MAKE THE GAME BETTER', lang: 'THE GAME\'S LANGUAGE', save: 'MOVE YOUR GARDEN TO ANOTHER DEVICE', casino: 'HIDES THE CASINO ON THE TITLE SCREEN', bright: 'LIGHTS UP THE LANTERN WOODS', metro: 'A SOFT TICK ON EVERY BEAT OF THE TOY ATTIC' };
 function updateSettings() {
-  const s = Save.settings, rows = settingsRows(), gap = setGap(rows);
+  const s = Save.settings, rows = settingsRows(), gap = setGap(rows), SET_Y = setTop(rows) + 24;
   menuNav(rows.length);
   let click = false;
   rows.forEach((r, i) => { if (hoverRow(i, SET_X - 12, SET_Y + i * gap - 4, 184, gap - 1)) click = true; });
@@ -462,6 +464,7 @@ function updateSettings() {
     else s[id] = (s[id] + 1) % 11;
     Audio_.applySettings(); Audio_.sfx('select'); Save.write();
   } else if (id === 'shake' && (dir || ok)) { s.shake = !s.shake; Audio_.sfx('select'); Save.write(); }
+  else if (id === 'mark' && (dir || ok)) { s.mark = ((s.mark || 0) + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); }
   else if (id === 'vibe' && (dir || ok)) { s.vibe = (s.vibe + (dir || 1) + 3) % 3; Audio_.sfx('select'); Save.write(); haptic('hurt'); }
   else if (id === 'full' && (dir || ok) && !click) toggleFullscreen();
   else if ((id === 'assist' || id === 'cb' || id === 'lefty' || id === 'bright' || id === 'metro') && (dir || ok)) { s[id] = !s[id]; Audio_.sfx('select'); Save.write(); }
@@ -475,9 +478,9 @@ function updateSettings() {
 function drawSettings() {
   if (G.back === 'title') drawTitleBg();
   dim(0.5);
-  const rows = settingsRows(), gap = setGap(rows), h = rows.length * gap + 36;
-  panel(VW / 2 - 104, 40, 208, h + 10);
-  text('SETTINGS', VW / 2, 48, 'Y', 2, 1);
+  const rows = settingsRows(), gap = setGap(rows), top = setTop(rows), SET_Y = top + 24;
+  panel(VW / 2 - 104, top, 208, rows.length * gap + 46);
+  text('SETTINGS', VW / 2, top + 8, 'Y', 2, 1);
   rows.forEach(([, label, val, v], i) => {
     const y = SET_Y + i * gap, sel = i === G.menuSel;
     if (sel) { const by = Math.round(y - gap / 2) + 1; rect(SET_X - 14, by, 188, gap - 1, '2'); rect(SET_X - 14, by, 188, 1, '3'); pointer(SET_X - 10, y); }

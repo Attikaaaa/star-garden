@@ -1274,13 +1274,14 @@ function drawLobby() {
   const L = NET.lobby.players, host = NET.role === 'host';
   for (let i = 0; i < NET_MAX; i++) {
     const x = VW / 2 - 126 + i * 64, y = 58, pl = L.find(q => q.pid === i), me = pl && pl.pid === NET.me;
-    rect(x, y, 60, 32, me ? 'Y' : '0'); rect(x + 1, y + 1, 58, 30, pl ? '2' : '1');
+    rect(x, y, 60, 32, me ? SEATS[i % SEATS.length] : '0'); rect(x + 1, y + 1, 58, 30, pl ? '2' : '1');
     if (pl) {
       const skin = me ? Save.skin : pl.skin;
       const hero = me ? Save.hero : pl.cos && pl.cos.hero, pre = typeof heroPre === 'function' ? heroPre(hero || 'pip') : 'hero_';
+      drawS(S('seat_ring_' + (i % SEATS.length)), x + 5, y + 25);
       drawFeet(S(pre + 'd0' + (Math.floor(G.time * 1.3 + i * 0.7) % 4 ? '' : 'b') + SKIN[skin]) || S('hero_d0' + SKIN[skin]), x + 13, y + 29);
       drawS(S('wand_' + (me ? Save.wand : pl.wand)), x + 26, y + 13);
-      text(me && NET.role === 'host' ? Save.name : pl.name, x + 30, y + 3, TAG_COL[skin], 2, 1);
+      text(me && NET.role === 'host' ? Save.name : pl.name, x + 30, y + 3, SEATS[i % SEATS.length], 2, 1);
     } else text(i ? 'OPEN' : '', x + 30, y + 13, '3', 1, 1);
   }
   const rows = lobbyRows(), sel = rows[G.menuSel], d = DIFFS[NET.lobby.diff];
