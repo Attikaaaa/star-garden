@@ -20,7 +20,7 @@ const setup = `const w = WGS.world, p = WGS.p, x = Math.floor(p.x / 16), y = Mat
   const D = ctx.drawImage.bind(ctx); const imgs = (fn) => { const L = []; ctx.drawImage = function (img) { L.push(img); return D(...arguments); }; try { fn(); } finally { ctx.drawImage = D; } return L; };
   const whites = (c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 8 && d[i] === 255 && d[i + 1] === 255 && d[i + 2] === 255) n++; return n; };`;
 const orchard = `for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) { wgSetObj(w, 'o', x - 18 + i * 3, y - 14 + j * 3, O_ID.tree_apple_r); wgSetObj(w, 'o', x + 2 + i * 3, y - 14 + j * 3, O_ID.oak); }
-  const scan = () => { const L = []; for (let j = -16; j < 17; j++) for (let i = -22; i < 23; i++) { const F = wgFallAt(x + i, y + j); if (F) L.push([x + i, y + j, F.id]); } return L; };`;
+  const scan = () => { const L = []; for (let j = -16; j < 17; j++) for (let i = -22; i < 23; i++) { const F = wgFallAt(x + i, y + j); if (F && F.id !== 'pinecone') L.push([x + i, y + j, F.id]); } return L; };`; // pinecones are wg_wreath's
 let r = await g.ev(`(() => { ${setup} ${orchard} const res = {};
   for (const d of [3, 9, 18, 19, 25]) { WGS.day = d; const L = scan(); res[d] = [L.filter(f => f[2] === 'apple').length, L.filter(f => f[2] === 'acorn').length, JSON.stringify(L.slice(0, 4))]; }
   WGS.day = 18; const L = scan();
