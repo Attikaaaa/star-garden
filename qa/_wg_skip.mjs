@@ -1,4 +1,4 @@
-// Wildgrove's skipping stones: USE a stone on water throws it (one stone spent), not on grass and not anything else;
+// Wildgrove's skipping stones: USE a stone on water throws it (one stone spent), not on grass (a cairn goes there) and not anything else;
 // the path is the same from the same throw, its first touch at the aim, hops growing shorter; it sinks after its skips
 // or rests on the far shore; a ring spreads at each touch and the stone flies over its shadow; the count is told when
 // it stops, five skips light STONE SKIPPER; the net: the host checks a guest's stone (beside that guest, not twice in a
@@ -15,8 +15,8 @@ await g.ev(`(() => { const w = WGS.world, d = WGS.dim, p = WGS.p, x = Math.floor
   WGS.scr = 'play'; w.meta.hintDone = 1; w.meta.ach = { skip: 1 }; w.meta.stats = { kills: 0, far: 0 }; p.x = x * 16 + 8; p.y = y * 16 + 10; window._sk = { x, y };
   for (let i = 0; i < 36; i++) WGS.inv[i] = null; WGS.inv[0] = { id: 'stone', n: 9 }; WGS.inv[1] = { id: 'wood', n: 3 }; WGS.sel = 0; WGSK.list.length = 0; WGS.weather = null; WGS.wxT = 9999; })(); 0`);
 let r = await g.ev(`(() => { const { x, y } = _sk, res = []; WGS.sel = 1; res.push(wgUse(x + 2, y), WGSK.list.length); WGS.sel = 0; res.push(wgUse(x - 2, y), WGSK.list.length);
-  res.push(wgUse(x + 2, y), WGSK.list.length, WGS.inv[0].n); return res; })()`);
-ok(!r[0] && r[1] === 0 && !r[2] && r[3] === 0 && r[4] && r[5] === 1 && r[6] === 8, 'USE a stone on water throws it, one stone spent; not on grass, not wood: ' + JSON.stringify(r));
+  wgSetObj(WGS.world, WGS.dim, x - 2, y, 0); const n0 = WGS.inv[0].n; res.push(wgUse(x + 2, y), WGSK.list.length, n0 - WGS.inv[0].n); return res; })()`);
+ok(!r[0] && r[1] === 0 && r[3] === 0 && r[4] && r[5] === 1 && r[6] === 1, 'USE a stone on water throws it, one stone spent; not on grass, not wood: ' + JSON.stringify(r));
 r = await g.ev(`(() => { const { x, y } = _sk, w = WGS.world, d = WGS.dim, x0 = x * 16 + 8, y0 = y * 16 + 10, A = wgSkipPath(w, d, x0, y0, 0, 4, 40), B = wgSkipPath(w, d, x0, y0, 0, 4, 40), C = wgSkipPath(w, d, x0, y0, 0, 7, 70);
   const gaps = A.pts.map((q, i) => i ? q[0] - A.pts[i - 1][0] : q[0] - x0);
   return [JSON.stringify(A) === JSON.stringify(B), A.pts[0][0] - x0, gaps.every((v, i) => !i || v < gaps[i - 1] || i === 1), A.skips, A.sink, A.pts.length, C.sink, C.skips, C.pts[C.pts.length - 1][3]]; })()`);

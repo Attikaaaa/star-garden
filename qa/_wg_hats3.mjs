@@ -8,7 +8,7 @@ await g.ev(`enterWG()`); await sleep(300);
 await g.ev(`wgCreateWorld({ name: { v: 'HATS' }, seed: { v: '39' }, look: { skin: 1, hair: 2, shirt: 3 }, peace: true }); 0`); await sleep(800);
 const out = [], ok = (c, m) => out.push((c ? 'ok   ' : 'FAIL ') + m);
 const NEW = ['hat_party', 'hat_witch', 'hat_sailor', 'hat_frog'];
-let r = await g.ev(`(() => { const ids = WG_HATS.map(h => h[0]); return [ids.slice(0, 9).join(), ids.slice(9).join(), ${JSON.stringify(NEW)}.every(id => WGI[id] && WGI[id].hat && RECIPES.some(x => x.out === id) && wgIcon(id))]; })()`);
+let r = await g.ev(`(() => { const ids = WG_HATS.map(h => h[0]); return [ids.slice(0, 9).join(), ids.slice(9, 13).join(), ${JSON.stringify(NEW)}.every(id => WGI[id] && WGI[id].hat && RECIPES.some(x => x.out === id) && wgIcon(id))]; })()`);
 ok(r[0] === 'hat_straw,hat_flowers,hat_beanie,hat_top,hat_crown,hat_mush,hat_chef,hat_pumpkin,hat_bunny' && r[1] === NEW.join() && r[2], 'four hats after the others, the old ones in their places, recipes and icons: ' + JSON.stringify(r));
 r = await g.ev(`(() => { const w = WGS.world, p = WGS.p; WGS.scr = 'play'; w.meta.hintDone = 1; w.meta.ach = { hats: 1, hats6: 1, hats10: 1 }; w.meta.stats = { kills: 0, far: 0 }; p.look.hat = 0;
   for (let i = 0; i < 36; i++) WGS.inv[i] = null; WGS.sel = 0; const res = []; wgSetObj(w, WGS.dim, Math.floor(p.x / 16) + 1, Math.floor(p.y / 16), 0);
@@ -21,7 +21,7 @@ r = await g.ev(`(() => { const res = []; for (let k = 10; k <= 13; k++) for (con
     res.push(n); } return res; })()`);
 ok(r.every(n => n >= 12), 'each is drawn into the hero from every side: ' + JSON.stringify(r));
 r = await g.ev(`[wgnHat(WG_HATS.length), wgnHat(WG_HATS.length + 1), WG_HATS.length]`);
-ok(r[0] === 13 && r[1] === 0 && r[2] === 13, "a friend's number for the last hat is good, one past it is not: " + JSON.stringify(r));
+ok(r[0] === r[2] && r[1] === 0 && r[2] >= 13, "a friend's number for the last hat is good, one past it is not: " + JSON.stringify(r));
 r = await g.ev(`(() => { const m = WGS.world.meta; m.ach = {}; m.stats.hats = 0b1111111110; wgAchTick(); const a = !!m.ach.hats10; m.ach = {}; m.stats.hats = 0b11111111110; wgAchTick(); return [a, !!m.ach.hats10]; })()`);
 ok(!r[0] && r[1], 'MAD HATTER for ten, not nine: ' + JSON.stringify(r));
 const EN = ['PARTY HAT', 'WITCH HAT', 'SAILOR CAP', 'FROG HAT', 'MAD HATTER', 'WEAR TEN DIFFERENT HATS'];
