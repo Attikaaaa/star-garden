@@ -291,5 +291,9 @@
     'STONE SKIPPER': 'KACSÁZÓ', 'SKIP A STONE FIVE TIMES': 'DOBJ ÖT KACSÁT EGY KŐVEL', '# SKIPS!': '# KACSA!', 'ONE SKIP!': 'EGY KACSA!', 'PLOP!': 'CSOBB!',
     'USE IT ON WATER TO SKIP IT': 'VÍZEN HASZNÁLVA KACSÁZHATSZ VELE',
   });
+  Object.assign(LANG.hu.table, { // sparklers
+    'SPARKLER': 'CSILLAGSZÓRÓ', 'SPARKLE': 'SZIKRÁZÓ', 'BURN A SPARKLER DOWN TO THE END': 'ÉGESS EL EGY CSILLAGSZÓRÓT A VÉGÉIG', 'THE SPARKLER BURNED OUT': 'ELÉGETT A CSILLAGSZÓRÓ',
+    'SPARKLES WHILE YOU HOLD IT': 'SZIKRÁZIK, AMÍG A KEZEDBEN TARTOD', 'BURNS FOR # SECONDS': '# MÁSODPERCIG ÉG',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

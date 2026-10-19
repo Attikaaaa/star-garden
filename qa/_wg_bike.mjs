@@ -40,7 +40,7 @@ r = await g.ev(`(() => { const p = WGS.p, w = WGS.world, d = WGS.dim, x = Math.f
   let diff = 0; for (let i = 0; i < da.length; i++) if (da[i] !== db[i]) diff++; res.hat = diff > 40; return res; })()`);
 ok(r.l1.join() === '2,0' && r.r1hat.join() === '2,0' && r.u1.join() === '0,1' && r.d1hat.join() === '0,1' && r.d0.join() === '0,0' && r.l1wet.join() === '0,0' && r.hat, 'riders drawn on a bicycle side on and end on, never a walker or a wader; hats ride too: ' + JSON.stringify(r));
 const net = await (await import('fs')).promises.readFile(new URL('../src/wg_net.js', import.meta.url), 'utf8');
-ok(/bike: m\.bk \? 1 : 0/.test(net) && /bike: a\[13\] \? 1 : 0/.test(net) && /bk: typeof wgBikeHeld/.test(net) && /L\.bike \? 1 : 0\]/.test(net) && /wgBikeHeld\(\) \? 1 : 0\]\]/.test(net), 'the net messages carry the bicycle');
+ok(/bike: m\.bk \? 1 : 0/.test(net) && /bike: a\[13\] \? 1 : 0/.test(net) && /bk: typeof wgBikeHeld/.test(net) && /L\.bike \? 1 : 0[,\]]/.test(net) && /wgBikeHeld\(\) \? 1 : 0[,\]]/.test(net), 'the net messages carry the bicycle');
 r = await g.ev(`wgTipLines({ id: 'bicycle', n: 1 })`);
 ok(r.includes('HOLD IT TO RIDE ON DRY GROUND') && r.includes('QUICKER STILL ON A PATH') && r.includes('USE RINGS THE BELL'), 'tips: ' + JSON.stringify(r));
 const EN = ['BICYCLE', 'FREEWHEELING', 'RIDE A BICYCLE 300 TILES', 'RING RING!', 'HOLD IT TO RIDE ON DRY GROUND', 'QUICKER STILL ON A PATH', 'USE RINGS THE BELL'];
