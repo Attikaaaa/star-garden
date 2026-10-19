@@ -69,10 +69,10 @@ const DP_ = (rows) => { const w = rows[0].length, pad = '.'.repeat(w + 2); retur
 const _dpRock = rockArt;
 rockArt = function (room, c, r, theme) { return theme === 'deep' && room.lay === 'hull' ? 'hull_deep' : _dpRock(room, c, r, theme); };
 
-// sand ripples, and the vents
-THEMES.deep.paint = function (g, room) {
+// sand ripples (the scenery draws its own), and the vents
+THEMES.deep.paint = function (g, room, scn) {
   const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
-  for (let r = 2; r <= 11; r++) for (let c = 1; c <= 22; c++) {
+  if (!scn) for (let r = 2; r <= 11; r++) for (let c = 1; c <= 22; c++) {
     const i = r * COLS + c, x = c * 16, y = OY + r * 16, h = hash(c, r, room.seed);
     if (room.tiles[i] !== T_FLOOR) continue;
     if (h % 3 === 0) f(x + 2 + h % 8, y + 4 + (h >> 4) % 8, 5, 1, '2');
@@ -1012,3 +1012,114 @@ function drawGclam(o, x, y) {
   drawS(s, x - (s.w >> 1), y - s.h + 4);
   if (open && Math.floor(o.t * 8) % 2) drawS(S('sparkle_0'), x + 4, y - s.h + 8);
 }
+// ---------- Scenery (scenery.js) ----------
+// The sea floor in the deep: rippled violet sand, glowing plankton and shells, trenches with
+// sparks far down, coral mounds, tall kelp and an old anchor; reef walls with coral fans,
+// anemones and pearl lamps.
+(function deepArt() {
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  // a kelp strand: a thin wavy stalk with long blades to alternate sides
+  const strand = (w, h, x0, top, phase) => grid(w, h).fill((x, y) => {
+    if (y < top || y > h - 4) return null;
+    const sway = (yy) => x0 + Math.sin((yy + phase) * 0.22) * 1.5;
+    for (let k = 0; ; k++) {
+      const by = top + 3 + k * 6, side = (k + phase) & 1 ? 1 : -1;
+      if (by > h - 8) break;
+      const bx = sway(by) + side * 2.2, u = (x + 0.5 - bx) / 1.7, v = (y + 0.5 - by) / 3.8;
+      if (u * u + v * v <= 1) return u < -0.3 ? 'h' : u < 0.4 ? 'G' : 'g';
+    }
+    return Math.round(sway(y)) === x ? 'g' : null;
+  }).rows();
+  // a tall kelp (a 1x2 post): two strands on a rock
+  def('gi_kelpp', comp(16, 46, [
+    [sculpt(16, 46, [{ e: [8, 42, 7, 3.5], ramp: '0122' }]), 0, 0],
+    [autoOutline(strand(16, 46, 6, 3, 0)), 0, 0],
+    [autoOutline(strand(16, 46, 10, 12, 5)), 0, 0],
+  ]));
+  // a kelp bed (a 2x2 giant)
+  def('gi_kelp', comp(38, 48, [
+    [sculpt(38, 48, [{ e: [19, 44, 17, 4], ramp: '0122' }, { e: [9, 42, 6, 3.5], ramp: '1223' }, { e: [28, 43, 7, 3], ramp: '1223' }]), 0, 0],
+    [autoOutline(strand(38, 48, 8, 10, 2)), 0, 0],
+    [autoOutline(strand(38, 48, 15, 2, 7)), 0, 0],
+    [autoOutline(strand(38, 48, 23, 6, 1)), 0, 0],
+    [autoOutline(strand(38, 48, 30, 14, 4)), 0, 0],
+  ]));
+  // a brain coral with orange tube sponges behind it (a 2x2 giant)
+  const brain = grid(40, 40).fill((x, y) => {
+    const dx = (x + 0.5 - 20) / 17, dy = (y + 0.5 - 29) / 9, r = dx * dx + dy * dy;
+    if (r > 1) return null;
+    if (Math.sin(x * 0.85 + Math.sin(y * 0.9) * 2.2) > 0.72) return 'p';
+    return dx + dy < -0.9 ? 'q' : dx + dy < 0.7 ? 'P' : 'p';
+  }).rows();
+  const tubes = sculpt(40, 40, [{ r: [7, 9, 6, 16, 2], ramp: 'ooOy' }, { r: [14, 4, 6, 20, 2], ramp: 'ooOy' }, { r: [26, 11, 6, 14, 2], ramp: 'ooOy' }]);
+  def('gi_coral', comp(40, 40, [
+    [tubes, 0, 0],
+    [['.nn.', 'n00n', '.nn.'], 8, 9], [['.nn.', 'n00n', '.nn.'], 15, 4], [['.nn.', 'n00n', '.nn.'], 27, 11],
+    [autoOutline(brain), 0, 0],
+  ]));
+  // a branching fire coral (orange, so it never reads as a pink jelly), an anchor stuck in the sand
+  A('ob_coral', [
+    '................',
+    '....O.....O.....',
+    '...Oo..O..oO....',
+    '....o.Oo.on.O...',
+    '..O.ono..o..o...',
+    '..ono.onon.no...',
+    '...on..oon.o....',
+    '....ononoonn....',
+    '......noon......',
+    '......noon......',
+    '.....2nonn2.....',
+    '....122nn221....',
+    '...12222222211..',
+    '....11111111....',
+    '................',
+    '................']);
+  A('ob_anchor', [
+    '................',
+    '.......ll.......',
+    '......l..m......',
+    '......l..m......',
+    '.......lm.......',
+    '....LllLlmmm....',
+    '.......Lm.......',
+    '.......Lm.......',
+    '.......Lm.......',
+    '.......Ln.......',
+    '..l....Lm....m..',
+    '..Ll...Ln...mm..',
+    '...Lllnlmmmmd...',
+    '..2222Lmm2222...',
+    '.112222222221...',
+    '................']);
+  // on the wall: a coral fan, an anemone, a pearl in an open shell (it glows, no flame)
+  A('fc_coralfan', [
+    '...........',
+    '..P.P.P.P..',
+    '.P.PqPqP.P.',
+    '..PqPPPqP..',
+    '...PPpPP...',
+    '....PpP....',
+    '.....p.....',
+    '....ppp....',
+    '...........']);
+  A('fc_anem', [
+    '.........',
+    '.q.q.q.q.',
+    '..qPqPq..',
+    '.qPPPPPq.',
+    '..PpppP..',
+    '...ppp...',
+    '.........']);
+  A('fc_pearl', [
+    '...........',
+    '...qqqqq...',
+    '..qPqPqPq..',
+    '.qPPPPPPPp.',
+    '..p.wCc.p..',
+    '.qPPPPPPPp.',
+    '..pPpPpPp..',
+    '...ppppp...',
+    '...........']);
+})();
