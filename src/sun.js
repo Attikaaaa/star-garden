@@ -66,15 +66,44 @@ const tileXY = (i) => [(i % COLS) * 16 + 8, OY + ((i / COLS) | 0) * 16 + 8];
 const _sunTileArt = tileArt;
 tileArt = function (room, c, r, t) { return t === T_GATE && G.floor && G.floor.land.id === 'sun' ? 'sgate' : _sunTileArt(room, c, r, t); };
 
-// plates, quicksand and the Sun Beam room's window and altar, baked into the room's static layer
-THEMES.sun.paint = function (g, room) {
+// plates and quicksand, baked into the room's static layer (with scenery the base draws the
+// quicksand itself, below)
+THEMES.sun.paint = function (g, room, scn) {
   for (let i = 0; i < room.tiles.length; i++) {
     const t = room.tiles[i];
-    if (t !== T_PLATE && t !== T_PLATEON && t !== T_QSAND) continue;
+    if (t !== T_PLATE && t !== T_PLATEON && (t !== T_QSAND || scn)) continue;
     const x = (i % COLS) * 16, y = OY + ((i / COLS) | 0) * 16;
     blit(g, S(t === T_QSAND ? 'qsand' : t === T_PLATE ? 'plate_0' : 'plate_1'), x, y, t === T_QSAND ? hash(i, 5, room.seed) & 1 : 0);
     const k = room.glyph && room.glyph.indexOf(i);
     if (k >= 0) { const s = S('glyph_' + k); blit(g, s, x + 8 - (s.w >> 1), y + 8 - (s.h >> 1)); }
+  }
+};
+
+// Quicksand in the scenery: each patch one sunken whirl round its own middle, in shade along its
+// top and left rim and lit along the bottom and right.
+SCN_BASE.sun = function (b, room) {
+  const m = regionMask(room, (t) => t === T_QSAND, 4, 1), comp = new Int16Array(COLS * ROWS).fill(-1), mid = [];
+  for (let i = 0; i < COLS * ROWS; i++) {
+    if (room.tiles[i] !== T_QSAND || comp[i] >= 0) continue;
+    const q = [i], k = mid.length;
+    let sx = 0, sy = 0, n = 0;
+    comp[i] = k;
+    while (q.length) {
+      const j = q.pop();
+      sx += (j % COLS) * 16 + 8; sy += OY + ((j / COLS) | 0) * 16 + 8; n++;
+      for (const d of [1, -1, COLS, -COLS]) if (room.tiles[j + d] === T_QSAND && comp[j + d] < 0) { comp[j + d] = k; q.push(j + d); }
+    }
+    mid.push([sx / n, sy / n]);
+  }
+  if (!mid.length) return;
+  for (let y = OY + 32; y < OY + 192; y++) for (let x = 16; x < VW - 16; x++) {
+    if (!m[y * VW + x]) continue;
+    const [cx, cy] = mid[comp[((y - OY) >> 4) * COLS + (x >> 4)]], dx = (x + 0.5 - cx) * 0.7, dy = y + 0.5 - cy;
+    const d = Math.hypot(dx, dy), v = (d / 6 + Math.atan2(dy, dx) / Math.PI + 8) % 1;
+    let k = d < 2.5 ? 'n' : d < 5 ? 'N' : v < 0.2 ? 'e' : 'a';
+    if (!inM(m, x, y - 1) || !inM(m, x - 1, y) || !inM(m, x, y - 2)) k = 'N';
+    else if (!inM(m, x, y + 1) || !inM(m, x + 1, y)) k = 'A';
+    b.px[y * VW + x] = p32(k);
   }
 };
 
@@ -896,3 +925,138 @@ function drawAltar(o, x, y) {
   drawFeet(S('sunaltar'), x, y + 1);
   if (o.open && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_0'), x + 5, y - 16);
 }
+// ---------- Scenery (scenery.js) ----------
+// A paved court half buried in sand: sandstone slabs, an oasis, obelisks, little stepped
+// pyramids, broken columns; on the wall a turquoise frieze, winged suns and braziers.
+(function sunArt() {
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  // an obelisk on its plinth, a gold cap, glyphs cut down its face (a 1x2 post)
+  const obel = grid(16, 46).fill((x, y) => {
+    if (y >= 39 && y <= 43 && x >= 1 && x <= 14) return y === 39 || x === 1 ? 'A' : x >= 13 || y === 43 ? 'e' : 'a';
+    if (y >= 8 && y < 39) {
+      const t = (y - 8) / 30, l = Math.round(5 - t * 1.4), r = Math.round(10 + t * 1.4);
+      if (x < l || x > r) return null;
+      return x === l ? 'A' : x >= r - 1 ? 'e' : 'a';
+    }
+    if (y >= 2 && y < 8) {
+      const h = (y - 2) / 5, l = Math.round(7 - h * 2), r = Math.round(8 + h * 2);
+      if (x < l || x > r) return null;
+      return x < 8 ? 'Y' : x < r ? 'y' : 'o';
+    }
+    return null;
+  }).rows();
+  def('gi_sobelisk', comp(16, 46, [
+    [autoOutline(obel), 0, 0],
+    [['nn', 'n.', 'nn'], 7, 13], [['.n', 'nnn', '.n'], 6, 19], [['nn', 'nn'], 7, 25],
+    [['TTTTT'], 6, 33], [['ooooo'], 6, 34],
+  ]));
+  // a little stepped pyramid with a gold cap and a dark doorway (a 2x2 giant)
+  const pyr = grid(38, 36).fill((x, y) => {
+    const d = x + 0.5 - 19;
+    for (let k = 0; k < 4; k++) {
+      const top = 7 + k * 6, half = 6 + k * 4;
+      if (y < top || y > top + 5 || Math.abs(d) > half) continue;
+      if (y === top || (y === top + 1 && Math.abs(d) < half - 1)) return d < 0 ? 'A' : 'a';
+      if (d < -half + 1.5) return 'A';
+      if (d > half - 2.5) return 'e';
+      return y === top + 5 ? 'e' : 'a';
+    }
+    if (y >= 1 && y < 7) {
+      const half = (y - 1) * 0.9 + 0.5;
+      if (Math.abs(d) <= half) return d < 0 ? 'Y' : d < half - 1 ? 'y' : 'o';
+    }
+    return null;
+  }).rows();
+  def('gi_spyramid', comp(38, 36, [
+    [sculpt(38, 36, [{ e: [19, 32, 18, 3.5], ramp: 'eaaA' }]), 0, 0],
+    [autoOutline(pyr), 0, 0],
+    [autoOutline(['.......', '.unnnN.', '.uuunN.', '.uuunN.', '.uuunN.']), 15, 25],
+    [['TTTT'], 17, 16],
+  ]));
+  // a broken column, a palm shoot in a sand mound, a woven basket
+  const A = (name, rows, opts) => def(name, autoOutline(rows.map(r => r.trim())), opts);
+  A('ob_column', [
+    '................',
+    '................',
+    '.......A..a.....',
+    '......AaA.aa....',
+    '.....AaeaAae....',
+    '.....AaeaAae....',
+    '.....TTTTTTt....',
+    '.....AaeaAae....',
+    '.....AaeaAae....',
+    '.....AaeaAae....',
+    '.....AaeaAae....',
+    '....AAAAAAAAe...',
+    '...AaaaaaaaaeN..',
+    '...eeeeeeeeeNN..',
+    '................',
+    '................']);
+  A('ob_sprout', [
+    '................',
+    '....hG....Gh....',
+    '...hGGg..gGGh...',
+    '..hG..gGGg..Gh..',
+    '..G...GNgG...G..',
+    '.......Nn.......',
+    '.......Nn.......',
+    '.......Nn.......',
+    '.......Nn.......',
+    '......aNnA......',
+    '....aAAaaAAa....',
+    '...aAaaaaaaae...',
+    '....eeeeeeee....',
+    '................']);
+  A('bk_basket', [
+    '................',
+    '................',
+    '.....nyyyyn.....',
+    '....nOOOOOOn....',
+    '...nnnnnnnnnn...',
+    '...OoOoOoOoOn...',
+    '...oOoOoOoOon...',
+    '...OoOoOoOoOn...',
+    '...nnnnnnnnnn...',
+    '...OoOoOoOoOn...',
+    '...oOoOoOoOon...',
+    '....nnnnnnnn....',
+    '................',
+    '................',
+    '................',
+    '................']);
+  // on the wall: a winged sun, a cartouche, a brazier (its flame is drawn live)
+  A('fc_sundisc', [
+    '.................',
+    '..CTt.oyyo.tTC...',
+    '.CTTtoyYYyotTTC..',
+    'CTtt.oyYYyo.ttTC.',
+    '.....oyyyyo......',
+    '......oooo.......',
+    '.................']);
+  A('fc_cartouche', [
+    '..........',
+    '...yyyy...',
+    '..yAAAAo..',
+    '..yAnnAo..',
+    '..yAAAAo..',
+    '..yATTAo..',
+    '..yAAAAo..',
+    '..yAnAAo..',
+    '..yAnnAo..',
+    '...oooo...',
+    '..oooooo..',
+    '..........']);
+  A('fc_sconce', [
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    '.oyyyyyo.',
+    '..oOOOo..',
+    '...nNn...',
+    '....n....',
+    '...nNn...',
+    '.........']);
+})();

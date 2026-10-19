@@ -38,7 +38,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
 | `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, the tile renderer for lands without scenery (`renderRoomPlain`), land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
-| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well, the Snowglobe) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
+| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well, the Snowglobe, the Sun Temple) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
 | `entities.js` | players (input, movement, combat, down/revive, robes, seat colours: `SEATS`, `seatCol`, the ring at their feet and your arrow, `seatMark`), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
 | `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
@@ -154,7 +154,8 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   tiles alone (`hash`, `vnoise`, `worley`, `scnRand`), never from the gameplay streams, so
   every co-op screen and a resumed run draw the same room. Rocks are grouped: a lone `#` is
   an obstacle, a run of them a ridge (hedge, stone wall), an exact 2x2 block a giant (tree,
-  palm, crystal) drawn as a tall piece sorted by y (display-list kind 7). A land's own
+  palm, crystal) drawn as a tall piece sorted by y (display-list kind 7); in a land with a
+  `POST` entry two rocks stacked in a column stand as one tall post (an obelisk). A land's own
   pieces (prisms, bells, the gate) are drawn with `tileArt`; a land layout built of
   breakables uses one kind (`LAY_BRK`), and a layout can name its own rock (`LAY_ROCK`) and
   tall piece (`LAY_TALL`). A rock `rockArt` draws its own way (a moon well, slag) always
@@ -165,7 +166,9 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   room, true)` draws its floor marks over the scenery (the `true`: skip any full-floor
   texture). Tiles that change often stay out of the baked base: `SCN_TILE[t]` says what the
   base sees (a frozen pond is still water) and `SCN_OVER[t](g, room)` draws the change on the
-  static layer. Every `gi_*` sprite gets a see-through `_d` copy (`seeThroughTall`).
+  static layer. A land's own ground goes into the base through `SCN_BASE[t]` (the Sun Temple's
+  quicksand; its tiles are listed in `BASE_T`), a ridge can be topped by `RIDGE[t].topAt`.
+  Every `gi_*` sprite gets a see-through `_d` copy (`seeThroughTall`).
 - Tall grass (`room.grass`, one byte per tile: 1 grass, 2 cut) grows in `start`, `normal`
   and `challenge` rooms of the lands in `GRASS_LANDS`, never in front of doors or where
   the land's `LAND_MECH[id].noGrass(room, c, r)` says (the pier, the bee ring, the clock's
