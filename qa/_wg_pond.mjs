@@ -51,7 +51,7 @@ await g.ev(`WGS.clock = 0.35; 0`);
 r = await g.ev(`(() => { const p = WGS.p; WGS.remote = [{ pid: 2, x: p.x + 40, y: p.y + 10, face: 'u', moving: true, walkT: 1, dim: WGS.dim, hp: 20, name: 'FRIEND', look: { skin: 1, hair: 0, shirt: 2 }, swing: 0, kite: 0, boat: 1, inv: 0 }];
   let used = 0; const f = wgBoatSpr; wgBoatSpr = (...a) => (used++, f(...a)); try { drawWG(); } finally { wgBoatSpr = f; } WGS.remote = []; return used; })()`);
 const net = await (await import('fs')).promises.readFile(new URL('../src/wg_net.js', import.meta.url), 'utf8');
-ok(r >= 1 && /boat: m\.bt \? 1 : 0/.test(net) && /boat: a\[12\] \? 1 : 0/.test(net) && /bt: typeof wgBoatHeld/.test(net) && /L\.kite \| 0, L\.boat \? 1 : 0\]/.test(net), 'a friend rows in a boat, the net carries it: ' + r);
+ok(r >= 1 && /boat: m\.bt \? 1 : 0/.test(net) && /boat: a\[12\] \? 1 : 0/.test(net) && /bt: typeof wgBoatHeld/.test(net) && /L\.kite \| 0, L\.boat \? 1 : 0[,\]]/.test(net), 'a friend rows in a boat, the net carries it: ' + r);
 r = await g.ev(`wgTipLines({ id: 'rowboat', n: 1 }).concat(wgTipLines({ id: 'well', n: 1 }), wgTipLines({ id: 'waterlily', n: 1 }))`);
 ok(r.includes('HOLD IT TO ROW ON WATER') && r.includes('DRAW WATER WITH A BUCKET') && r.includes('FLOATS ON WATER'), 'tips: ' + JSON.stringify(r));
 r = await g.ev(`(() => { Save.settings.lang = 'hu'; const a = [tr(WGI.rowboat.name), tr(WGI.waterlily.name), tr('ROW YOUR BOAT'), tr('HOLD IT TO ROW ON WATER'), tr('DRAW WATER WITH A BUCKET'), tr('FLOATS ON WATER')]; Save.settings.lang = 'en'; return a; })()`);
