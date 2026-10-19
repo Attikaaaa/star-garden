@@ -79,7 +79,7 @@ function wgPart(x, y, n, o) {
   for (let i = 0; i < n; i++) {
     if (WGS.parts.length > 260) WGS.parts.shift();
     const a = Math.random() * 6.283, s = (o.s || 30) * (0.4 + Math.random() * 0.8);
-    WGS.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (o.up || 0), g: o.g === undefined ? 90 : o.g, life: (o.life || 0.5) * (0.6 + Math.random() * 0.6), max: o.life || 0.5, c: o.c[Math.floor(Math.random() * o.c.length)], sz: o.sz || 1 });
+    WGS.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (o.up || 0), g: o.g === undefined ? 90 : o.g, life: (o.life || 0.5) * (0.6 + Math.random() * 0.6), max: o.life || 0.5, c: o.c[Math.floor(Math.random() * o.c.length)], sz: o.sz || 1, age: 0 });
   }
 }
 function wgToast(msg, t) { WGS.toast = { msg, t: t || 2 }; }

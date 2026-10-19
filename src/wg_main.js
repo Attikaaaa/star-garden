@@ -90,7 +90,7 @@ function updateWG(dt) {
   if (s === 'dead') { WGS.deadT += dt; if (wgHostLive()) wgHostWorld(dt); else wgUpdateWorldBg(dt); return; }
   if (s === 'pause' || s === 'inv' || s === 'chest' || s === 'trade') { if (wgHostLive()) wgHostWorld(dt); else wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
 }
-function wgUpdateWorldBg(dt) { for (const q of WGS.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.age += dt; } WGS.parts = WGS.parts.filter(q => q.age < q.life); }
+function wgUpdateWorldBg(dt) { for (const q of WGS.parts) { q.vy += q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.age += dt; } WGS.parts = WGS.parts.filter(q => q.age < q.life); } // each falls (or rises) by its own pull
 
 function drawWG() {
   if (!WGS.world && WGS.scr !== 'worlds' && WGS.scr !== 'create' && WGS.scr !== 'loading' && WGS.scr !== 'join' && WGS.scr !== 'browse') WGS.scr = 'worlds';
