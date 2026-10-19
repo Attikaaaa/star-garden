@@ -139,12 +139,14 @@ const Audio_ = (() => {
     surf() { noise(2.4, 0.03, 300, 'lowpass', 0, 1300); noise(1.6, 0.018, 1500, 'bandpass', 0.6, 400); }, // a wave washing in
     crackle() { const n = 2 + Math.floor(Math.random() * 2); for (let i = 0; i < n; i++) noise(0.015, 0.035, 1800 + Math.random() * 2600, 'bandpass', Math.random() * 0.2); }, // a fire close by
     rustle() { noise(0.14, 0.025, 1600, 'bandpass', 0, 700); noise(0.08, 0.015, 3000, 'bandpass', 0.05); }, // tall grass brushed aside
+    gull() { osc('triangle', 1500, 1900, 0.06, 0.03); osc('triangle', 1900, 1200, 0.22, 0.035, 0.06); osc('triangle', 1700, 1100, 0.18, 0.025, 0.34); }, // a seagull's cry
     cheep() { for (let i = 0; i < 3; i++) osc('triangle', 2800, 3900, 0.05, 0.02, i * 0.1); }, // chicks in a nest
     cricket() { for (let k = 0; k < 2; k++) for (let i = 0; i < 3; i++) osc('sine', 4400, 4250, 0.03, 0.018, k * 0.32 + i * 0.06); }, // a cricket on a summer night
     windup() { for (let i = 0; i < 5; i++) osc('triangle', 1900 - i * 70, 1500, 0.025, 0.06, i * 0.07); }, // a music box's key turned
   };
   [523, 587, 659, 784, 880, 1047, 1175, 1319].forEach((f, i) => { // Wildgrove's ocarina: a soft, breathy C pentatonic, oca0 to oca7
     SFX['oca' + i] = () => { osc('sine', f * 0.99, f, 0.55, 0.12); osc('triangle', f * 2, f * 2, 0.22, 0.014); noise(0.06, 0.018, 2600, 'bandpass'); };
+    SFX['pno' + i] = () => { osc('triangle', f, f, 0.7, 0.09); osc('sine', f * 2, f * 2, 0.35, 0.03); osc('sine', f * 3, f * 3, 0.15, 0.012); }; // Wildgrove's piano: a bright pluck that fades
   });
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;
