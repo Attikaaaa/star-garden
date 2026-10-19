@@ -200,7 +200,7 @@ function wgIcon(id) {
     case 'honey_cake': wgRc(g, 3, 7, 10, 6, 'N'); wgRc(g, 3, 5, 10, 3, 'O'); wgRc(g, 3, 5, 10, 1, 'Y'); wgRc(g, 3, 8, 10, 1, 'w'); wgPx(g, 6, 3, 'r'); wgRc(g, 6, 4, 1, 1, 'n'); wgRc(g, 4, 6, 3, 1, 'y'); break;
     default: break;
   }
-  if (it.kind === 'seed') { wgRc(g, 6, 5, 4, 8, 'a'); wgRc(g, 6, 5, 4, 1, 'A'); wgRc(g, 7, 3, 2, 2, 'n'); const col = { wheat: 'O', carrot: 'o', potato: 'N', pumpkin: 'y', berrybush: 'r' }[it.crop]; wgRc(g, 7, 7, 2, 4, col); wgPx(g, 7, 7, 'w'); return done(); }
+  if (it.kind === 'seed') { wgRc(g, 6, 5, 4, 8, 'a'); wgRc(g, 6, 5, 4, 1, 'A'); wgRc(g, 7, 3, 2, 2, 'n'); const col = { wheat: 'O', carrot: 'o', potato: 'N', pumpkin: 'y', berrybush: 'r', tomato: 'r', corn: 'Y', straw: 'R', sun: 'k' }[it.crop]; wgRc(g, 7, 7, 2, 4, col); wgPx(g, 7, 7, 'w'); return done(); }
   if (it.kind === 'place') return wgPlaceIcon(id, c, g, done);
   return done();
 }
