@@ -23,10 +23,12 @@ ok(cobble > grass * 1.15 && board > grass * 1.1 && Math.abs(floor - grass) <= 2,
 r = await g.ev(`(() => { const w = WGS.world, d = WGS.dim, p = WGS.p, x = Math.floor(p.x / 16) + 1, y = Math.floor(p.y / 16), res = [];
   for (let i = 0; i < 36; i++) WGS.inv[i] = null; WGS.sel = 0;
   for (const [item, ground] of [['boardwalk', 'shallow'], ['boardwalk', 'deep'], ['path_cobble', 'shallow']]) {
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (i || j) wgSetGround(w, d, x + i, y + j, G_ID[ground === 'deep' ? 'deep' : 'grass']); // deep water out from the shore (wg_pier's boardwalks start at the shore)
     wgSetObj(w, d, x, y, 0); wgSetGround(w, d, x, y, G_ID[ground]); WGS.inv[0] = { id: item, n: 4 }; wgUse(x, y); res.push(GROUND[wgGround(w, d, x, y)].id);
   }
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) wgSetGround(w, d, x + i, y + j, G_ID.grass);
   return res; })()`);
-ok(r[0] === 'p_board' && r[1] === 'deep' && r[2] === 'shallow', 'a boardwalk bridges shallow water only: ' + JSON.stringify(r));
+ok(r[0] === 'p_board' && r[1] === 'deep' && r[2] === 'shallow', 'a boardwalk bridges shallow water, never out on open deep water: ' + JSON.stringify(r));
 r = await g.ev(`wgTipLines({ id: 'path_cobble', n: 1 }).concat(wgTipLines({ id: 'boardwalk', n: 1 }), wgTipLines({ id: 'path_dirt', n: 1 }))`);
 ok(r.filter(s => s === 'QUICKER TO WALK ON').length === 3 && r.includes('ALSO OVER SHALLOW WATER'), 'tips: ' + JSON.stringify(r));
 r = await g.ev(`(() => { Save.settings.lang = 'hu'; const a = WG_PATHS.map(q => tr(q[2])).concat(tr('QUICKER TO WALK ON'), tr('ALSO OVER SHALLOW WATER')); Save.settings.lang = 'en'; return a; })()`);
