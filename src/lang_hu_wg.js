@@ -88,5 +88,7 @@
   Object.assign(LANG.hu.table, { 'STASH': 'LÁDÁBA', 'STASHED # STACKS': '# KÖTEG A LÁDÁKBAN', 'STASHED # STACK': '# KÖTEG A LÁDÁBAN', 'NOTHING TO STASH': 'NINCS MIT ELRAKNI',
     'NEAR: * + # CHESTS': 'KÖZELBEN: * + # LÁDA', 'NEAR: * + # CHEST': 'KÖZELBEN: * + # LÁDA', 'NEAR: # STATIONS': 'KÖZELBEN: # MUNKAHELY', 'NEAR: # STATIONS + # CHESTS': 'KÖZELBEN: # MUNKAHELY + # LÁDA',
     'CHESTS NEARBY HELP YOU CRAFT': 'A KÖZELI LÁDÁK IS KÉSZÍTENEK' });
+  Object.assign(LANG.hu.table, { 'WRITE ON THE SIGN': 'ÍRJ A TÁBLÁRA', 'SAVE': 'MENTÉS', 'THE SIGN IS WRITTEN': 'A TÁBLA KÉSZ', 'THE SIGN IS BLANK': 'A TÁBLA ÜRES',
+    'A: LETTER  X: DELETE  START: SAVE  B: BACK': 'A: BETŰ  X: TÖRÖL  START: MENTÉS  B: VISSZA', 'TYPE IT  ENTER: SAVE  ESC: BACK': 'GÉPELD BE  ENTER: MENTÉS  ESC: VISSZA' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

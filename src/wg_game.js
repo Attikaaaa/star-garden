@@ -227,7 +227,7 @@ function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, e
     if (o.kind === 'station') { if (o.st === 'fire' || o.st === 'furnace' || o.st === 'bench' || o.st === 'anvil' || o.st === 'alch' || o.st === 'loom') { WGS.scr = 'inv'; WGS.ui = { tab: 'craft' }; return true; } }
     if (o.kind === 'bed') { WGS.p.spawn = { x: tx * 16 + 8, y: ty * 16 + 20, dim }; wgToast('SPAWN POINT SET'); if (wgNight(WGS.clock) > 0.5 && dim === 'o') { WGS.clock = 0.27; WGS.day++; wgToast('GOOD MORNING'); } return true; }
     if (o.kind === 'stairs') { if (o.sky) wgGoSky(tx, ty); else if (o.skyup) wgLeaveSky(); else wgGoDim(o.down ? 'u' : 'o', tx, ty); return true; }
-    if (o.kind === 'sign') { wgToast('SIGN: ' + (wgSignText(tx, ty) || 'EMPTY'), 3); return true; }
+    if (o.kind === 'sign') { wgSignOpen(tx, ty); return true; }
     if (o.kind === 'hive') { const n = wgMetaAt(w, dim, tx, ty); if (n > 0) { wgDrop(tx * 16 + 8, ty * 16 + 20, 'honey', n); wgSetObj(w, dim, tx, ty, id, 0); wgPart(tx * 16 + 8, ty * 16 + 8, 5, { c: ['y', 'Y', 'O'], s: 24, up: 14 }); } else wgToast('THE BEES ARE BUSY'); return true; }
     if (o.kind === 'well') { wgToast('FRESH WATER (+HP)'); WGS.p.hp = Math.min(WGS.p.maxHp, WGS.p.hp + 2); return true; }
     if (o.kind === 'plant' && o.pick) { wgBreak(tx, ty, true); return true; }
@@ -256,6 +256,7 @@ function wgUse(tx, ty) { // right click on a tile: open, toggle, plant, place, e
     if (it.placeG) { wgSetGround(w, dim, tx, ty, G_ID[it.placeG]); }
     else { wgSetObj(w, dim, tx, ty, O_ID[it.place]); if (it.place === 'chest' || it.place === 'barrel') wgCont(w, dim, tx, ty, true); }
     wgInvTake(WGS.inv, s.id, 1); wgSfx('place'); wgPart(tx * 16 + 8, ty * 16 + 12, 4, { c: ['L', 'l'], s: 20, up: 10, life: 0.3 });
+    if (it.place === 'sign') wgSignOpen(tx, ty); // a new sign asks for its words
     return true;
   }
   if (it.kind === 'seed') {

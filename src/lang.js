@@ -25,9 +25,10 @@ function langWild(id) {
 }
 const langId = () => (typeof Save !== 'undefined' && LANG[Save.settings.lang] ? Save.settings.lang : 'en');
 const _trCache = new Map();
+let TR_RAW = false; // set while drawing player words (sign text, names), which are never looked up
 function tr(str) {
   const id = langId();
-  if (id === 'en') return str;
+  if (id === 'en' || TR_RAW) return str;
   const key = id + '\u0001' + str;
   let r = _trCache.get(key);
   if (r !== undefined) return r;

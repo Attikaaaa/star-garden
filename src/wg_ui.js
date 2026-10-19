@@ -15,14 +15,14 @@ function wgDrawPlay() {
     ctx.strokeStyle = o ? 'rgba(255,224,120,0.9)' : 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1;
     const c = Math.floor(WGS.t * 3) % 2; ctx.strokeRect(sx + 0.5, sy + 0.5, 15, 15); if (c && o) { rect(sx - 1, sy - 1, 2, 2, 'Y'); rect(sx + 15, sy - 1, 2, 2, 'Y'); rect(sx - 1, sy + 15, 2, 2, 'Y'); rect(sx + 15, sy + 15, 2, 2, 'Y'); }
     if (m && m.tx === T.tx && m.ty === T.ty) { const f = 1 - m.hp / OBJ[o].hp; rect(sx, sy + 17, 16, 3, '0'); rect(sx + 1, sy + 18, Math.round(14 * f), 1, 'Y'); }
-    if (o) { // the name shows when the aim lands on something and while it is mined, then fades so it never sits on the hero
+    if (o && !(OBJ[o].kind === 'sign' && wgSignText(T.tx, T.ty))) { // the name shows when the aim lands on something and while it is mined, then fades so it never sits on the hero
       const k = T.tx + ',' + T.ty; if (WGS.tgtK !== k) { WGS.tgtK = k; WGS.tgtT = WGS.t; }
       const age = WGS.t - WGS.tgtT, a = m && m.tx === T.tx && m.ty === T.ty ? 1 : wgClamp((1.6 - age) * 3, 0, 1);
       if (a > 0) { ctx.globalAlpha = a; wtext(OBJ[o].name, sx + 8, sy - 7, 'w', 2, 1); ctx.globalAlpha = 1; }
     }
   }
   const F = WGS.fish; if (F) { const sx = F.tx * 16 + 8 - cx0, sy = F.ty * 16 + 8 - cy0 + Math.round(Math.sin(WGS.t * 5)); ctx.strokeStyle = 'rgba(240,239,255,0.8)'; ctx.beginPath(); ctx.moveTo(Math.round(WGS.p.x - cx0) + 5, Math.round(WGS.p.y - cy0) - 16); ctx.lineTo(sx, sy); ctx.stroke(); rect(sx - 1, sy - 1, 3, 3, 'r'); rect(sx, sy - 1, 1, 1, 'w'); if (F.t < 0.8) { rect(sx - 4, sy + 2, 9, 1, 'C'); } }
-  wgDrawAmbient(cx0, cy0); wgDrawLight(cx0, cy0); wgDrawSky();
+  wgDrawAmbient(cx0, cy0); wgDrawLight(cx0, cy0); wgDrawSky(); wgDrawSigns(cx0, cy0);
   ctx.restore();
   wgDrawWeatherFX();
   if (!WGS.photo) wgDrawHud();

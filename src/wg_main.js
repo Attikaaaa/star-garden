@@ -36,8 +36,8 @@ function wgButton(ui, label, x, y, w, o) {
 window.addEventListener('keydown', (e) => {
   const f = WGU.edit; if (!f || G.state !== 'wg') return;
   if (e.key === 'Backspace') f.v = f.v.slice(0, -1);
-  else if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') { WGU.edit = null; }
-  else if (e.key.length === 1 && f.v.length < f.max && /[A-Za-z0-9 _\-\/]/.test(e.key)) f.v += e.key.toUpperCase();
+  else if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') { f.end = e.key; WGU.edit = null; }
+  else if (e.key.length === 1 && f.v.length < f.max && (f.re || /[A-Za-z0-9 _\-\/]/).test(e.key)) f.v += e.key.toUpperCase();
   else return;
   e.preventDefault(); e.stopPropagation();
 }, true);
@@ -348,7 +348,7 @@ function wgDrawPlayer(e, cx0, cy0) {
     const hx = p.face === 'u' ? sx + 6 : p.face === 'd' ? sx - 8 : sx + side * 7 - 8, hy = sy - 18 + (p.face === 'u' ? -2 : 0) - sw;
     if (h.kind === 'tool' || h.kind === 'weapon' || h.kind === 'place' || h.kind === 'food' || h.kind === 'seed') { ctx.save(); ctx.globalAlpha = 1; ctx.drawImage(ic, hx - 2, hy - 2); ctx.restore(); }
   }
-  if (p.name && e.p !== WGS.p) wtext(p.name, sx, sy - 32, 'w', 2, 1);
+  if (p.name && e.p !== WGS.p) wgRawText(p.name, sx, sy - 32, 'w', 2, 1);
 }
 
 // ---------- touch ----------

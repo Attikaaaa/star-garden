@@ -75,6 +75,7 @@ function wgnHostMsg(L, m) {
   else if (m.t === 'ping') wgnSend(L, { t: 'pong', s: m.s });
   else if (m.t === 'chat' && String(m.msg || '')[0] === '/') { const r = wgnPerm().ops.includes(L.rj) ? wgnCmd(m.msg, L) : 'ONLY OPERATORS CAN DO THAT'; wgnSend(L, { t: 'chat', who: '', msg: r }); }
   else if (m.t === 'chat') { const msg = String(m.msg || '').slice(0, 60); wgnAll({ t: 'chat', who: L.name, msg }, null); WGN.chat.push({ who: L.name, msg, t: 8 }); }
+  else if (m.t === 'sign') { if (wgSignSet(m.k, m.v)) wgnAll({ t: 'sign', k: m.k, v: WGS.signs[m.k] || '' }, L); }
   else if (m.t === 'bye') wgnDrop(L, false);
 }
 // host / operator commands, typed in chat: /KICK name, /BAN name, /UNBAN name, /OP name, /WHITE ON|OFF|ADD name|DEL name, /PASS word|OFF, /TIME DAY|NIGHT, /LIST, /SAY text
@@ -103,7 +104,7 @@ function wgnCmd(txt, by) {
 function wgnClean(n) { return String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10); }
 function wgnWelcome(L) {
   const w = WGS.world;
-  return { name: w.meta.name, seed: w.seed, diff: w.meta.diff, spawn: w.spawn, clock: WGS.clock, day: WGS.day, st: L.guest, pid: L.pid, host: WGS.p.name, hd: WGS.dim };
+  return { name: w.meta.name, seed: w.seed, diff: w.meta.diff, spawn: w.spawn, clock: WGS.clock, day: WGS.day, st: L.guest, pid: L.pid, host: WGS.p.name, hd: WGS.dim, signs: WGS.signs || {} };
 }
 function wgnDrop(L, quiet) {
   const i = WGN.peers.indexOf(L); if (i < 0) return;
@@ -128,6 +129,7 @@ function wgNetTile(dim, x, y) {
   if (WGN.role === 'host') wgnAll(msg, null); else wgnSend(WGN.link, msg);
 }
 function wgNetChunk(w, dim, cx, cy) { if (WGN.role === 'client' && w === WGS.world && WGN.link && WGN.link.open) wgnSend(WGN.link, { t: 'chunkreq', d: dim, cx, cy }); }
+function wgNetSign(k, v) { if (!WGN.role) return; const m = { t: 'sign', k, v }; if (WGN.role === 'host') wgnAll(m, null); else wgnSend(WGN.link, m); }
 function wgNetChest(dim, x, y, arr) { if (!WGN.role) return; const m = { t: 'cset', d: dim, x, y, a: arr }; if (WGN.role === 'host') wgnAll(m, null); else wgnSend(WGN.link, m); }
 
 // ---------- client ----------
@@ -178,12 +180,13 @@ function wgnClientMsg(L, m) {
   else if (m.t === 'dmg') wgHurtPlayer(m.dmg, m.fx, m.fy);
   else if (m.t === 'clk') { WGS.clock = m.c; WGS.day = m.d; WGS.wk = m.wk; WGN.hd = m.hd || 'o'; }
   else if (m.t === 'chat') WGN.chat.push({ who: m.who, msg: m.msg, t: 8 });
+  else if (m.t === 'sign') wgSignSet(m.k, m.v);
   else if (m.t === 'kick' || (m.t === 'no' && L.open)) { WGN.err = 'THE HOST CLOSED THE WORLD'; wgnStop(); wgnLeaveGame(); }
 }
 function wgnEnter(wl) { // we are in: build the host's world around us
   const meta = { id: 'net', name: wl.name, seed: wl.seed, diff: wl.diff, created: 0, last: 0, played: 0, day: wl.day };
   WGN.hd = wl.hd || 'o'; const w = wgNewWorld(meta); w.spawn = wl.spawn; WGS.world = w; WGS.readonly = true; WGS.net = true;
-  WGS.dim = 'o'; WGS.clock = wl.clock; WGS.day = wl.day; WGS.signs = {}; WGS.mobs = []; WGS.drops = []; WGS.parts = []; WGS.remote = []; WGS.t = 0; WGS.tf = 0;
+  WGS.dim = 'o'; WGS.clock = wl.clock; WGS.day = wl.day; WGS.signs = {}; for (const k in wl.signs || {}) wgSignSet(k, wl.signs[k]); WGS.mobs = []; WGS.drops = []; WGS.parts = []; WGS.remote = []; WGS.t = 0; WGS.tf = 0;
   const p = wgNewPlayer(wl.spawn.x, wl.spawn.y); WGS.p = p; WGS.inv = wgInvNew(); WGS.sel = 0;
   const lk = (typeof WGU !== 'undefined' && WGU.look) || { skin: 0, hair: 0, shirt: 0 }; p.look = lk;
   if (wl.st) { Object.assign(p, { x: wl.st.x, y: wl.st.y, hp: wl.st.hp, food: wl.st.food, armor: wl.st.armor || p.armor }); WGS.inv = wl.st.inv || WGS.inv; WGS.dim = wl.st.dim || 'o'; }
