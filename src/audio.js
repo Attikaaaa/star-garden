@@ -129,6 +129,8 @@ const Audio_ = (() => {
     cwin() { [784, 988, 1175, 1568].forEach((f, i) => osc('p25', f, f, 0.09, 0.1, i * 0.06)); osc('triangle', 2093, 2093, 0.2, 0.06, 0.24); },
     bigwin() { [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => { osc('p25', f, f, 0.12, 0.11, i * 0.07); bell(f * 2, 0.5 + i * 0.05); }); osc('triangle', 131, 131, 0.9, 0.25, 0.45); },
     scratch() { noise(0.05, 0.05, 5200, 'highpass'); },
+    chime() { const P = [1047, 1175, 1319, 1568, 1760, 2093]; for (let i = 0; i < 3; i++) { const f = P[Math.floor(Math.random() * P.length)], at = i * 0.14 + Math.random() * 0.05; osc('sine', f, f, 0.9, 0.05, at); osc('triangle', f * 2, f * 2, 0.2, 0.012, at); } }, // a shell chime in the breeze
+    windup() { for (let i = 0; i < 5; i++) osc('triangle', 1900 - i * 70, 1500, 0.025, 0.06, i * 0.07); }, // a music box's key turned
   };
   function sfx(name) {
     if (!ac || set.muted || !set.sfx) return;
@@ -341,6 +343,29 @@ const Audio_ = (() => {
       lead: 'E5 - A5 - C6 - B5 A5 F5 - A5 - D6 - C6 - B5 - G#5 - E5 - B5 - A5 - - - E5 - . . ' +
         'F5 - A5 - C6 - F6 - E6 - D6 - A5 - F5 - E5 - G#5 - B5 - D6 - C6 - B5 - G#5 - - -',
     },
+    // Wildgrove's music boxes and gramophone: four short tunes, a plucked comb over a soft bass and no drums
+    mb_lull: { // LULLABY
+      bpm: 70, wave: 'sine', celesta: true, marimba: true, box: true, waltz: true, drum: '.',
+      chords: 'C Am F G C Am F C',
+      lead: 'G5 - E5 - E5 - A5 - G5 - E5 - F5 - A5 - C6 - B5 - - - G5 - G5 - E5 - C6 - A5 - G5 - E5 - F5 - E5 - D5 - C5 - - - . .',
+    },
+    mb_dew: { // MORNING DEW
+      bpm: 96, wave: 'sine', celesta: true, marimba: true, box: true, drum: '.',
+      chords: 'C G Am Em F C F G',
+      lead: 'E5 - G5 - C6 - G5 - D6 - B5 - G5 - B5 - C6 - A5 - E5 - A5 - B5 - G5 - E5 - . . ' +
+        'A5 - C6 - F6 - E6 D6 C6 - G5 - E5 - G5 - A5 - F5 - A5 - C6 - B5 - D6 - G5 - . .',
+    },
+    mb_waltz: { // STARRY WALTZ
+      bpm: 120, wave: 'sine', celesta: true, marimba: true, box: true, waltz: true, drum: '.',
+      chords: 'F C Dm Am Bb F C F',
+      lead: 'C6 - A5 - F5 - E5 - G5 - C6 - D6 - F6 - D6 - C6 - - - A5 - Bb5 - D6 - F6 - A5 - C6 - F6 - G5 - E5 - C6 - F5 - - - . .',
+    },
+    mb_rain: { // RAIN ON THE ROOF
+      bpm: 84, wave: 'sine', celesta: true, marimba: true, box: true, drum: '.',
+      chords: 'Am F C G Am F G Am',
+      lead: 'E5 - A5 - C6 - B5 A5 A5 - - - F5 - . . G5 - C6 - E6 - D6 C6 D6 - - - B5 - . . ' +
+        'C6 - E6 - A6 - G6 E6 F6 - E6 - C6 - A5 - B5 - D6 - G5 - B5 - A5 - - - . . . .',
+    },
   };
   for (const k in SONGS) {
     const s = SONGS[k];
@@ -382,7 +407,7 @@ const Audio_ = (() => {
         if (song.bells && i % 8 === 0) { osc('sine', f * 2, f * 2, 0.8, 0.09, at, musBus); osc('triangle', f * 4, f * 4, 0.2, 0.025, at, musBus); }
       }
       const b = song.bassT[i % song.bassT.length];
-      if (b !== '.') { const f = freq(b); osc('triangle', f, f, dt * 0.9, 0.5, at, musBus); if (song.choir && i % 8 === 0) { osc('sine', f * 2, f * 2, dt * 8, 0.07, at, musBus); osc('sine', f * 3, f * 3, dt * 8, 0.04, at, musBus); } } // choir: a low held pad
+      if (b !== '.') { const f = freq(b); osc('triangle', f, f, dt * 0.9, song.box ? 0.2 : 0.5, at, musBus); if (song.choir && i % 8 === 0) { osc('sine', f * 2, f * 2, dt * 8, 0.07, at, musBus); osc('sine', f * 3, f * 3, dt * 8, 0.04, at, musBus); } } // choir: a low held pad
       const d = song.drumT[i % song.drumT.length];
       if (d === 'k') { osc('triangle', 150, 45, 0.12, 0.55, at, musBus); }
       else if (d === 's') noise(0.1, 0.22, 2000, 'bandpass', at, 0, musBus);
