@@ -38,7 +38,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
 | `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, the tile renderer for lands without scenery (`renderRoomPlain`), land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
-| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
+| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well, the Snowglobe) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
 | `entities.js` | players (input, movement, combat, down/revive, robes, seat colours: `SEATS`, `seatCol`, the ring at their feet and your arrow, `seatMark`), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
 | `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
@@ -156,11 +156,18 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   an obstacle, a run of them a ridge (hedge, stone wall), an exact 2x2 block a giant (tree,
   palm, crystal) drawn as a tall piece sorted by y (display-list kind 7). A land's own
   pieces (prisms, bells, the gate) are drawn with `tileArt`; a land layout built of
-  breakables uses one kind (`LAY_BRK`). Every per-land table (`SCN_GROUND`, `SCN_DECALS`,
-  `CAP`, `PIT`, `RIDGE`, `FACE_GROW`, `FACE_THINGS`, `OBSTACLES`, `BREAKABLES`, `TALL`,
-  `RING`, `GRASS_BITS`...) needs an entry for a new land with scenery.
+  breakables uses one kind (`LAY_BRK`), and a layout can name its own rock (`LAY_ROCK`) and
+  tall piece (`LAY_TALL`). A rock `rockArt` draws its own way (a moon well, slag) always
+  stands alone. Every per-land table (`SCN_GROUND`, `SCN_DECALS`, `CAP`, `PIT`, `RIDGE`,
+  `FACE_GROW`, `FACE_THINGS`, `OBSTACLES`, `BREAKABLES`, `TALL`, `RING`, `GRASS_BITS`...)
+  needs an entry for a new land with scenery. `FACE_GROW` can give the face its own `wall`,
+  a `spill` over its top (snow) and `drip`s hanging from it. A land's `THEMES[t].paint(g,
+  room, true)` draws its floor marks over the scenery (the `true`: skip any full-floor
+  texture). Tiles that change often stay out of the baked base: `SCN_TILE[t]` says what the
+  base sees (a frozen pond is still water) and `SCN_OVER[t](g, room)` draws the change on the
+  static layer. Every `gi_*` sprite gets a see-through `_d` copy (`seeThroughTall`).
 - Tall grass (`room.grass`, one byte per tile: 1 grass, 2 cut) grows in `start`, `normal`
-  and `challenge` rooms of scenery lands, never in the Star Well, in front of doors or where
+  and `challenge` rooms of the lands in `GRASS_LANDS`, never in front of doors or where
   the land's `LAND_MECH[id].noGrass(room, c, r)` says (the pier, the bee ring, the clock's
   alcove); the Meadow's flower patches keep off it. Shots and rolls cut it on the host
   (`cutGrass`, sent as the `grass` event and kept in `roomMsg`, the tile checksum and the

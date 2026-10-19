@@ -191,6 +191,7 @@ function drawPitLife(room, theme, ox, oy) {
   if (!room.pits || theme === 'cloud') return; // the open sky is still
   const crystal = theme === 'crystal' || theme === 'well', key = crystal ? 'Y' : THEMES[theme].h;
   for (const [x, y, h] of room.pits) {
+    if (room.tiles[((y - OY) >> 4) * COLS + (x >> 4)] !== T_PIT) continue; // frozen over, filled in
     // keep clear of the far bank (scenery.js draws it along a pool's top edge)
     const top = tileAt(room, x >> 4, ((y - OY) >> 4) - 1) !== T_PIT;
     if (crystal) {

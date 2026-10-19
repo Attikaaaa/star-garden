@@ -110,6 +110,25 @@ function drawGlass() {
   if (SCR.oy >= 8) rect(E.l + 20, E.t + 3, Math.round((E.r - E.l) * 0.25), 1, 'w');
 }
 
+// The scenery's base keeps a frozen pond as water (no rebake when a bridge forms or melts); the
+// bridge is laid over it as a slab of ice, lit on its top and left edges, thick at the bottom.
+SCN_TILE.snow = (room, i, t) => (t === T_ICE && room.pit0 && room.pit0.has(i) ? T_PIT : t);
+SCN_OVER.snow = (g, room) => {
+  if (!room.pit0) return;
+  const ice = (c, r) => room.tiles[r * COLS + c] === T_ICE;
+  for (const i of room.pit0) {
+    if (room.tiles[i] !== T_ICE) continue;
+    const c = i % COLS, r = (i / COLS) | 0, x = c * 16, y = OY + r * 16;
+    blit(g, S('ice'), x, y, hash(i, 7, room.seed) & 1);
+    g.fillStyle = PAL.w;
+    if (!ice(c, r - 1)) g.fillRect(x, y, 16, 1);
+    if (!ice(c - 1, r)) g.fillRect(x, y, 1, 16);
+    g.fillStyle = PAL.c;
+    if (!ice(c + 1, r)) g.fillRect(x + 15, y, 1, 16);
+    if (!ice(c, r + 1)) { g.fillRect(x, y + 13, 16, 1); g.fillStyle = PAL.B; g.fillRect(x, y + 14, 16, 1); g.fillStyle = PAL['0']; g.fillRect(x, y + 15, 16, 1); }
+  }
+};
+
 LAND_MECH.snow = {
   build(room) {
     if (room.type === 'rink') { stampLayout(room.tiles, RINK_LAYOUT, false, false, null); return; }
@@ -966,3 +985,116 @@ function drawRink(o, x, y) {
   drawFeet(S('rsign'), x, y + 1);
   if (!o.at && Math.floor(o.t * 3) % 3 === 0) drawS(S('sparkle_c'), x + 6, y - 18);
 }
+// ---------- Scenery (scenery.js) ----------
+// Fresh snow with wind ripples, ice-brick walls under a lip of snow with icicles, ponds with an
+// icy rim, snowy pines, a village's cabins.
+(function snowArt() {
+  const A = (name, art, opts) => def(name, autoOutline(Array.isArray(art) ? art : parseArt(name, art)), opts);
+  const rowsOf = (name) => _defs.find(d => d.name === name).rows;
+  // a clear block of ice, a stump under a cap of snow, a slalom flag
+  def('ob_iceblock', stamp(sculpt(16, 16, [
+    { e: [8, 14, 7, 2], ramp: 'lLLw' },
+    { r: [2, 4, 12, 10, 2], ramp: 'bBcC' },
+    { r: [3, 4, 10, 4, 1], ramp: 'cCCw', hi: false },
+  ]), 4, 6, 'w...\n.w..\n....\n....\n...C\n..C.'));
+  def('ob_snowstump', sculpt(16, 16, [
+    { e: [8, 14, 7.5, 2], ramp: 'lLLw' },
+    { r: [3, 6, 10, 9, 3], ramp: 'unNO' },
+    { e: [8, 6, 5.5, 2.8], ramp: 'lLww', hi: false },
+    { e: [4.5, 8.5, 1.5, 1.5], ramp: 'lLww', hi: false },
+  ]));
+  A('ob_flag', `
+    ................
+    .......X........
+    .......Xrrr.....
+    .......XRrrrr...
+    .......XRRrrr...
+    .......XRrr.....
+    .......Xr.......
+    .......X........
+    .......x........
+    .......X........
+    .......x........
+    .......X........
+    ......lxl.......
+    ....lLwwwLl.....
+    ................
+    ................`);
+  def('bk_cratesnow', stamp(rowsOf('bk_crate'), 2, 2, 'wwwwwwwwwwww\nLwwLwwwLwwwL\n.L......L...'));
+  // a snowy pine: three tiers, each wider than the skirt above it, so the outline steps out;
+  // snow lies on each tier's shoulders and along its slopes, a dark line under every skirt
+  const T = [[1, 15, 1, 7.5], [10, 29, 2.5, 13], [21, 44, 4, 17.5]];
+  const tierOf = (x, y) => {
+    const d = x + 0.5 - 18;
+    for (let i = 0; i < T.length; i++) {
+      const [top, bot, h0, h1] = T[i], jag = (Math.floor((x + i) / 2) % 2) * 2;
+      if (y < top || y > bot - jag) continue;
+      if (Math.abs(d) <= h0 + (h1 - h0) * (y - top) / (bot - top)) return i;
+    }
+    return -1;
+  };
+  const pine = grid(36, 54).fill((x, y) => {
+    const i = tierOf(x, y);
+    if (i < 0) return null;
+    const d = x + 0.5 - 18, [top, bot, h0, h1] = T[i], half = h0 + (h1 - h0) * (y - top) / (bot - top);
+    let sky = 9, over = 9;
+    for (let k = 1; k <= 4; k++) { const j = tierOf(x, y - k); if (j < 0 && sky > 4) sky = k; if (j >= 0 && j < i && over > 4) over = k; }
+    const snowy = (sky <= 2 + (d < 0 ? 1 : 0)) || (over > 1 && over <= 3 + (d < 0 ? 1 : 0) && Math.abs(d) < half - 1);
+    if (over === 1) return 'z';
+    if (snowy) return d < -2 ? 'w' : d < half * 0.5 ? 'L' : 'l';
+    return d < -half * 0.35 ? 'G' : d < half * 0.35 ? 'g' : 'z';
+  }).rows();
+  const trunk = sculpt(36, 54, [{ e: [18, 50.5, 14, 3], ramp: 'lLLw' }, { r: [15, 40, 6, 11, 1], ramp: 'unNN' }]);
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  def('gi_pine', comp(36, 54, [[trunk, 0, 0], [autoOutline(pine), 0, 0], [['w.L', '.w.'], 16, 48]]));
+  // a cabin in the village: log walls with a lit window either side of the door, a roof under
+  // thick snow with icicles on the eaves, a brick chimney
+  const hut = grid(44, 48).fill((x, y) => {
+    const d = x + 0.5 - 22;
+    // the roof: a trapezoid of snow, lumpy along its lower edge
+    const rt = 9, rb = 27 + ((x >> 1) % 3 === 0 ? 1 : 0), half = 10 + (y - rt) / (27 - rt) * 11.5;
+    if (y >= rt && y <= rb && Math.abs(d) <= half) {
+      if (y >= 26 && (x % 5 === 1) && y <= 28) return 'C';
+      return d < -half * 0.2 ? 'w' : d < half * 0.55 ? 'L' : 'l';
+    }
+    // the chimney behind the roof
+    if (x >= 29 && x <= 34 && y >= 3 && y < rt + 2) return y <= 4 ? 'w' : x === 29 ? 'R' : (y % 3 === 0 ? 'n' : 'r');
+    // the log wall
+    if (x >= 7 && x <= 36 && y > rb && y <= 44) {
+      if (y === rb + 1) return 'u';
+      const row = (y - 29) % 3;
+      return row === 0 ? 'n' : x === 7 || (row === 1 && (x * 7 + y) % 11 === 0) ? 'O' : 'N';
+    }
+    return null;
+  }).rows();
+  def('gi_hut', comp(44, 48, [
+    [sculpt(44, 48, [{ e: [22, 45, 20, 3], ramp: 'lLLw' }]), 0, 0],
+    [autoOutline(hut), 0, 0],
+    [autoOutline(['.......', '.uuuuu.', '.uuuuu.', '.uuuuu.', '.uuuNu.', '.uuuuu.', '.uuuuu.']), 18, 37],
+    [autoOutline(['......', '.YyyO.', '.yyOO.', '.yOOo.', '......']), 9, 32],
+    [autoOutline(['......', '.YyyO.', '.yyOO.', '.yOOo.', '......']), 29, 32],
+  ]));
+  // on the wall: a wreath and a frosted window
+  A('fc_wreath', `
+    ...........
+    ....gGg....
+    ...GhGGg...
+    ..Gh...Gg..
+    ..G.....g..
+    ..Gr...rg..
+    ...gGrGg...
+    ....rRr....
+    ...rr.rr...
+    ...........`);
+  A('fc_frost', `
+    ..........
+    .wwwwwwww.
+    .wcBBBwCw.
+    .wBBBbbBw.
+    .wBBbbbBw.
+    .wwwwwwww.
+    .wBbbbbcw.
+    .wCbbbbBw.
+    .wwwwwwww.
+    ..........`);
+})();

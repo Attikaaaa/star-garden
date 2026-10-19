@@ -1075,6 +1075,7 @@ function frameError(e) {
   if (window.reportError) reportError(e); else setTimeout(() => { throw e; });
 }
 
+seeThroughTall();
 bakeAtlas();
 resize();
 initProgress();
