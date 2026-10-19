@@ -75,7 +75,7 @@ function wgDrawHud() {
   if (WGN.role) wtext((WGN.role === 'host' ? 'CODE ' + WGN.code + (WGN.pub ? ' PUBLIC' : '') : 'ONLINE') + '  ' + (1 + (WGN.role === 'host' ? WGN.peers.filter(q => q.pid > 0).length : WGS.remote.length + 0)) + ' IN WORLD', L + 4, T0 + 4, 'Y', 2, 0);
   { const k = WGS.mobs.find(m => WG_MOBS[m.type].boss && Math.hypot(m.x - WGS.p.x, m.y - WGS.p.y) < 320); if (k) { const D = WG_MOBS[k.type], bw = 140, bx2 = (L + R) / 2 - bw / 2, f = Math.max(0, k.hp / D.hp); rect(bx2 - 1, T0 + 44, bw + 2, 8, '0'); rect(bx2, T0 + 45, bw, 6, 'x'); rect(bx2, T0 + 45, Math.round(bw * f), 6, D.star ? 'o' : 'r'); rect(bx2, T0 + 45, Math.round(bw * f), 1, D.star ? 'Y' : 'R'); wtext(D.name, (L + R) / 2, T0 + 54, 'w', 2, 1); } }
   if (WGS.scr === 'play' && !WGU.chatOpen) wgDrawTrack(L, T0);
-  if (WGS.toast) wtext(WGS.toast.msg, (L + R) / 2, T0 + 14, 'Y', 3, 1);
+  if (WGS.toast) (WGS.toast.raw && typeof wgRawText === 'function' ? wgRawText : wtext)(WGS.toast.msg, (L + R) / 2, T0 + 14, 'Y', 3, 1); // raw: a player's own words
   { const m = WGS.world.meta, H = !m.hintDone && WG_HINTS[m.hint || 0]; if (H && WGS.scr === 'play') { const tw = textW(tr(H[0]), 1) + 12; rect((L + R) / 2 - tw / 2, T0 + 26, tw, 12, '0'); rect((L + R) / 2 - tw / 2 + 1, T0 + 27, tw - 2, 10, '1'); wtext(H[0], (L + R) / 2, T0 + 29, 'Y', 0, 1); } }
   for (const k in p.buff) { /* potion buffs are listed under the dial */ }
   let y = cy + 32; for (const k in p.buff) { wtext(k.toUpperCase() + ' ' + Math.ceil(p.buff[k]), R - 4, y, 'g', 2, 2); y += 9; }

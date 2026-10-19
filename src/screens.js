@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.30', lines: ['WILDGROVE: WAYSTONES', 'BUILD TWO OR MORE AND TRAVEL BETWEEN THEM', 'A SIGN BESIDE ONE GIVES IT A NAME', 'THEY SHOW ON THE MAP'] },
   { v: '1.16.29', lines: ['WILDGROVE: A BICYCLE!', 'RIDE FASTER, QUICKER STILL ON PATHS', 'USE RINGS ITS BELL', 'FRIENDS SEE YOU RIDE BY'] },
   { v: '1.16.28', lines: ['WILDGROVE: POND LIFE', 'FISH GLIDE UNDER DEEP WATER', 'DRAGONFLIES OVER THE SHALLOWS IN SUMMER', 'CATCH ONE WITH THE BUG NET AND FRAME IT'] },
   { v: '1.16.27', lines: ['WILDGROVE: HATS!', 'A STRAW HAT, A FLOWER CROWN, A BEANIE', 'A TOP HAT AND A GOLD CROWN', 'FRIENDS SEE WHICH HAT IS YOURS'] },

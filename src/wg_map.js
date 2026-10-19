@@ -113,6 +113,7 @@ function wgDrawMap() {
   }
   // stairs and altars, home, the pack you dropped, the pin, friends, you
   for (const ch of vis) for (const [i, j, o] of ch.marks) wgMapMark(X(ch.cx * CS + i + 0.5), Y(ch.cy * CS + j + 0.5), o.kind === 'altar' ? 'p' : o.sky ? 'w' : o.up || o.skyup ? 'C' : 'Y', o.kind === 'altar' ? 'P' : 0);
+  if (typeof wgMapWays === 'function') wgMapWays(X, Y, dim); // waystones, from the world's list
   const home = p.spawn && (p.spawn.dim || 'o') === dim ? p.spawn : dim === 'o' ? w.spawn : null;
   if (home) wgMapHouse(X(home.x / 16), Y(home.y / 16));
   const gv = p.grave; if (gv && gv.dim === dim) { const x = X(gv.x / 16), y = Y(gv.y / 16); rect(x - 3, y - 3, 7, 7, '0'); for (let k = -2; k <= 2; k++) { rect(x + k, y + k, 1, 1, 'r'); rect(x + k, y - k, 1, 1, 'r'); } }
