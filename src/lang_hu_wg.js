@@ -287,5 +287,9 @@
     'LIGHT POST': 'FÉNYFÜZÉR-OSZLOP', 'GLOWING GARDEN': 'RAGYOGÓ KERT', 'STRING LIGHTS BETWEEN TWO POSTS': 'FESZÍTS KI FÉNYFÜZÉRT KÉT OSZLOP KÖZÉ',
     'PLACE TWO IN A ROW TO STRING LIGHTS': 'TEGYÉL LE KETTŐT EGY SORBA A FÉNYFÜZÉRHEZ', 'UP TO 6 TILES APART': 'LEGFELJEBB 6 MEZŐNYIRE',
   });
+  Object.assign(LANG.hu.table, { // skipping stones
+    'STONE SKIPPER': 'KACSÁZÓ', 'SKIP A STONE FIVE TIMES': 'DOBJ ÖT KACSÁT EGY KŐVEL', '# SKIPS!': '# KACSA!', 'ONE SKIP!': 'EGY KACSA!', 'PLOP!': 'CSOBB!',
+    'USE IT ON WATER TO SKIP IT': 'VÍZEN HASZNÁLVA KACSÁZHATSZ VELE',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
