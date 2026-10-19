@@ -11,6 +11,7 @@ await g.ev(`(() => { const w = WGS.world, d = WGS.dim, p = WGS.p, x = Math.floor
   for (let j = -12; j < 14; j++) for (let i = -18; i < 19; i++) { wgSetObj(w, d, x + i, y + j, 0); wgSetGround(w, d, x + i, y + j, G_ID.grass); }
   WGS.scr = 'play'; w.meta.hintDone = 1; WGS.weather = null; WGS.wxT = 9999; window._dr = { x, y }; Input.mx = 4; Input.my = 4;
   window._plant = (id) => { for (const [i, j] of [[-6, -3], [-2, -4], [3, -3], [7, -4], [-5, 2], [5, 2]]) wgSetObj(w, d, x + i, y + j, O_ID[id]); };
+  wgGrowTick = function () {}; // no fruit tree ripens (and stops blossoming) halfway through
   window._run = (n) => { let most = 0; for (let i = 0; i < n; i++) { updateWG(1 / 60); most = Math.max(most, WGDR.list.length); } return most; }; })(); 0`);
 let r = await g.ev(`(() => { WGS.day = 2; _plant('tree_apple'); const most = _run(900), L = WGDR.list; return [most, L.length, L.every(q => ['w', 'L', 'q'].includes(q.c)), L.some(q => q.rest > 0), WGDR.src.length]; })()`);
 ok(r[0] > 3 && r[0] <= 12 && r[2] && r[3] && r[4] === 6, 'in spring blossoming trees let petals go, a dozen at most, and they settle: ' + JSON.stringify(r));
