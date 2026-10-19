@@ -221,5 +221,9 @@
   Object.assign(LANG.hu.table, {
     'OVER THE RAINBOW': 'A SZIVÁRVÁNY FELETT', 'SEE A RAINBOW AFTER THE RAIN': 'LÁSS SZIVÁRVÁNYT ESŐ UTÁN',
   });
+  Object.assign(LANG.hu.table, { // sky lanterns
+    'SKY LANTERN': 'ÉGI LÁMPÁS', 'LANTERN NIGHT': 'LÁMPÁSOK ÉJSZAKÁJA', 'LET FIVE SKY LANTERNS GO': 'ENGEDJ EL ÖT ÉGI LÁMPÁST',
+    'IT NEEDS THE OPEN SKY': 'NYÍLT ÉG KELL NEKI', 'IT SHINES BEST AT NIGHT': 'ÉJJEL RAGYOG A LEGSZEBBEN', 'MAKE A WISH...': 'KÍVÁNJ VALAMIT...',
+    'USE IT AT NIGHT UNDER THE OPEN SKY': 'ÉJJEL, A SZABAD ÉG ALATT HASZNÁLD', 'FRIENDS SEE IT RISE': 'A BARÁTAID IS LÁTJÁK FELSZÁLLNI' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
