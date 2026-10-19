@@ -81,6 +81,6 @@ wgBuildAll = function () {
     (g) => { patch(g, 'H'); for (const [x, y] of [[5, 11], [10, 12], [13, 10], [2, 13]]) { wgBlob(g, x, y, 1.4, 1.6, RED); wgPx(g, x, y, 'Y'); } }]);
   // a sunflower: a stem, a bud, the yellow face turned to the light
   const stem = (g, top) => { wgLine(g, 8, 15, 8, top, 'G'); wgLine(g, 9, 15, 9, top + 2, 'g'); wgBlob(g, 5.5, 11, 2.2, 1.2, G4); wgBlob(g, 11.5, 9, 2.2, 1.2, G4); };
-  crop('crop_sun', [(g) => { wgLine(g, 8, 15, 8, 11, 'G'); wgPx(g, 7, 12, 'h'); wgPx(g, 9, 11, 'h'); wgPx(g, 6, 11, 'H'); wgPx(g, 10, 10, 'H'); },(g) => stem(g, 9), (g) => { stem(g, 5); wgBlob(g, 8.5, 4, 2, 2, G4); },
+  crop('crop_sun', [(g) => { wgLine(g, 8, 15, 8, 11, 'G'); wgPx(g, 7, 12, 'h'); wgPx(g, 9, 11, 'h'); wgPx(g, 6, 11, 'H'); wgPx(g, 10, 10, 'H'); }, (g) => stem(g, 9), (g) => { stem(g, 5); wgBlob(g, 8.5, 4, 2, 2, G4); },
     (g) => { stem(g, 6); wgBlob(g, 8.5, 4.4, 5, 4, ['O', 'y', 'Y', 'Y']); wgBlob(g, 8.5, 4.4, 2.2, 2, ['k', 'u', 'n', 'N']); wgPx(g, 7, 3, 'n'); }]);
 };
