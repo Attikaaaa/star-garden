@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.36', lines: ['WILDGROVE: EMOTES AND LEAF PILES', 'PRESS G (OR RT) TO WAVE, SMILE OR SEND A HEART', 'FRIENDS SEE YOUR EMOTES', 'JUMP INTO LEAF PILES IN AUTUMN'] },
   { v: '1.16.35', lines: ['WILDGROVE: PUDDLES AND MARSHMALLOWS', 'PUDDLES FILL IN THE RAIN, SO SPLASH AWAY', 'TOAST MARSHMALLOWS AT A CAMPFIRE', 'PULL THEM OUT WHEN THEY ARE GOLDEN'] },
   { v: '1.16.34', lines: ['WILDGROVE: SKY LANTERNS', 'LET ONE GO AT NIGHT AND MAKE A WISH', 'FRIENDS SEE YOUR LANTERNS RISE'] },
   { v: '1.16.33', lines: ['WILDGROVE: RAINBOWS', 'WHEN A DAYTIME RAIN STOPS, LOOK UP', 'A NEW STAR: OVER THE RAINBOW'] },
