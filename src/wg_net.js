@@ -7,6 +7,11 @@ const WGN = { role: null, code: '', pub: false, peers: [], relays: [], q: [], li
 const WGN_PROTO = 1, WGN_TOPIC = 'wildgrove/' + WGN_PROTO + '/', WGN_PUB = 'wildgrove/' + WGN_PROTO + '/public';
 const wgnKite = (k) => (k >= 1 && k <= 3 ? k | 0 : 0); // a friend's kite colour, never anything else
 const wgnHat = (k) => (k >= 1 && k <= (typeof WG_HATS !== 'undefined' ? WG_HATS.length : 0) ? k | 0 : 0); // a friend's hat, by its number in the list
+const wgnLookNum = (k) => { if (!Number.isInteger(k) || k < 0) return null; const skin = (k / 100) | 0, hair = ((k / 10) | 0) % 10, shirt = k % 10; return skin < WG_SKIN.length && hair < WG_HAIR.length && shirt < WG_SHIRT.length ? { skin, hair, shirt } : null; }; // a guest's look as one number, or nothing
+function wgnLook(l) { // a look from the net, every part in range, so a friend's odd one never breaks a screen
+  const o = l && typeof l === 'object' ? l : {}, r = (v, n) => (Number.isInteger(v) && v >= 0 && v < n ? v : 0);
+  return { skin: r(o.skin, WG_SKIN.length), hair: r(o.hair, WG_HAIR.length), shirt: r(o.shirt, WG_SHIRT.length), hat: wgnHat(o.hat) };
+}
 const wgnOn = () => !!WGN.role;
 function wgnSend(L, msg, unreliable) {
   if (!L) return;
@@ -61,14 +66,14 @@ function wgnHostMsg(L, m) {
     const old = WGN.peers.find(q => q !== L && q.rj && q.rj === m.rj && q.pid > 0); if (old) wgnDrop(old, true);
     const used = new Set(WGN.peers.map(q => q.pid)); let pid = 1; while (used.has(pid)) pid++;
     if (pid >= WGN.max) { wgnSend(L, { t: 'no', why: 'THAT WORLD IS FULL' }); return; }
-    L.pid = pid; L.rj = String(m.rj || '').slice(0, 24); L.name = wgnClean(m.name) || 'FRIEND' + pid; L.ping = 0; L.look = m.look || { skin: 0, hair: 0, shirt: 0 };
+    L.pid = pid; L.rj = String(m.rj || '').slice(0, 24); L.name = wgnClean(m.name) || 'FRIEND' + pid; L.ping = 0; L.look = wgnLook(m.look);
     const st = (w.guests || {})[L.rj]; L.guest = st || null;
     const sp = st ? { x: st.x, y: st.y } : w.spawn; L.x = sp.x; L.y = sp.y; L.dim = st && st.dim || 'o'; L.hp = st ? st.hp : 20; L.face = 'd'; L.moving = false; L.walkT = 0;
     wgnSend(L, { t: 'hi', pid, w: wgnWelcome(L) });
     wgToast(L.name + ' JOINED!'); wgSfx('select'); wgnAll({ t: 'chat', who: '', msg: L.name + ' JOINED' }, L); WGN.chat.push({ who: '', msg: L.name + ' JOINED', t: 8 });
   } else if (m.t === 'offer') wgnOffer(L, m);
   else if (L.pid < 0) return;
-  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), boat: m.bt ? 1 : 0, bike: m.bk ? 1 : 0, inv: 0 }); if (wgnHat(m.ht) !== ((L.look && L.look.hat) | 0)) L.look = Object.assign({}, L.look, { hat: wgnHat(m.ht) }); }
+  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), boat: m.bt ? 1 : 0, bike: m.bk ? 1 : 0, inv: 0 }); if (wgnHat(m.ht) !== ((L.look && L.look.hat) | 0)) L.look = Object.assign({}, L.look, { hat: wgnHat(m.ht) }); const lk = wgnLookNum(m.lk); if (lk && ['skin', 'hair', 'shirt'].some(k => lk[k] !== (L.look && L.look[k]))) L.look = Object.assign({}, L.look, lk); }
   else if (m.t === 'tile') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; wgnAll(Object.assign({}, m, { t: 'set' }), L); }
   else if (m.t === 'chunkreq') { const ch = wgChunk(w, m.d, m.cx, m.cy); wgnSend(L, { t: 'chunk', d: m.d, cx: m.cx, cy: m.cy, pk: ch.mod ? wgPackChunk(ch) : null }); }
   else if (m.t === 'hit') { const mob = WGS.mobs.find(q => q.id === m.id); if (mob && !mob.dead) { WGS.lootTo = L.pid; wgHurtMob(mob, Math.min(40, +m.dmg || 1), L.x, L.y); WGS.lootTo = 0; if (mob.hp > 0) mob.fear = 3; } }
@@ -173,7 +178,7 @@ function wgnClientMsg(L, m) {
   if (!L.open) return;
   L.heard = performance.now();
   const w = WGS.world;
-  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], kite: wgnKite(a[11]), boat: a[12] ? 1 : 0, bike: a[13] ? 1 : 0, inv: 0 })); }
+  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: wgnLook(a[9]), swing: a[10], kite: wgnKite(a[11]), boat: a[12] ? 1 : 0, bike: a[13] ? 1 : 0, inv: 0 })); }
   else if (m.t === 'mobs') { if (WGS.dim === WGN.hd) wgnMobs(m.l); }
   else if (m.t === 'set') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; }
   else if (m.t === 'chunk') { const ch = wgChunk(w, m.d, m.cx, m.cy); if (m.pk) { WGN.applying = true; wgReadChunk(ch, m.pk); ch.artDirty = true; WGN.applying = false; for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const n = wgChunk(w, m.d, m.cx + dx, m.cy + dy, false); if (n) n.artDirty = true; } } }
@@ -238,7 +243,7 @@ function wgnUpdate(dt) {
     WGN.annT -= dt; if (WGN.annT <= 0) { WGN.annT = 6; wgnAnnounce(); }
   } else if (WGN.link && WGN.link.open) {
     WGN.sendT -= dt;
-    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, bt: typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0, bk: typeof wgBikeHeld === 'function' && wgBikeHeld() ? 1 : 0, ht: (p.look && p.look.hat) | 0 }, true); }
+    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, bt: typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0, bk: typeof wgBikeHeld === 'function' && wgBikeHeld() ? 1 : 0, ht: (p.look && p.look.hat) | 0, lk: p.look ? (p.look.skin | 0) * 100 + (p.look.hair | 0) * 10 + (p.look.shirt | 0) : 0 }, true); }
     WGN.pgT = (WGN.pgT || 0) - dt; if (WGN.pgT <= 0) { WGN.pgT = 3; wgnSend(WGN.link, { t: 'ping', s: performance.now() }); }
     WGN.meT = (WGN.meT || 0) - dt; if (WGN.meT <= 0) { WGN.meT = 5; wgnSend(WGN.link, { t: 'me', hp: p.hp, food: p.food, inv: WGS.inv, armor: p.armor, sel: WGS.sel }); }
     // glide the mobs towards their last reported spot

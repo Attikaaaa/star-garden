@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.32', lines: ['WILDGROVE: A WARDROBE', 'CHANGE YOUR SKIN, HAIR AND TUNIC ANY TIME', 'FRIENDS SEE YOUR NEW LOOK'] },
   { v: '1.16.31', lines: ['WILDGROVE: NEW FRIENDS', 'A RABBIT, A FROG OR A CRAB CAN FOLLOW YOU', 'CARROTS, FIREFLIES AND FISH WIN THEM OVER', 'PET YOUR FRIEND WITH AN EMPTY HAND'] },
   { v: '1.16.30', lines: ['WILDGROVE: WAYSTONES', 'BUILD TWO OR MORE AND TRAVEL BETWEEN THEM', 'A SIGN BESIDE ONE GIVES IT A NAME', 'THEY SHOW ON THE MAP'] },
   { v: '1.16.29', lines: ['WILDGROVE: A BICYCLE!', 'RIDE FASTER, QUICKER STILL ON PATHS', 'USE RINGS ITS BELL', 'FRIENDS SEE YOU RIDE BY'] },
