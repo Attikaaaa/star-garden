@@ -6,6 +6,7 @@
 const WGN = { role: null, code: '', pub: false, peers: [], relays: [], q: [], link: null, status: '', err: '', pid: 0, list: [], listing: false, applying: false, sendT: 0, mobT: 0, annT: 0, clkT: 0, chat: [], max: 6 };
 const WGN_PROTO = 1, WGN_TOPIC = 'wildgrove/' + WGN_PROTO + '/', WGN_PUB = 'wildgrove/' + WGN_PROTO + '/public';
 const wgnKite = (k) => (k >= 1 && k <= 3 ? k | 0 : 0); // a friend's kite colour, never anything else
+const wgnHat = (k) => (k >= 1 && k <= (typeof WG_HATS !== 'undefined' ? WG_HATS.length : 0) ? k | 0 : 0); // a friend's hat, by its number in the list
 const wgnOn = () => !!WGN.role;
 function wgnSend(L, msg, unreliable) {
   if (!L) return;
@@ -67,7 +68,7 @@ function wgnHostMsg(L, m) {
     wgToast(L.name + ' JOINED!'); wgSfx('select'); wgnAll({ t: 'chat', who: '', msg: L.name + ' JOINED' }, L); WGN.chat.push({ who: '', msg: L.name + ' JOINED', t: 8 });
   } else if (m.t === 'offer') wgnOffer(L, m);
   else if (L.pid < 0) return;
-  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), boat: m.bt ? 1 : 0, inv: 0 }); }
+  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), boat: m.bt ? 1 : 0, inv: 0 }); if (wgnHat(m.ht) !== ((L.look && L.look.hat) | 0)) L.look = Object.assign({}, L.look, { hat: wgnHat(m.ht) }); }
   else if (m.t === 'tile') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; wgnAll(Object.assign({}, m, { t: 'set' }), L); }
   else if (m.t === 'chunkreq') { const ch = wgChunk(w, m.d, m.cx, m.cy); wgnSend(L, { t: 'chunk', d: m.d, cx: m.cx, cy: m.cy, pk: ch.mod ? wgPackChunk(ch) : null }); }
   else if (m.t === 'hit') { const mob = WGS.mobs.find(q => q.id === m.id); if (mob && !mob.dead) { WGS.lootTo = L.pid; wgHurtMob(mob, Math.min(40, +m.dmg || 1), L.x, L.y); WGS.lootTo = 0; if (mob.hp > 0) mob.fear = 3; } }
@@ -237,7 +238,7 @@ function wgnUpdate(dt) {
     WGN.annT -= dt; if (WGN.annT <= 0) { WGN.annT = 6; wgnAnnounce(); }
   } else if (WGN.link && WGN.link.open) {
     WGN.sendT -= dt;
-    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, bt: typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0 }, true); }
+    if (WGN.sendT <= 0) { WGN.sendT = 0.066; wgnSend(WGN.link, { t: 'p', x: Math.round(p.x), y: Math.round(p.y), face: p.face, mv: p.moving ? 1 : 0, wt: +p.walkT.toFixed(2), dim: WGS.dim, hp: p.hp, sw: p.swing > 0 ? 1 : 0, kt: typeof wgKiteHeld === 'function' ? wgKiteHeld() : 0, bt: typeof wgBoatHeld === 'function' && wgBoatHeld() ? 1 : 0, ht: (p.look && p.look.hat) | 0 }, true); }
     WGN.pgT = (WGN.pgT || 0) - dt; if (WGN.pgT <= 0) { WGN.pgT = 3; wgnSend(WGN.link, { t: 'ping', s: performance.now() }); }
     WGN.meT = (WGN.meT || 0) - dt; if (WGN.meT <= 0) { WGN.meT = 5; wgnSend(WGN.link, { t: 'me', hp: p.hp, food: p.food, inv: WGS.inv, armor: p.armor, sel: WGS.sel }); }
     // glide the mobs towards their last reported spot

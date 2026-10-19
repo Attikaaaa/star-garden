@@ -195,5 +195,9 @@
     'SHE HAS NO MILK YET': 'MÉG NINCS TEJE', 'ALSO MILKS A COW': 'TEHENET IS FEJHETSZ VELE' });
   Object.assign(LANG.hu.table, { // the trees through the seasons
     'ALL FOUR SEASONS': 'MIND A NÉGY ÉVSZAK', 'SEE A WHOLE YEAR GO BY': 'ÉLJ VÉGIG EGY EGÉSZ ÉVET' });
+  Object.assign(LANG.hu.table, { // the hat pack
+    'STRAW HAT': 'SZALMAKALAP', 'FLOWER CROWN': 'VIRÁGKOSZORÚ', 'WOOL BEANIE': 'GYAPJÚSAPKA', 'TOP HAT': 'CILINDER', 'GOLD CROWN': 'ARANYKORONA',
+    'HAT TRICK': 'MESTERHÁRMAS', 'WEAR THREE DIFFERENT HATS': 'VISELJ HÁROM KÜLÖNBÖZŐ KALAPOT', 'HAT ON': 'KALAP FEL', 'HAT OFF': 'KALAP LE',
+    'USE IT TO PUT IT ON OR TAKE IT OFF': 'HASZNÁLATTAL FELVESZED VAGY LEVESZED', 'FRIENDS SEE IT TOO': 'A BARÁTAID IS LÁTJÁK' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
