@@ -246,7 +246,7 @@ function wgPlayUpdate(dt) {
     else if (!wgUse(WGS.target.tx, WGS.target.ty) && held && held.kind === 'food') wgEat(WGS.sel);
   } else if (rmb && held && held.kind === 'food') wgEat(WGS.sel);
   const F = WGS.fish;
-  if (F) { const h2 = WGS.inv[WGS.sel]; if (!h2 || h2.id !== 'rod' || Math.hypot(F.tx * 16 + 8 - p.x, F.ty * 16 + 8 - p.y) > 90) { WGS.fish = null; wgToast('THE LINE SNAPPED BACK'); } else if ((F.t -= dt) <= 0) { WGS.fish = null; if (wgInvAdd(WGS.inv, 'fish', 1)) wgDrop(p.x, p.y, 'fish', 1); wgToast('CAUGHT A FISH!', 2); wgSfx('item'); wgPart(F.tx * 16 + 8, F.ty * 16 + 8, 8, { c: ['c', 'C', 'w'], s: 30, up: 30, life: 0.5 }); } }
+  if (F) { const h2 = WGS.inv[WGS.sel]; if (!h2 || h2.id !== 'rod' || Math.hypot(F.tx * 16 + 8 - p.x, F.ty * 16 + 8 - p.y) > 90) { WGS.fish = null; wgToast('THE LINE SNAPPED BACK'); } else if ((F.t -= dt) <= 0) { WGS.fish = null; const got = typeof wgCatch === 'function' ? wgCatch(F) : 'fish'; if (wgInvAdd(WGS.inv, got, 1)) wgDrop(p.x, p.y, got, 1); wgToast('CAUGHT: ' + WGI[got].name, 2); wgSfx('item'); wgPart(F.tx * 16 + 8, F.ty * 16 + 8, 8, { c: ['c', 'C', 'w'], s: 30, up: 30, life: 0.5 }); } }
   // hunger and health
   const burn = (p.moving ? (run ? 0.06 : 0.02) : 0.004) * dt;
   if (p.sat > 0) p.sat = Math.max(0, p.sat - burn * 4); else p.food = Math.max(0, p.food - burn * 4);

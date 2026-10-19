@@ -4,7 +4,7 @@ import { open, waitFor } from './lib.mjs';
 const g = await open({ w: 1152, h: 648 });
 await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
 const r = await g.ev(`(() => {
-  const got = new Set(['fish', 'bucket_water']), bad = []; // fished; a bucket dipped in water
+  const got = new Set(['bucket_water'].concat(typeof WG_FISH !== 'undefined' ? WG_FISH : ['fish'])), bad = []; // a bucket dipped in water; every fish (wgCatch)
   for (const o of OBJ) if (o) { for (const d of o.drops || []) got.add(d[0]); if (o.ripe) got.add(o.ripe); }
   for (const k in WG_MOBS) for (const d of WG_MOBS[k].drops || []) got.add(d[0]);
   for (const t of WG_TRADES) got.add(t[2]);
