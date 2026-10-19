@@ -18,7 +18,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
   share one global scope: top-level names must not collide. Load order is fixed in
   `index.html` (palette → save → online → rng → gfx → font → lang → art → audio → input →
   data → level → scenery → entities → enemies → fx → ui → meta → the progress and content files →
-  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → toy → snow → sun → main → qr → net). `net.js` loads last because it wraps a few
+  couch → cloud → yard → casino → art_casino → slot → cards → roulette → scratch → lounge → events → road → lands → wardens → woods → toy → snow → sun → library → forge → deep → moon → items3 → main → qr → net). `net.js` loads last because it wraps a few
   functions of the others (see *Co-op* below).
 - **Only what is needed goes in.** No test framework and no debug UI in shipped code.
 
@@ -68,6 +68,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `quests.js`, `stars.js`, `book.js`, `mail.js` | quests; Constellations (achievements); the Book (items, bestiary, combos, runs, stats); the frog's letters and daily gifts |
 | `hub.js`, `yard.js` | the Garden's menus and cosmetics (trails, pets, titles); the walkable Garden, plants and seed plots; the shared walk-to-a-tap helpers (`yardPath` BFS with a cell size, `pathDir`, `slideStep`) the casino uses too |
 | `items2.js`, `loot.js`, `affix.js`, `mods.js` | more items, rarity and sets; door rewards, skull rooms, star scrolls; elite affixes and the nemesis; run modifiers |
+| `items3.js` | the third item batch (comfort, defence, harder hits, co-op items) with its sets, combos and icons; its hooks (`itemFloorStart`, `itemBossDown`, `heartHeal`, `hurtInv`, `reviveRate`, `knockOf`, `treasureCount`, `shopCount`) are called from main.js, entities.js and enemies.js; it also wraps `shotHitDmg(s, e)`, `itemTick`, `playerShoot`, `useBelt` and `itemRoomClear`, and adds the movement flags a client needs (`galosh`, `anchor`, ...) to `PF_EXTRA` |
 | `foes.js`, `bosses.js`, `rooms.js`, `story.js` | the second wave of foes; alternate bosses, the Star Well and Big Stars; special rooms; the frog's lines and the ending |
 | `heroes.js`, `options.js` | the four heroes; wand aspects, Star Trials, Quick Run, assist, bullet shapes, key remapping, the arena save |
 | `daily.js`, `events.js` | the Daily Star Run, Weekly Challenge and share card (from `DAILY_ROAD_FROM` the whole road deals the lands; older keys keep the classic three); the sky calendar (Star Rain, Moon Night), seasons, Boss of the Week |
@@ -81,8 +82,8 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 
 `tools/dev.mjs` holds developer checks that drive the real game in headless Chromium (Node 22+,
 nothing ships): `layouts` (every `*LAYOUT(S)` const: size, door lanes, BFS reachability),
-`sheet [regex]` (sprite contact sheet at 3x) and `bot [land] [floors]` (an invulnerable bot
-clears a run and reports errors and frame times). Run `layouts` after touching any layout.
+`sheet [regex]` (sprite contact sheet at 3x) and `bot [land] [floors] [items]` (an invulnerable bot
+clears a run, holding the given items, and reports errors and frame times). Run `layouts` after touching any layout.
 
 `tools/casino_check.mjs` works out every casino game's return to player from its real
 tables (reel strips, paytables, all 216 Sic Bo rolls); run it after touching any odds. Chips
@@ -211,8 +212,10 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
 
 ## Adding content
 
-- **Item:** entry in `ITEMS` (`name`, short `desc`, `apply(p)`, optional `unique`), plus
-  an `icon_<id>` sprite in `art_ui.js`. The description must fit the banner.
+- **Item:** entry in `ITEMS` (`name`, short `desc`, `apply(p)`, optional `unique`, `rare`,
+  `set`, `team`), plus an `icon_<id>` sprite (16x16). The description must fit the banner. A
+  `team` item is offered only when friends play along (`teamOk` in loot.js). A flag that changes
+  how a hero moves goes into `PF_EXTRA`, since a client moves its own hero.
 - **Enemy:** `EDEF` stats, an `AI.<type>` state machine, `enemySprite` and `enemyColors`
   branches, optionally `glintAt` (pre-shot sparkle), then add the type to a `LANDS[].pool`.
   At most two stationary (`still`) enemies spawn per room.

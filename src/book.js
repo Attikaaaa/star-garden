@@ -220,7 +220,7 @@ function drawBookItems() {
   let y = 72;
   text(has ? it.name : '???', BK.pane + 64, y, has ? 'Y' : 'l', 1, 1); y += 12;
   y = paneLines([has ? it.desc : unl.has(id) ? 'NOT FOUND YET' : 'LEARN IT FROM A STAR SCROLL'], y, 'w') + 2;
-  text(RARE_NAME[it.rare || 0] + (it.set ? '  ' + SETS[it.set] + ' SET' : ''), BK.pane + 64, y, it.rare === 2 ? 'P' : it.rare ? 'c' : 'l', 1, 1); y += 12;
+  text(RARE_NAME[it.rare || 0] + (it.set ? '  ' + SETS[it.set] + ' SET' : it.team ? '  CO-OP' : ''), BK.pane + 64, y, it.rare === 2 ? 'P' : it.rare ? 'c' : 'l', 1, 1); y += 12;
   if (has) {
     const combos = SYNERGIES.filter(s => s.need.includes(id));
     if (combos.length) { text('COMBOS', BK.pane + 64, y, 'c', 1, 1); y += 10; }

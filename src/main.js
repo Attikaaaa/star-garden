@@ -101,6 +101,7 @@ function loadFloor(depth) {
   placeHeroes(192, 128, 'u');
   arriveBoon(depth);
   for (const p of G.players) if (p.wstar && !p.dead) wishBless(p); // WISH STAR (moon.js)
+  itemFloorStart(depth);
   if (G.run.plus) plusAct(depth);
   if (teamHas('starmap')) for (const r of G.floor.rooms) r.seen = true;
   if (depth === 0 && tutNeeded()) startTutorial(G.room);
@@ -239,19 +240,19 @@ function stockRoom(room) {
   if (room.lay === 'picnic') room.props.push({ kind: 'rug', spr: 'blanket', x: 192, y: 128, t: 0 });
   if (room.type === 'item') {
     // co-op: one extra choice per extra hero, everyone takes one
-    const k = Math.min(5, 2 + n), ids = G.first && !G.run.picked ? firstRunItems(k) : itemPool(k), w = 48;
+    const k = treasureCount(n), ids = G.first && !G.run.picked ? firstRunItems(k) : itemPool(k), w = 48;
     G.run.picked = true;
     ids.forEach((id, i) => { addPedestal(room, 192 + (i - (ids.length - 1) / 2) * w, 128, id); room.props[room.props.length - 1].group = 'item'; });
   }
   if (room.type === 'shop') {
-    room.props.push({ kind: 'rug', x: 192, y: 132, t: 0 });
+    const ids = itemPool(shopCount()), d = G.mode === 'adv' ? powDepth() : 0, x0 = 192 - (ids.length + 1) * 25; // centred row
+    room.props.push(ids.length > 2 ? { kind: 'rug', spr: 'rug_w', x: 192, y: 132, t: 0 } : { kind: 'rug', x: 192, y: 132, t: 0 });
     room.props.push({ kind: 'frog', x: 192, y: 78, t: 0 });
-    const ids = itemPool(2), d = G.mode === 'adv' ? powDepth() : 0;
-    addPedestal(room, 117, 138, 'hp', 4 + Math.floor(d / 3));
-    addPedestal(room, 167, 138, grand() < 0.3 ? gpick(CHARM_IDS) : gpick(POTION_IDS), 0);
+    addPedestal(room, x0, 138, 'hp', 4 + Math.floor(d / 3));
+    addPedestal(room, x0 + 50, 138, grand() < 0.3 ? gpick(CHARM_IDS) : gpick(POTION_IDS), 0);
     const pot = room.props[room.props.length - 1];
     pot.price = POTIONS[pot.item].price;
-    ids.forEach((id, i) => addPedestal(room, 217 + i * 50, 138, id, 15 + d)); // the road pays more further down
+    ids.forEach((id, i) => addPedestal(room, x0 + 100 + i * 50, 138, id, 15 + d)); // the road pays more further down
   }
 }
 
@@ -379,6 +380,7 @@ function bossItems(room, y) {
 }
 function giveBossReward() {
   const room = G.room;
+  itemBossDown();
   if (room.type === 'arena') { arenaBossReward(); return; }
   bossItems(room, 150);
   room.props.push({ kind: 'portal', x: 192, y: 92, t: 0 });

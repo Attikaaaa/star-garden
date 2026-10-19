@@ -301,7 +301,8 @@ function driftMove(room, p, vx, vy, dt) {
   if (d.grip < 1 && p.skates) { d.grip = 0.6; vx *= 1.25; vy *= 1.25; } // SKATES
   if (d.grip < 1) { const k = Math.min(1, d.grip * 10 * dt); vx = p.mvx = (p.mvx || 0) + (vx - (p.mvx || 0)) * k; vy = p.mvy = (p.mvy || 0) + (vy - (p.mvy || 0)) * k; }
   else { p.mvx = vx; p.mvy = vy; }
-  DRIFT_V[0] = vx + d.cx; DRIFT_V[1] = vy + d.cy;
+  const k = p.anchor ? 0 : 1; // ANCHOR CHARM (items3.js): the current does not carry that hero
+  DRIFT_V[0] = vx + d.cx * k; DRIFT_V[1] = vy + d.cy * k;
   return DRIFT_V;
 }
 // A walking foe, after its AI moved it from (x0, y0): on ice its steps blend into a slide, and
@@ -367,11 +368,12 @@ function boxSolid(room, x, y, hw, hh, mode) {
 // Move with axis-separated sliding. Returns true if something blocked the move.
 function moveBox(room, e, dx, dy, mode) {
   let blocked = false;
+  const walk = mode === 'enemy' || (mode === 'player' && !e.galosh); // GALOSHES (items3.js): nothing slows that hero
   // wading through the Shore's shallows at high tide
-  if (room.flood && (mode === 'player' || mode === 'enemy') && room.tiles[Math.floor((e.y - 1 - OY) / 16) * COLS + Math.floor(e.x / 16)] === T_PIT) { dx *= WADE; dy *= WADE; }
+  if (room.flood && walk && room.tiles[Math.floor((e.y - 1 - OY) / 16) * COLS + Math.floor(e.x / 16)] === T_PIT) { dx *= WADE; dy *= WADE; }
   // a land's own slow ground (the Snowglobe's drifts)
   const lm = landMech();
-  if (lm && lm.slow && (mode === 'player' || mode === 'enemy')) { const k = lm.slow(room, e); dx *= k; dy *= k; }
+  if (lm && lm.slow && walk) { const k = lm.slow(room, e); dx *= k; dy *= k; }
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
   const sx = dx / steps, sy = dy / steps;
   for (let i = 0; i < steps; i++) {

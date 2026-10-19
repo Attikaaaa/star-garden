@@ -132,7 +132,8 @@ function hurtEnemy(e, dmg, fx, fy, quiet, own) {
   if (e.flashCd <= 0) { e.flash = 0.07; e.flashCd = 0.14; }
   if (!e.boss && !e.still && !EDEF[e.type].warden) {
     const d = Math.hypot(e.x - fx, e.y - fy) || 1;
-    e.kx = (e.x - fx) / d * 90; e.ky = (e.y - fy) / d * 90;
+    const kb = knockOf(own);
+    e.kx = (e.x - fx) / d * kb; e.ky = (e.y - fy) / d * kb;
   }
   if (!quiet) Audio_.sfx('hit');
   burst(fx, fy, 4, ['w', 'Y'], 60, 0.2);

@@ -75,12 +75,14 @@ function learnScroll(id) {
 // ---------- The item pool ----------
 // Rare and epic items turn up more often further down the road.
 const tierW = (r) => RARE_W[r] * (1 + (G.mode === 'adv' && G.floor ? r * 0.05 * powDepth() : 0));
+// Co-op items (team) only turn up when there are friends to help.
+const teamOk = (k) => !ITEMS[k].team || G.players.length > 1;
 // Offered items: unlocked ones (all of them in daily runs, for fairness), rarer ones less
 // often, unique ones only once.
 function itemPool(n) {
   const owned = new Set([].concat(...G.players.map(p => p.items)));
   const unl = G.daily ? null : new Set(Save.unl.items);
-  const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)) && (ITEMS[k].land ? landItem(k) : !unl || unl.has(k)));
+  const pool = Object.keys(ITEMS).filter(k => !(ITEMS[k].unique && owned.has(k)) && teamOk(k) && (ITEMS[k].land ? landItem(k) : !unl || unl.has(k)));
   const out = [];
   while (out.length < n && pool.length) {
     const w = pool.map(k => tierW(ITEMS[k].rare || 0)), tot = w.reduce((a, b) => a + b, 0);

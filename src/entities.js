@@ -237,9 +237,9 @@ function orbitPos(p, i) {
 // A hero out of hearts waits for a teammate: stand next to them to help them up.
 const REVIVE_T = 1.6;
 function updateDowned(p, dt) {
-  let help = false;
-  for (const q of G.players) if (q !== p && alive(q) && Math.hypot(q.x - p.x, q.y - p.y) < 22) help = true;
-  p.revive = help ? p.revive + dt : Math.max(0, p.revive - dt * 0.6);
+  let help = 0;
+  for (const q of G.players) if (q !== p && alive(q) && Math.hypot(q.x - p.x, q.y - p.y) < 22) help = Math.max(help, reviveRate(q));
+  p.revive = help ? p.revive + dt * help : Math.max(0, p.revive - dt * 0.6);
   if (help && Math.random() < 0.3) part(p.x + rnd(-8, 8), p.y - rnd(0, 12), 0, -30, 0.5, null, { spr: 'sparkle', drag: 1 });
   if (p.revive >= REVIVE_T) {
     revivePlayer(p, 2);
@@ -312,7 +312,7 @@ function hurtPlayer(p, n, src) {
     return;
   }
   if (p.hp - n <= 0 && itemSaveLife(p)) return;
-  p.hp -= n; p.inv = 1.1; p.hurtT = 0.35;
+  p.hp -= n; p.inv = hurtInv(p); p.hurtT = 0.35;
   itemHurt(p);
   if (src) p.lastHit = src;
   youFx(p, p.hp <= 0 ? 'death' : 'hurt');
@@ -558,7 +558,7 @@ function updateShots(dt) {
         // shells and hiding crabs: the shot glances off
         const bl = EDEF[e.type].block;
         if (bl && bl(e, s)) { s.life = 0; burst(s.x, s.y, 4, ['w', 'l'], 60, 0.2); Audio_.sfx('pop'); break; }
-        hurtEnemy(e, shotHitDmg(s), px, py, false, s.own);
+        hurtEnemy(e, shotHitDmg(s, e), px, py, false, s.own);
         itemOnHit(s, e);
         if (s.kind === 'chain') chainFrom(e, s.dmg * 0.6, s.own);
         if (s.fw) {
@@ -892,7 +892,7 @@ function updatePickups(dt) {
         burst(k.x, k.y - 6, 14, ['Y', 'A', 'w'], 90, 0.5, { g: -30 });
       } else if (isHeart) {
         if (p.hp >= p.maxHp) continue;
-        healPlayer(p, k.type === 'heart' ? 2 : 1);
+        heartHeal(p, k.type === 'heart' ? 2 : 1);
         noteFor(p, 'heart');
         Audio_.sfx('heart');
       } else {

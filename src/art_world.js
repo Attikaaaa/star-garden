@@ -1059,15 +1059,18 @@ def('heart_half', `
 def('pedestal', stamp(sculpt(16, 12, [
   { r: [3, 4, 10, 8, 2], ramp: 'dmlL', hi: false }, { e: [8, 3.5, 7.5, 3.5], ramp: 'dmlL', hi: false },
 ]), 4, 2, '.llll.\nlLLLLl'));
-def('rug', grid(176, 28).fill((x, y) => {
-  if (x < 3 || x > 172) return y > 1 && y < 26 && y % 2 === 0 ? (x === 1 || x === 174 ? 'Y' : x === 0 || x === 175 ? null : 'y') : null;
-  if (y === 0 || y === 27 || x === 3 || x === 172) return '0';
-  if (y === 1 || y === 26 || x === 4 || x === 171) return 'o';
-  if (y === 2 || y === 25 || x === 5 || x === 170) return 'y';
-  if (y === 3 || y === 24 || x === 6 || x === 169) return 'o';
+// the shop's rug, with tassels at both ends (a wider one for a fifth pedestal)
+const rugArt = (w) => grid(w, 28).fill((x, y) => {
+  if (x < 3 || x > w - 4) return y > 1 && y < 26 && y % 2 === 0 ? (x === 1 || x === w - 2 ? 'Y' : x === 0 || x === w - 1 ? null : 'y') : null;
+  if (y === 0 || y === 27 || x === 3 || x === w - 4) return '0';
+  if (y === 1 || y === 26 || x === 4 || x === w - 5) return 'o';
+  if (y === 2 || y === 25 || x === 5 || x === w - 6) return 'y';
+  if (y === 3 || y === 24 || x === 6 || x === w - 7) return 'o';
   const dx = (x - 6) % 16 - 8, dy = y - 13.5;
   return Math.abs(dx) + Math.abs(dy) < 6 ? (Math.abs(dx) + Math.abs(dy) < 3 ? 'y' : 'P') : 'p';
-}).rows());
+}).rows();
+def('rug', rugArt(176));
+def('rug_w', rugArt(226));
 
 def('shot_0', `
   ...0...

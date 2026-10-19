@@ -6,9 +6,10 @@
 //   node tools/dev.mjs sheet [regex] [zoom] [all] contact sheet of the sprites whose name matches, 3x by default
 //                                           (all: every frame, not one per sprite family),
 //                                           written to /tmp/star-garden/sheet.png
-//   node tools/dev.mjs bot [land] [floors]  an invulnerable bot clears every room of a run (from
-//                                           the given land, or the default road), then reports
-//                                           errors, frame times and a screenshot per floor
+//   node tools/dev.mjs bot [land] [floors] [items]  an invulnerable bot clears every room of a run
+//                                           (from the given land, or the default road; '-' for the
+//                                           default), holding the given items (comma separated),
+//                                           then reports errors, frame times and a screenshot per floor
 //   node tools/dev.mjs room [land] [js] [ms] [type]  screenshot of a room in that land (first
 //                                           normal room, or the given type) after an optional expression
 //
@@ -186,7 +187,7 @@ async function sheet(re = '.', zoom = 3, all = false) {
 }
 
 // ---------- bot ----------
-async function bot(land, floors = 3) {
+async function bot(land, floors = 3, items = []) {
   const b = await open();
   let failed = false;
   try {
@@ -195,6 +196,7 @@ async function bot(land, floors = 3) {
       startRun('adv', null, {});
       ${land ? `if (!LAND[${JSON.stringify(land)}]) throw new Error('no land ${land}');
       G.run.path = [${JSON.stringify(land)}].concat(roadPath().filter(id => id !== ${JSON.stringify(land)})); loadFloor(0);` : ''}
+      for (const id of ${JSON.stringify(items)}) giveItem(id, G.player);
       MODALS.length = 0;
       window.__bot = { frames: [], last: performance.now() };
       (function tick() {
@@ -273,6 +275,6 @@ async function room(land, js = '', ms = 1500, type = 'normal') {
 const [cmdName, ...args] = process.argv.slice(2);
 if (cmdName === 'layouts') await layouts();
 else if (cmdName === 'sheet') await sheet(args[0], +args[1] || 3, args[2] === 'all');
-else if (cmdName === 'bot') await bot(args[0] && args[0] !== '-' ? args[0] : null, +args[1] || 3);
+else if (cmdName === 'bot') await bot(args[0] && args[0] !== '-' ? args[0] : null, +args[1] || 3, args[2] ? args[2].split(',') : []);
 else if (cmdName === 'room') await room(args[0] || 'meadow', args[1], +args[2] || 1500, args[3]);
-else console.log('usage: node tools/dev.mjs layouts | sheet [regex] | bot [land] [floors] | room [land] [js] [ms] [type]');
+else console.log('usage: node tools/dev.mjs layouts | sheet [regex] | bot [land] [floors] [items] | room [land] [js] [ms] [type]');

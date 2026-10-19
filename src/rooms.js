@@ -112,7 +112,7 @@ function stockSpecial(room) {
 // The one item of a Moon Altar: a rare or epic one.
 function rareItem() {
   const owned = new Set([].concat(...G.players.map(p => p.items)));
-  const pool = Object.keys(ITEMS).filter(k => (ITEMS[k].rare || 0) >= 1 && !(ITEMS[k].unique && owned.has(k)) && (ITEMS[k].land ? landItem(k) : G.daily || Save.unl.items.includes(k)));
+  const pool = Object.keys(ITEMS).filter(k => (ITEMS[k].rare || 0) >= 1 && !(ITEMS[k].unique && owned.has(k)) && teamOk(k) && (ITEMS[k].land ? landItem(k) : G.daily || Save.unl.items.includes(k)));
   return pool.length ? gpick(pool) : itemPool(1)[0];
 }
 // Champion rooms: one elite with two affixes and a lot of health.
