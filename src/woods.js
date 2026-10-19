@@ -178,6 +178,7 @@ LAND_MECH.lantern = {
     if (layer !== 1) return;
     const amb = LIGHT.amb, n = LIGHT.n;
     for (const a of AMB) if (a.life > 0 && a.kind === 'ffly') lightAdd(a.x, a.y, 7); // fireflies glow, for the eye only
+    for (const [x, y] of room.lamps || []) lightAdd(x + 1, y + 1, 22); // and so do the lanterns on the wall
     drawLight(ox, oy, Save.settings.bright ? DUSK * 0.4 : DUSK); // BRIGHT WOODS: seen, not played
     LIGHT.amb = amb; LIGHT.n = n;
     // what must never hide in the dark: tells, rings, dazed sparkles, and foes' eyes
@@ -1247,3 +1248,81 @@ AI.pking = function (e, dt, room, p) {
   }
 };
 BEASTS.push({ t: 'pking', spr: 'pking_0', boss: true, lore: ['THE CROWNED PUMPKIN OF THE WOODS.', 'WATCH HIS HEADS LIGHT UP, THEN SHOOT', 'THEM IN THAT ORDER. WHERE HE HOPS, MOVE.'] });
+// ---------- Scenery (scenery.js) ----------
+// Moss and fallen leaves under the dusk, dark ponds with lily pads, teal and autumn trees, birches,
+// mossy boulders and ferns; the wall is a row of old trunks with lanterns, knots and shelf fungus.
+(function woodsArt() {
+  const comp = (w, h, parts) => parts.reduce((rows, [art, x, y]) => stamp(rows, x, y, art), Array.from({ length: h }, () => '.'.repeat(w)));
+  const rowsOf = (name) => _defs.find(d => d.name === name).rows;
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  // the meadow's old tree in the woods' colours: teal at dusk, and one in autumn
+  def('gi_wtree', rowsOf('gi_tree'), { legend: { g: 'b', G: 't', h: 'T', H: 'C', r: 'n', R: 'O' } });
+  def('gi_wtree_a', rowsOf('gi_tree'), { legend: { g: 'n', G: 'o', h: 'O', H: 'y', r: 'n', R: 'r' } });
+  // a birch: a slim white trunk with dark marks under a small bright crown (a 1x2 post)
+  const birch = grid(16, 46).fill((x, y) => {
+    const d = x + 0.5 - 8;
+    if (y >= 18 && y <= 42 && Math.abs(d) <= 2 + (y > 39 ? 1 : 0)) {
+      if ((y * 7 + (x >> 1) * 3) % 11 === 0) return 'x';
+      return d < -1 ? 'w' : d > 1 ? 'l' : 'L';
+    }
+    return null;
+  }).rows();
+  const crown = sculpt(16, 46, [
+    { e: [8, 9, 6.5, 7], ramp: 'gGhH' }, { e: [4.5, 17, 3.8, 4], ramp: 'gGhH' }, { e: [11.5, 16, 3.8, 4.5], ramp: 'gGhH' }, { e: [8, 21, 3, 2.5], ramp: 'gGhH' },
+  ]);
+  def('gi_birch', comp(16, 46, [
+    [sculpt(16, 46, [{ e: [8, 43, 6, 2], ramp: 'tggG' }]), 0, 0],
+    [autoOutline(birch), 0, 0],
+    [['x', '.', '.', 'x'], 6, 24],
+    [crown, 0, 0],
+  ]));
+  // a mossy boulder, a fern
+  def('ob_mossrock', sculpt(16, 16, [
+    { e: [8, 9, 7, 6], ramp: 'dmlL' },
+    { e: [6, 5.5, 3.5, 2], ramp: 'gGhH', hi: false },
+    { e: [10.5, 6.5, 2, 1.2], ramp: 'gGhH', hi: false },
+  ]));
+  A('ob_fern', [
+    '................',
+    '................',
+    '.......h........',
+    '..h...hG....h...',
+    '...G..G.G..G....',
+    '.h.G.G..G.Gg.h..',
+    '..GgG...gGg.G...',
+    '...GgG.gGg.Gg...',
+    '.hGgg.gGg.gGg...',
+    '..gGgggGgggg.h..',
+    '...ggtggggtGg...',
+    '....ttgggtt.....',
+    '................',
+    '................']);
+  // breakables: a toadstool, a bundle of firewood
+  def('bk_mushcap', stamp(sculpt(16, 16, [
+    { r: [6, 9, 4, 6, 1], ramp: 'lLLw' },
+    { e: [8, 7.5, 6.5, 4], ramp: 'rrRq' },
+  ]), 4, 5, 'w.....\n...w..\n.....w'));
+  def('bk_firewood', sculpt(16, 16, [
+    { e: [5, 11, 3.5, 3.2], ramp: 'unNO' }, { e: [11, 11, 3.5, 3.2], ramp: 'unNO' }, { e: [8, 6.5, 3.5, 3.2], ramp: 'unNO' },
+    { e: [5, 11, 1.2, 1], ramp: 'nnnn', hi: false }, { e: [11, 11, 1.2, 1], ramp: 'nnnn', hi: false }, { e: [8, 6.5, 1.2, 1], ramp: 'nnnn', hi: false },
+  ]));
+  // on the trunks: shelf fungus and a knot hole
+  A('fc_shelf', [
+    '.........',
+    '..NOOO...',
+    '.nNNNNO..',
+    '..nnNNO..',
+    '.NOOO....',
+    'nNNNNO...',
+    '.nnnn....',
+    '.........']);
+  A('fc_knot', [
+    '........',
+    '..uuuu..',
+    '.uu00uu.',
+    '.u0000u.',
+    '.u0000N.',
+    '.uu00NN.',
+    '..uNNN..',
+    '........']);
+})();
