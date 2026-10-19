@@ -81,6 +81,29 @@ await sleep(150);
 await g.ev(`Input.mx = 24 + 19 + 9; Input.my = 28 + 9; __pad.buttons[5] = { pressed: true, value: 1 }; 0`); await sleep(120); await g.ev(`__pad.buttons[5] = { pressed: false, value: 0 }; 0`); await sleep(120);
 r = await g.ev(`[WGS.inv[1], WGS.inv.slice(9).filter(Boolean).map(s => s.id + ':' + s.n), WGS.cur]`);
 ok(!r[0] && r[1].join() === 'stone:33' && !r[2], 'the pad RB moves the whole stack: ' + JSON.stringify(r));
+// chests in reach: the recipe book counts them, crafting takes from them, STASH tops them up
+r = await g.ev(`(() => {
+  const w = WGS.world, d = WGS.dim, tx = Math.floor(WGS.p.x / 16) + 3, ty = Math.floor((WGS.p.y - 4) / 16);
+  for (let y = ty - 7; y <= ty + 7; y++) for (let x = tx - 9; x <= tx + 5; x++) { const o = wgObjAt(w, d, x, y); if (o && OBJ[o].kind === 'storage') wgSetObj(w, d, x, y, 0); } // only this chest in reach
+  wgSetObj(w, d, tx, ty, O_ID.chest); const c = wgCont(w, d, tx, ty, true); for (let i = 0; i < 27; i++) c[i] = null; c[0] = { id: 'wood', n: 10 }; c[1] = { id: 'flint', n: 3 };
+  var inv = WGS.inv; for (let i = 0; i < 36; i++) inv[i] = null; inv[9] = { id: 'wood', n: 2 }; inv[10] = { id: 'flint', n: 4 }; inv[11] = { id: 'stone', n: 6 };
+  WGS.p.seen = { wood: 1 }; WGS.nearC = null; WGS.scr = 'inv'; WGS.ui = {}; WGS.cur = null; window.__chest = c; return [tx, ty];
+})()`);
+await sleep(250);
+await g.ev(`__click(210 + 75, 38 + 13)`); // the first craftable recipe: sticks, 1 wood (the pack's own first)
+r = await g.ev(`(() => { const L = RECIPES.filter(rc => rc.at === 'hand' && (WGS.p.seen[rc.out] || Object.keys(rc.in).every(k => WGS.p.seen[k]))); return [wgInvCount(WGS.inv, 'stick'), wgInvCount(WGS.inv, 'wood'), wgInvCount(__chest, 'wood')]; })()`);
+ok(r[0] === 4 && r[1] + r[2] === 11, 'crafting near a chest: ' + JSON.stringify(r));
+r = await g.ev(`(() => { const st = wgStations(); const pool = WGS.inv.concat(__chest); return [wgCanCraft(pool, RECIPES.find(rc => rc.out === 'chest')), wgCanCraft(WGS.inv, RECIPES.find(rc => rc.out === 'chest'))]; })()`);
+ok(r[0] && !r[1], 'a chest recipe (8 wood) only works with the chest counted: ' + JSON.stringify(r));
+await g.ev(`WGS.p.seen = { wood: 1, chest: 1 }; WGU.rq.v = 'CHEST'; WGS.ui = {}; 0`); await sleep(250);
+await g.ev(`__click(210 + 75, 38 + 13)`);
+r = await g.ev(`[wgInvCount(WGS.inv, 'chest'), wgInvCount(WGS.inv, 'wood') + wgInvCount(__chest, 'wood')]`);
+ok(r[0] === 1 && r[1] === 3, 'the chest recipe takes wood from the pack, then the chest: ' + JSON.stringify(r));
+await g.ev(`WGU.rq.v = ''; 0`);
+await g.ev(`__click(24 + 88 + 20, 14 + 6)`); // STASH
+r = await g.ev(`[wgInvCount(WGS.inv, 'flint'), wgInvCount(__chest, 'flint'), wgInvCount(WGS.inv, 'stone')]`);
+ok(r[0] === 0 && r[1] === 7 && r[2] === 6, 'STASH puts flint with the flint, stone stays: ' + JSON.stringify(r));
+console.log('stash', await g.shot('wg_inv_stash.png'));
 // the hand refills itself in play: the same thing first, else the best tool of the kind; never after a drop
 await g.ev(`navigator.getGamepads = () => []; Input.lastAim = 'keys'; var inv = WGS.inv; for (let i = 0; i < 36; i++) inv[i] = null; inv[0] = { id: 'torch', n: 1 }; inv[20] = { id: 'torch', n: 30 }; WGS.sel = 0; WGS.scr = 'play'; WGS.ui = {}; 0`);
 await sleep(150); await g.ev(`WGS.inv[0] = null; 0`); await sleep(150);

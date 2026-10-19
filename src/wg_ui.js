@@ -100,7 +100,7 @@ function wgDrawPause() {
     wgUiEnd(ui); return;
   }
   if (ui.mp) { wgDrawFriends(ui); wgUiEnd(ui); return; }
-  if (ui.help) { panel(60, 3, 264, 192); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'SHIFT+CLICK  WHOLE STACK, MAKE 5', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP', 'IN THE BACKPACK: A PICK UP  RB WHOLE STACK']; rows.forEach((r, i) => wtext(r, 70, 10 + i * 11, i > 11 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 177, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
+  if (ui.help) { panel(60, 1, 264, 204); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'SHIFT+CLICK  WHOLE STACK, MAKE 5', 'CHESTS NEARBY HELP YOU CRAFT', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP', 'IN THE BACKPACK: A PICK UP  RB WHOLE STACK']; rows.forEach((r, i) => wtext(r, 70, 8 + i * 11, i > 12 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 186, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
   panel(112, 22, 160, client ? 118 : 174); wtext('PAUSED', VW / 2, 30, 'Y', 3, 1);
   let y = 44;
   if (wgButton(ui, 'RESUME', 128, y, 128) || pressed('Escape') && ui.armed) { WGS.scr = 'play'; return; } y += 18;
@@ -164,6 +164,34 @@ function wgSortPack() {
   for (const s of items) wgMoveStack([s], 0, inv, WG_BAG);
   Audio_.sfx('select');
 }
+// Chests within five tiles lend what they hold to the recipe book and take the stash. Alone or as the host only:
+// a client's copy of a chest can be behind the host's. Looked up once a second while the backpack is open.
+function wgNearChests() {
+  const N = WGS.nearC; if (N && WGS.t - N.t < 1) return N.list;
+  const list = [];
+  if (WGN.role !== 'client' && WGS.world) {
+    const w = WGS.world, d = WGS.dim, px = Math.floor(WGS.p.x / 16), py = Math.floor((WGS.p.y - 4) / 16);
+    for (let y = py - 5; y <= py + 5; y++) for (let x = px - 5; x <= px + 5; x++) { const id = wgObjAt(w, d, x, y); if (id && OBJ[id].kind === 'storage') list.push({ x, y, d, c: wgCont(w, d, x, y, true) }); }
+    list.sort((a, b) => Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py));
+  }
+  WGS.nearC = { t: WGS.t, list }; return list;
+}
+function wgChestSaved(q) { wgChunkAt(WGS.world, q.d, q.x, q.y).mod = true; if (WGN.role === 'host') wgNetChest(q.d, q.x, q.y, q.c); }
+// Takes n of id from the pack first, then from the nearest chests.
+function wgTakeNear(id, n) {
+  const own = Math.min(n, wgInvCount(WGS.inv, id)); if (own) wgInvTake(WGS.inv, id, own); n -= own;
+  for (const q of wgNearChests()) { if (!n) break; const t = Math.min(n, wgInvCount(q.c, id)); if (t) { wgInvTake(q.c, id, t); n -= t; wgChestSaved(q); } }
+}
+// The stash: every backpack stack goes into a chest nearby that already holds that thing (the hotbar stays).
+function wgStash() {
+  let moved = 0;
+  for (const q of wgNearChests()) {
+    let any = false;
+    for (let i = 9; i < 36; i++) { const s = WGS.inv[i]; if (s && q.c.some(t => t && t.id === s.id)) { const n0 = s.n; wgMoveStack(WGS.inv, i, q.c, WG_BOX); if (!WGS.inv[i] || WGS.inv[i].n !== n0) { moved++; any = true; } } }
+    if (any) wgChestSaved(q);
+  }
+  wgToast(moved ? 'STASHED ' + moved + (moved > 1 ? ' STACKS' : ' STACK') : 'NOTHING TO STASH'); Audio_.sfx(moved ? 'select' : 'error');
+}
 // A small button that answers a click, a tap or the pad's pointer (never the keys, which do other things there).
 function wgSmallBtn(label, x, y, w, h) {
   h = h || 12; const inside = Input.mx >= x && Input.mx < x + w && Input.my >= y && Input.my < y + h, ty = y + (h >> 1) - 3;
@@ -185,6 +213,7 @@ function wgDrawInv() {
   const x0 = 24, y0 = 18; panel(x0 - 8, y0 - 8, 348, 192);
   wtext('BACKPACK', x0, y0 - 2, 'Y', 1);
   if (wgSmallBtn('SORT', x0 + 132, y0 - 4, 38)) wgSortPack();
+  if (wgNearChests().length && wgSmallBtn('STASH', x0 + 88, y0 - 4, 40)) wgStash();
   wgSlotGrid(WGS.inv, x0, y0 + 10, 9, 9, 0);
   wgSlotGrid(WGS.inv, x0, y0 + 36, 9, 27, 9);
   // armour
@@ -195,23 +224,26 @@ function wgDrawInv() {
   const st = wgStations(), rx = x0 + 186, ui = WGS.ui;
   wtext('RECIPE BOOK', rx, y0 - 2, 'Y', 1);
   const names = { bench: 'WORKBENCH', furnace: 'FURNACE', anvil: 'ANVIL', alch: 'ALCHEMY', loom: 'LOOM', fire: 'FIRE' };
-  wtext('NEAR: ' + (Object.keys(st).filter(k => k !== 'hand').map(k => names[k]).join(', ') || 'NOTHING'), rx, y0 + 8, 'L', 0);
+  const chests = wgNearChests(), pool = chests.length ? WGS.inv.concat(...chests.map(q => q.c)) : WGS.inv, sts = Object.keys(st).filter(k => k !== 'hand');
+  let near = 'NEAR: ' + (sts.map(k => tr(names[k])).join(', ') || tr('NOTHING')) + (chests.length ? ' + ' + chests.length + (chests.length > 1 ? ' CHESTS' : ' CHEST') : '');
+  if (textW(near, 0) > 150) near = 'NEAR: ' + sts.length + ' STATIONS' + (chests.length ? ' + ' + chests.length + ' CHESTS' : ''); // too long: just count them
+  wtext(near, rx, y0 + 8, 'L', 0);
   const seen = WGS.p.seen || {}, q = (WGU.rq || (WGU.rq = { v: '', max: 12 })).v, all = RECIPES.filter(r => st[r.at]);
   const known = r => seen[r.out] || Object.keys(r.in).every(k2 => seen[k2]);
-  const list = all.filter(r => known(r) && (!q || tr(WGI[r.out].name).includes(q))); list.sort((a, b) => (wgCanCraft(WGS.inv, b) ? 1 : 0) - (wgCanCraft(WGS.inv, a) ? 1 : 0));
+  const list = all.filter(r => known(r) && (!q || tr(WGI[r.out].name).includes(q))); list.sort((a, b) => (wgCanCraft(pool, b) ? 1 : 0) - (wgCanCraft(pool, a) ? 1 : 0));
   ui.scroll = wgClamp((ui.scroll || 0) - Math.sign(Input.wheel) * 1, 0, Math.max(0, list.length - 5)); Input.wheel = 0;
   const rows = 5, RH = 27;
   for (let k = 0; k < rows && ui.scroll + k < list.length; k++) {
-    const r = list[ui.scroll + k], y = y0 + 20 + k * RH, can = wgCanCraft(WGS.inv, r), inside = Input.mx >= rx && Input.mx < rx + 150 && Input.my >= y && Input.my < y + 26;
+    const r = list[ui.scroll + k], y = y0 + 20 + k * RH, can = wgCanCraft(pool, r), inside = Input.mx >= rx && Input.mx < rx + 150 && Input.my >= y && Input.my < y + 26;
     rect(rx, y, 150, 26, '0'); rect(rx + 1, y + 1, 148, 24, inside && can ? 'Y' : can ? '3' : '1'); rect(rx + 2, y + 2, 146, 22, inside && can ? 'y' : can ? '2' : '1');
     ctx.drawImage(wgIcon(r.out), rx + 2, y + 5);
     wtext(tr(WGI[r.out].name) + (r.n > 1 ? ' X' + r.n : ''), rx + 20, y + 3, can ? (inside ? '0' : 'w') : 'm', 0);
-    let cx = rx + 20; for (const k2 in r.in) { const have = wgInvCount(WGS.inv, k2) >= r.in[k2]; ctx.globalAlpha = have ? 1 : 0.55; ctx.drawImage(wgIcon(k2), cx, y + 10); ctx.globalAlpha = 1; wtext(String(r.in[k2]), cx + 15, y + 17, have ? (inside ? '0' : 'h') : 'R', 2, 2); cx += 22; }
+    let cx = rx + 20; for (const k2 in r.in) { const have = wgInvCount(pool, k2) >= r.in[k2]; ctx.globalAlpha = have ? 1 : 0.55; ctx.drawImage(wgIcon(k2), cx, y + 10); ctx.globalAlpha = 1; wtext(String(r.in[k2]), cx + 15, y + 17, have ? (inside ? '0' : 'h') : 'R', 2, 2); cx += 22; }
     if (inside) WGS.tip = Object.keys(r.in).map(k2 => r.in[k2] + ' ' + tr(WGI[k2].name)).join(', ');
     if (inside && can && Input.mouseHit) { // shift-click makes up to five at once
       let made = 0;
-      for (let t = wgShift() ? 5 : 1; t > 0 && wgCanCraft(WGS.inv, r); t--) {
-        for (const k2 in r.in) wgInvTake(WGS.inv, k2, r.in[k2]);
+      for (let t = wgShift() ? 5 : 1; t > 0 && wgCanCraft(chests.length ? WGS.inv.concat(...chests.map(q => q.c)) : WGS.inv, r); t--) {
+        for (const k2 in r.in) wgTakeNear(k2, r.in[k2]);
         const left = wgInvAdd(WGS.inv, r.out, r.n); if (left) wgDrop(WGS.p.x, WGS.p.y, r.out, left);
         made += r.n;
       }
