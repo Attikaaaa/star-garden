@@ -101,7 +101,7 @@ function wgGroundTex(gid, v, tone) {
       for (let y = 0; y < 16; y += 4) { wgRc(g, 0, y, 16, 1, R[0]); wgRc(g, 0, y + 1, 16, 1, R[2]); const o = (y / 4) % 2 ? 4 : 0; wgRc(g, (o + 4) % 16, y, 1, 4, R[0]); wgRc(g, (o + 12) % 16, y, 1, 4, R[0]); }
       sc(5, R[3]); break;
     }
-    case 'f_red': case 'f_blue': case 'f_green': {
+    case 'f_red': case 'f_blue': case 'f_green': case 'f_yellow': case 'f_white': case 'f_purple': {
       wgRc(g, 0, 0, 16, 16, R[1]);
       wgRc(g, 0, 0, 16, 1, R[0]); wgRc(g, 0, 15, 16, 1, R[0]); wgRc(g, 0, 0, 1, 16, R[0]); wgRc(g, 15, 0, 1, 16, R[0]);
       wgRc(g, 2, 2, 12, 1, R[3]); wgRc(g, 2, 13, 12, 1, R[3]); wgRc(g, 2, 2, 1, 12, R[3]); wgRc(g, 13, 2, 1, 12, R[3]);
