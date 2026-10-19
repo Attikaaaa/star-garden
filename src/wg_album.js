@@ -1,11 +1,11 @@
 'use strict';
-// Wildgrove: the album, from the pause menu. Every food and fish in the game as a grid: the ones you have held in
+// Wildgrove: the album, from the pause menu. Every food, fish and bug in the game (`album: 1` items) as a grid: the ones you have held in
 // colour, the rest as dark shapes still to find. The pointer, the arrows or the pad pick one to read its name.
 const WG_ALBUM_COLS = 12, WG_ALBUM_ROWS = 5;
 let _wgAlbumList = null;
 function wgAlbumList() { // raw things first (caught, picked, grown), then what is cooked or mixed from them
   if (_wgAlbumList) return _wgAlbumList;
-  const all = Object.values(WGI).filter(i => i.kind === 'food' || i.id === 'fish_gold'), made = (i) => RECIPES.some(r => r.out === i.id);
+  const all = Object.values(WGI).filter(i => i.kind === 'food' || i.id === 'fish_gold' || i.album), made = (i) => RECIPES.some(r => r.out === i.id);
   return (_wgAlbumList = all.filter(i => !made(i)).concat(all.filter(made)).map(i => i.id));
 }
 function wgAlbumShape(id) { // a dark silhouette of the icon for what is not found yet

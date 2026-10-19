@@ -1,10 +1,10 @@
-// Every Wildgrove item can be had: dropped by something, crafted, traded, fished or found in a chest.
+// Every Wildgrove item can be had: dropped by something, crafted, traded, fished, caught in a net or found in a chest.
 // Every recipe uses real items and a real station, and no recipe makes more than a stack.
 import { open, waitFor } from './lib.mjs';
 const g = await open({ w: 1152, h: 648 });
 await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
 const r = await g.ev(`(() => {
-  const got = new Set(['bucket_water'].concat(typeof WG_FISH !== 'undefined' ? WG_FISH : ['fish'])), bad = []; // a bucket dipped in water; every fish (wgCatch)
+  const got = new Set(['bucket_water'].concat(typeof WG_FISH !== 'undefined' ? WG_FISH : ['fish'], typeof WG_BFLY !== 'undefined' ? WG_BFLY.map(b => 'bfly_' + b[0]).concat('firefly') : [])), bad = []; // a bucket dipped in water; every fish (wgCatch); the bugs (wgSwingNet)
   for (const o of OBJ) if (o) { for (const d of o.drops || []) got.add(d[0]); if (o.ripe) got.add(o.ripe); }
   for (const k in WG_MOBS) for (const d of WG_MOBS[k].drops || []) got.add(d[0]);
   for (const t of WG_TRADES) got.add(t[2]);

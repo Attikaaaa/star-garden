@@ -212,7 +212,11 @@ function wgDrawSky() { // dawn and dusk colour over the whole surface
 }
 
 // ---------- ambient life: butterflies by day, fireflies by night, drifting leaves and desert dust (no entities, nothing saved) ----------
+// The bugs drawn are noted in WGBUG.seen (cell x, cell y, n, world x, world y, kind: 0-3 a butterfly's colour, 4 a
+// firefly) for the bug net (wg_bugs.js); one caught stays out of sight until its time in WGBUG.gone has passed.
+const WGBUG = { seen: [], gone: new Map() };
 function wgDrawAmbient(cx0, cy0) {
+  WGBUG.seen.length = 0;
   if (WGS.dim !== 'o' || !wgOpt().amb) return;
   const w = WGS.world, t = WGS.t, night = wgNight(WGS.clock), C = 80, gx0 = Math.floor(cx0 / C) - 1, gy0 = Math.floor(cy0 / C) - 1, gx1 = Math.floor((cx0 + SCR.w) / C) + 1, gy1 = Math.floor((cy0 + SCR.h) / C) + 1;
   for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
@@ -226,11 +230,13 @@ function wgDrawAmbient(cx0, cy0) {
     }
     if (night < 0.35 && (b === 'meadow' || b === 'forest' || b === 'highland') && h % 4 === 0) { // a lone butterfly here and there, never a yellow fleck that reads as a drop
       for (let n = 0; n < 1; n++) {
+        if (WGBUG.gone.get((gx * 65536 + gy) * 4 + n) > t) continue;
         const x = sx(n * 2, 1), y = sy(n * 2, 1) - Math.round(Math.abs(Math.sin(t * 3 + n)) * 3), col = ['P', 'c', 'O', 'w'][(h >>> 20) % 4], f = Math.floor(t * 9 + n) % 2;
+        WGBUG.seen.push(gx, gy, n, x + cx0, y + cy0, (h >>> 20) % 4);
         shadow(x, y + 10, 3); rect(x, y, 1, 1, '0'); rect(x - 1 - f, y - 1, 1 + f, 1 + f, col); rect(x + 1, y - 1, 1 + f, 1 + f, col);
       }
     } else if (night > 0.4 && (b === 'forest' || b === 'swamp' || b === 'jungle' || b === 'meadow') && h % 2 === 0) {
-      for (let n = 0; n < 3; n++) { const a = 0.35 + Math.sin(t * 2.2 + n * 2 + ph) * 0.35; if (a > 0.15) { const x = sx(n * 3, 0.8), y = sy(n * 3, 0.8) - 6; ctx.globalAlpha = Math.min(1, a * 0.35); rect(x - 1, y - 1, 3, 3, 'y'); ctx.globalAlpha = Math.min(1, a + 0.3); rect(x, y, 1, 1, 'Y'); ctx.globalAlpha = 1; } }
+      for (let n = 0; n < 3; n++) { const a = 0.35 + Math.sin(t * 2.2 + n * 2 + ph) * 0.35; if (a > 0.15 && !(WGBUG.gone.get((gx * 65536 + gy) * 4 + n) > t)) { const x = sx(n * 3, 0.8), y = sy(n * 3, 0.8) - 6; WGBUG.seen.push(gx, gy, n, x + cx0, y + cy0, 4); ctx.globalAlpha = Math.min(1, a * 0.35); rect(x - 1, y - 1, 3, 3, 'y'); ctx.globalAlpha = Math.min(1, a + 0.3); rect(x, y, 1, 1, 'Y'); ctx.globalAlpha = 1; } }
     } else if ((b === 'forest' || b === 'jungle') && h % 2 === 1) {
       const k = (t * 0.25 + ph) % 1, x = Math.round(ax + Math.sin(t * 1.3 + ph) * 8 + k * 30 - cx0), y = Math.round(ay - 40 + k * 90 - cy0);
       rect(x, y, 2, 1, (h >>> 9) % 2 ? 'O' : 'g'); rect(x + 1, y + 1, 1, 1, 'n');
