@@ -102,7 +102,7 @@ function wgDrawPause() {
   }
   if (ui.mp) { wgDrawFriends(ui); wgUiEnd(ui); return; }
   if (ui.help) { panel(60, 1, 264, 204); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'SHIFT+CLICK  WHOLE STACK, MAKE 5', 'CHESTS NEARBY HELP YOU CRAFT', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP', 'IN THE BACKPACK: A PICK UP  RB WHOLE STACK']; rows.forEach((r, i) => wtext(r, 70, 8 + i * 11, i > 12 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 186, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
-  panel(112, 22, 160, client ? 118 : 174); wtext('PAUSED', VW / 2, 30, 'Y', 3, 1);
+  panel(112, 22, 160, client ? 120 : 174); wtext('PAUSED', VW / 2, 30, 'Y', 3, 1);
   let y = 44;
   if (wgButton(ui, 'RESUME', 128, y, 128) || pressed('Escape') && ui.armed) { WGS.scr = 'play'; return; } y += 18;
   ui.armed = true;
@@ -111,8 +111,9 @@ function wgDrawPause() {
     if (wgButton(ui, WGN.role ? 'FRIENDS: CODE ' + WGN.code : 'PLAY WITH FRIENDS', 128, y, 128)) ui.mp = !ui.mp; y += 18;
     if (wgButton(ui, 'EXPORT WORLD', 128, y, 128)) wgExport(WGS.world.meta.id).then(() => wgToast('WORLD FILE SAVED')); y += 18;
   }
-  if (wgButton(ui, 'SETTINGS', 128, y, 62)) ui.set = !ui.set;
-  if (wgButton(ui, 'STARS', 194, y, 62)) { ui.ach = true; ui.pg = 0; } y += 18;
+  if (wgButton(ui, 'SETTINGS', 128, y, 128)) ui.set = !ui.set; y += 18;
+  if (wgButton(ui, 'STARS', 128, y, 62)) { ui.ach = true; ui.pg = 0; }
+  if (wgButton(ui, 'ALBUM', 194, y, 62)) { ui.album = true; ui.pg = 0; ui.sel = undefined; } y += 18;
   if (wgButton(ui, 'MAP', 128, y, 50)) { wgOpenMap(); return; }
   if (wgButton(ui, 'CONTROLS', 182, y, 74)) ui.help = !ui.help; y += 18;
   if (wgButton(ui, client ? 'LEAVE WORLD' : 'SAVE AND QUIT', 128, y, 128)) {
