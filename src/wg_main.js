@@ -84,10 +84,11 @@ function updateWG(dt) {
   if (WGS.toast && (WGS.toast.t -= dt) <= 0) WGS.toast = null;
   wgnUpdate(dt);
   const s = WGS.scr;
+  if (s !== 'play') WGS.hand = null; // stacks moved in a menu are never refilled
   if (s === 'play') return wgPlayUpdate(dt);
   if (s === 'loading') return;
-  if (s === 'dead') { WGS.deadT += dt; wgUpdateWorldBg(dt); return; }
-  if (s === 'pause' || s === 'inv' || s === 'chest' || s === 'trade') { wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
+  if (s === 'dead') { WGS.deadT += dt; if (wgHostLive()) wgHostWorld(dt); else wgUpdateWorldBg(dt); return; }
+  if (s === 'pause' || s === 'inv' || s === 'chest' || s === 'trade') { if (wgHostLive()) wgHostWorld(dt); else wgUpdateWorldBg(dt); if (s !== 'pause' && (pressed(wgKey('bag'), 'Escape', 'PadB', 'PadY'))) { WGS.scr = 'play'; Audio_.sfx('select'); } }
 }
 function wgUpdateWorldBg(dt) { for (const q of WGS.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.age += dt; } WGS.parts = WGS.parts.filter(q => q.age < q.life); }
 
@@ -201,9 +202,8 @@ function wgPlayUpdate(dt) {
   for (let i = 0; i < 9; i++) if (pressed('Digit' + (i + 1))) WGS.sel = i;
   if (pressed('PadRB')) WGS.sel = (WGS.sel + 1) % 9; if (pressed('PadLB')) WGS.sel = (WGS.sel + 8) % 9;
   if (Input.wheel) { WGS.sel = (WGS.sel + (Input.wheel > 0 ? 1 : 8)) % 9; Input.wheel = 0; }
-  if (pressed(wgKey('drop'))) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); } }
-  // time
-  if (!(WGS.world.meta.rules || {}).noCycle) WGS.clock += dt / wgDayLen(); if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast(WGS.day % 8 === 0 ? WG_SEASONS[wgSeason()] + ' BEGINS' : 'DAY ' + (WGS.day + 1), 2.5); }
+  if (pressed(wgKey('drop'))) { const s = WGS.inv[WGS.sel]; if (s) { wgDrop(p.x + (p.face === 'l' ? -14 : p.face === 'r' ? 14 : 0), p.y + (p.face === 'd' ? 12 : p.face === 'u' ? -12 : 0), s.id, 1, { delay: 1.2 }); wgInvTake(WGS.inv, s.id, 1); WGS.hand = null; } } // dropped on purpose: no refill
+  wgClockTick(dt);
   const Tt = Input.touch;
   if (Input.lastAim === 'touch') { WGS.touch = { mx: Tt.mx, my: Tt.my, act: !!Tt.aim, use: WGS.tapUse }; if (Tt.aim) { Input.mx = Tt.aim.x; Input.my = Tt.aim.y; } else if (WGS.tapAt) { Input.mx = WGS.tapAt[0]; Input.my = WGS.tapAt[1]; } WGS.tapUse = false; WGS.tapAt = null; } else WGS.touch = null;
   // movement
@@ -255,20 +255,53 @@ function wgPlayUpdate(dt) {
   if (g.hurt) { WGS.lavaT = (WGS.lavaT || 0) - dt; if (WGS.lavaT <= 0) { WGS.lavaT = 0.5; wgHurtPlayer(3, p.x, p.y + 4); } }
   for (const k in p.buff) if ((p.buff[k] -= dt) <= 0) delete p.buff[k];
   wgWeatherTick(dt); wgHintTick(dt);
-  // world
-  wgUpdateDrops(dt);
-  if (WGS.world.meta.diff !== 'peaceful') { wgMobSpawnTick(dt); wgUpdateMobs(dt); wgUpdateShots(dt); } else WGS.mobs = WGS.mobs.filter(m => WG_MOBS[m.type].pas), wgUpdateMobs(dt);
-  if (!(WGN.role === 'client')) wgGrowTick(dt);
-  wgUpdateWorldBg(dt);
+  wgWorldStep(dt);
   if (p.hp <= 0 && WGS.scr === 'play') wgDie();
   // camera
   cam.x += (p.x - cam.x) * Math.min(1, dt * 8); cam.y += (p.y - 8 - cam.y) * Math.min(1, dt * 8);
   if (WGS.shake) WGS.shake = Math.max(0, WGS.shake - dt);
-  // streaming: forget far chunks
+  wgRefillHand();
+}
+// The hand refills itself: when the chosen hotbar slot empties in play (a tool or weapon worn out; stacks are
+// spent from the backpack first) the same thing comes up from the backpack, or the best tool or weapon of its kind.
+function wgRefillHand() {
+  const inv = WGS.inv, s = inv[WGS.sel], last = WGS.hand;
+  if (s) { WGS.hand = { sel: WGS.sel, id: s.id }; return; }
+  WGS.hand = null;
+  if (!last || last.sel !== WGS.sel) return;
+  const it = WGI[last.id], kind = (t) => (it.tool && t.tool === it.tool) || (it.weapon && t.weapon === it.weapon);
+  let best = -1;
+  for (let i = 9; i < 36 && best < 0; i++) if (inv[i] && inv[i].id === last.id) best = i;
+  if (best < 0) for (let i = 9; i < 36; i++) { const t = inv[i] && WGI[inv[i].id]; if (t && kind(t) && (best < 0 || (t.tier || 0) > (WGI[inv[best].id].tier || 0))) best = i; }
+  if (best < 0) return;
+  inv[WGS.sel] = inv[best]; inv[best] = null; WGS.hand = { sel: WGS.sel, id: inv[WGS.sel].id };
+  Audio_.sfx('select');
+}
+function wgClockTick(dt) {
+  if (!(WGS.world.meta.rules || {}).noCycle) WGS.clock += dt / wgDayLen();
+  if (WGS.clock >= 1) { WGS.clock -= 1; WGS.day++; wgToast(WGS.day % 8 === 0 ? WG_SEASONS[wgSeason()] + ' BEGINS' : 'DAY ' + (WGS.day + 1), 2.5); }
+}
+// The world around the hero: drops, mobs, crops, far chunks let go, the autosave.
+function wgWorldStep(dt) {
+  wgUpdateDrops(dt);
+  if (WGS.world.meta.diff !== 'peaceful') { wgMobSpawnTick(dt); wgUpdateMobs(dt); wgUpdateShots(dt); } else WGS.mobs = WGS.mobs.filter(m => WG_MOBS[m.type].pas), wgUpdateMobs(dt);
+  if (!(WGN.role === 'client')) wgGrowTick(dt);
+  wgUpdateWorldBg(dt);
   WGS.sweep = (WGS.sweep || 0) - dt; if (WGS.sweep < 0) { WGS.sweep = 4; wgSweepChunks(); }
   WGS.autosave -= dt; if (WGS.autosave <= 0) { WGS.autosave = 30; wgSaveNow(); }
 }
-function wgPlayFrozen(dt) { wgUpdateDrops(dt); wgUpdateWorldBg(dt); WGS.p.moving = false; }
+// Alone, a menu stops the world. A host with friends in the world must not stop it for them: time, weather,
+// mobs and crops go on while the host's hero stands still (and can still be hurt).
+const wgHostLive = () => WGN.role === 'host' && WGS.world && WGN.peers.some(q => q.pid > 0);
+function wgHostWorld(dt) {
+  const p = WGS.p; dt *= [1, 0.75, 0.5][wgOpt().slow] || 1;
+  p.moving = false; p.vx = p.vy = 0; WGS.mine = null;
+  wgClockTick(dt); wgWeatherTick(dt);
+  p.hurt = Math.max(0, p.hurt - dt); p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt);
+  for (const k in p.buff) if ((p.buff[k] -= dt) <= 0) delete p.buff[k];
+  wgWorldStep(dt);
+}
+function wgPlayFrozen(dt) { if (wgHostLive()) return wgHostWorld(dt); wgUpdateDrops(dt); wgUpdateWorldBg(dt); WGS.p.moving = false; }
 function wgGrowTick(dt) {
   WGS.growT = (WGS.growT || 0) - dt; if (WGS.growT > 0) return; WGS.growT = 1;
   const w = WGS.world, CS = WG.CS;

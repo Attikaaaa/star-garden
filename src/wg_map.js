@@ -92,13 +92,6 @@ function wgMapHouse(x, y) {
 function wgMapHero(x, y, col, me) { // the shirt's colour in a white ring, on any ground; yours blinks gold
   rect(x - 4, y - 4, 9, 9, '0'); rect(x - 3, y - 3, 7, 7, me && Math.floor(WGS.t * 3) % 2 ? 'Y' : 'w'); rect(x - 2, y - 2, 5, 5, '0'); rect(x - 1, y - 1, 3, 3, col);
 }
-function wgMapButton(label, x, y, w) { // a plain button: a click or a tap, never the keys (they pan and pin)
-  const inside = Input.mx >= x && Input.mx < x + w && Input.my >= y && Input.my < y + 14;
-  rect(x, y, w, 14, '0'); rect(x + 1, y + 1, w - 2, 12, inside ? 'o' : '2'); rect(x + 2, y + 2, w - 4, 10, inside ? 'y' : '1');
-  wtext(label, x + w / 2, y + 4, inside ? '0' : 'w', inside ? 0 : 1, 1);
-  if (inside && Input.mouseHit) { Input.mouseHit = false; return true; }
-  return false;
-}
 function wgDrawMap() {
   const w = WGS.world, dim = WGS.dim, p = WGS.p, z = WGM.z, CS = WG.CS;
   const L = -SCR.ox, T0 = -SCR.oy, R = L + SCR.w, B = T0 + SCR.h, mx = Math.round((L + R) / 2), my = Math.round((T0 + B - 14) / 2);
@@ -129,9 +122,9 @@ function wgDrawMap() {
   // the centre, where a pin goes with the keys or the pad
   ctx.globalAlpha = 0.7; rect(mx - 4, my, 3, 1, 'w'); rect(mx + 2, my, 3, 1, 'w'); rect(mx, my - 4, 1, 3, 'w'); rect(mx, my + 2, 1, 3, 'w'); ctx.globalAlpha = 1;
   // buttons: zoom and close, for the mouse and for fingers
-  if (wgMapButton('-', R - 66, T0 + 4, 18)) WGM.z = WGM_Z[Math.max(0, WGM_Z.indexOf(WGM.z) - 1)];
-  if (wgMapButton('+', R - 46, T0 + 4, 18)) WGM.z = WGM_Z[Math.min(WGM_Z.length - 1, WGM_Z.indexOf(WGM.z) + 1)];
-  if (wgMapButton('X', R - 24, T0 + 4, 20)) { WGS.scr = 'play'; WGS.ui = {}; Audio_.sfx('select'); return; }
+  if (wgSmallBtn('-', R - 66, T0 + 4, 18, 14)) WGM.z = WGM_Z[Math.max(0, WGM_Z.indexOf(WGM.z) - 1)];
+  if (wgSmallBtn('+', R - 46, T0 + 4, 18, 14)) WGM.z = WGM_Z[Math.min(WGM_Z.length - 1, WGM_Z.indexOf(WGM.z) + 1)];
+  if (wgSmallBtn('X', R - 24, T0 + 4, 20, 14)) { WGS.scr = 'play'; WGS.ui = {}; Audio_.sfx('select'); return; }
   wtext(dim === 'u' ? 'MAP: THE CAVES' : dim === 'k' ? 'MAP: THE SKY' : 'MAP', L + 6, T0 + 7, 'Y', 2, 0);
   // the mouse: drag to move, click to set or lift the pin
   if (Input.mouseHit && Input.my < B - 14) WGM.drag = { x: Input.mx, y: Input.my, cx: WGM.cx, cy: WGM.cy, moved: false };
@@ -173,17 +166,18 @@ updateWG = function (dt) {
   if (WGS.scr === 'play' && WGS.world && !WGU.chatOpen && pressed('KeyM', 'PadBack')) { wgOpenMap(); return; }
   _wgUpd0(dt);
   const s = WGS.scr;
-  if (s === 'map') wgMapUpdate(dt);
-  else if ((s === 'inv' || s === 'chest' || s === 'trade') && Input.lastAim === 'pad') { // the left stick moves a pointer: A clicks, X right-clicks
+  if (s === 'map') { wgMapUpdate(dt); if (wgHostLive()) wgHostWorld(dt); }
+  else if ((s === 'inv' || s === 'chest' || s === 'trade') && Input.lastAim === 'pad') { // the left stick moves a pointer: A clicks, X right-clicks, RB shift-clicks
     Input.mx = wgClamp(Input.mx + Input.pad.mx * 170 * dt, -SCR.ox, -SCR.ox + SCR.w - 1); Input.my = wgClamp(Input.my + Input.pad.my * 170 * dt, -SCR.oy, -SCR.oy + SCR.h - 1);
     if (pressed('PadA')) Input.mouseHit = true;
     if (pressed('PadX')) Input.rHit = true;
+    if (pressed('PadRB')) { Input.mouseHit = true; WGS.quick = true; } // RB: the whole stack, like a shift-click
   }
 };
 const _wgDraw0 = drawWG;
 drawWG = function () {
   if (WGS.scr === 'map' && WGS.world) return wgDrawMap();
-  _wgDraw0();
+  _wgDraw0(); WGS.quick = false;
   if (Input.lastAim === 'pad' && (WGS.scr === 'inv' || WGS.scr === 'chest' || WGS.scr === 'trade')) drawS(S('cursor'), Math.round(Input.mx) - 4, Math.round(Input.my) - 4);
 };
 WG_HINTS.push(['PRESS M FOR THE MAP: CLICK IT TO SET A PIN', () => WGS.world.meta.mapSeen]);

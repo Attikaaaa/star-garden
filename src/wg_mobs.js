@@ -237,6 +237,7 @@ function wgHurtPlayer(dmg, fx, fy) {
 }
 function wgDie() {
   const p = WGS.p; p.hp = 0; WGS.scr = 'dead'; WGS.deadT = 0;
+  if (WGS.cur) { const c = WGS.cur; WGS.cur = null; const left = wgInvAdd(WGS.inv, c.id, c.n); if (left) wgDrop(p.x, p.y, c.id, left, { keep: 1 }); } // a stack in hand (hurt in a menu) goes back first
   // the pack spills where the hero fell; with KEEP INVENTORY on the pack stays; otherwise it spills and the drops wait
   const keep = WGS.world.meta.rules && WGS.world.meta.rules.keepInv, had = WGS.inv.some(Boolean);
   for (let i = 0; i < WGS.inv.length && !keep; i++) { const s = WGS.inv[i]; if (s) { wgDrop(p.x + (Math.random() - 0.5) * 20, p.y + (Math.random() - 0.5) * 12, s.id, s.n, { keep: 1 }); WGS.inv[i] = null; } }

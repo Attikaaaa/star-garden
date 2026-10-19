@@ -80,4 +80,7 @@
     'PAD: STICKS MOVE AND AIM': 'KONTROLLER: KAROK MOZGATNAK ÉS CÉLOZNAK', 'A MINE  X USE  LB RB HOTBAR  BACK MAP': 'A ÁS  X HASZNÁL  LB RB TÁRGY  BACK TÉRKÉP',
     'PRESS M FOR THE MAP: CLICK IT TO SET A PIN': 'NYOMJ M-ET A TÉRKÉPHEZ: KATTINTVA JELÖLŐT TŰZÖL',
   });
+  Object.assign(LANG.hu.table, { 'SORT': 'RENDEZ', 'TAKE ALL': 'MIND KI', 'STORE ALL': 'MIND BE', 'MADE * X#': 'ELKÉSZÜLT: * X#', '#-# OF #': '#-# / #',
+    'SHIFT+CLICK  WHOLE STACK, MAKE 5': 'SHIFT+KATT  EGÉSZ KÖTEG, 5 DARAB', 'IN THE BACKPACK: A PICK UP  RB WHOLE STACK': 'HÁTIZSÁKBAN: A FELVESZ  RB EGÉSZ KÖTEG' });
+  langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();

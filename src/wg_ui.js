@@ -100,7 +100,7 @@ function wgDrawPause() {
     wgUiEnd(ui); return;
   }
   if (ui.mp) { wgDrawFriends(ui); wgUiEnd(ui); return; }
-  if (ui.help) { panel(60, 20, 264, 150); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP']; rows.forEach((r, i) => wtext(r, 70, 27 + i * 9, i > 10 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 154, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
+  if (ui.help) { panel(60, 3, 264, 192); const K = (n) => wgKeyName(wgKey(n)), rows = [K('up') + K('left') + K('down') + K('right') + '  MOVE (' + K('run') + ' RUNS)', 'LEFT CLICK  MINE / HIT (HOLD)', 'RIGHT CLICK  USE / PLACE / EAT', '1-9 OR WHEEL  HOTBAR', K('bag') + '  BACKPACK AND CRAFTING', K('drop') + '  DROP ONE', K('use') + '  USE OR EAT', 'M  MAP', 'SHIFT+CLICK  WHOLE STACK, MAKE 5', 'ENTER  CHAT (ONLINE)', 'F2  PHOTO', 'ESC  PAUSE', 'PAD: STICKS MOVE AND AIM', 'A MINE  X USE  LB RB HOTBAR  BACK MAP', 'IN THE BACKPACK: A PICK UP  RB WHOLE STACK']; rows.forEach((r, i) => wtext(r, 70, 10 + i * 11, i > 11 ? 'L' : 'w', 1)); if (wgButton(ui, 'BACK', 140, 177, 104) || pressed('Escape')) ui.help = false; wgUiEnd(ui); return; }
   panel(112, 22, 160, client ? 118 : 174); wtext('PAUSED', VW / 2, 30, 'Y', 3, 1);
   let y = 44;
   if (wgButton(ui, 'RESUME', 128, y, 128) || pressed('Escape') && ui.armed) { WGS.scr = 'play'; return; } y += 18;
@@ -136,17 +136,55 @@ function wgSlotClick(arr, i, held) { // click-to-move stacks (held lives in WGS.
   if (s.id === c.id && s.n < WGI[s.id].stack) { const t = Math.min(c.n, WGI[s.id].stack - s.n); s.n += t; c.n -= t; if (!c.n) WGS.cur = null; return; }
   arr[i] = c; WGS.cur = s;
 }
+// Moves the stack at from[i] into the slot ranges of to (in order of preference: [[9, 36], [0, 9]] is the
+// backpack, then the hotbar): onto stacks of the same thing anywhere first, then into the first empty slot.
+const WG_PACK = [[9, 36], [0, 9]], WG_HOT = [[0, 9]], WG_BAG = [[9, 36]], WG_BOX = [[0, 27]];
+function wgMoveStack(from, i, to, ranges) {
+  const s = from[i]; if (!s) return false;
+  const max = WGI[s.id].stack;
+  for (const [a, b] of ranges) for (let k = a; k < b && s.n; k++) if (to[k] && to[k] !== s && to[k].id === s.id && to[k].n < max) { const t = Math.min(s.n, max - to[k].n); to[k].n += t; s.n -= t; }
+  if (!s.n) { from[i] = null; return true; }
+  for (const [a, b] of ranges) for (let k = a; k < b; k++) if (!to[k]) { to[k] = s; from[i] = null; return true; }
+  return false;
+}
+const wgShift = () => !!(Input.down.ShiftLeft || Input.down.ShiftRight || WGS.quick); // WGS.quick: the pad's RB, for one frame
+// Where a shift-click sends a stack: between the hotbar and the backpack, or between a chest and you.
+function wgShiftMove(arr, i) {
+  const inv = WGS.inv;
+  if (WGS.scr === 'chest') { const c = wgCont(WGS.world, WGS.chest.dim, WGS.chest.tx, WGS.chest.ty, true); if (arr === c) wgMoveStack(c, i, inv, WG_PACK); else wgMoveStack(inv, i, c, WG_BOX); }
+  else if (arr === inv) wgMoveStack(inv, i, inv, i < 9 ? WG_BAG : WG_HOT);
+  Audio_.sfx('select');
+}
+// Tidies the backpack (not the hotbar): stacks merged, tools first, then by name.
+function wgSortPack() {
+  const inv = WGS.inv, items = [];
+  for (let i = 9; i < 36; i++) if (inv[i]) { items.push(inv[i]); inv[i] = null; }
+  const order = { tool: 0, weapon: 1, armor: 2, food: 3, seed: 4, place: 5, res: 6 };
+  items.sort((a, b) => { const A = WGI[a.id], B = WGI[b.id], ka = order[A.kind] === undefined ? 7 : order[A.kind], kb = order[B.kind] === undefined ? 7 : order[B.kind]; return ka - kb || (A.name < B.name ? -1 : A.name > B.name ? 1 : 0) || b.n - a.n; });
+  for (const s of items) wgMoveStack([s], 0, inv, WG_BAG);
+  Audio_.sfx('select');
+}
+// A small button that answers a click, a tap or the pad's pointer (never the keys, which do other things there).
+function wgSmallBtn(label, x, y, w, h) {
+  h = h || 12; const inside = Input.mx >= x && Input.mx < x + w && Input.my >= y && Input.my < y + h, ty = y + (h >> 1) - 3;
+  rect(x, y, w, h, '0'); rect(x + 1, y + 1, w - 2, h - 2, inside ? 'o' : '2'); rect(x + 2, y + 2, w - 4, h - 4, inside ? 'y' : '1');
+  if (label === 'up' || label === 'dn') { const c = inside ? '0' : 'w', cx = x + Math.floor(w / 2); for (let r = 0; r < 4; r++) rect(cx - r - 1, ty + 1 + (label === 'up' ? r : 3 - r), r * 2 + 2, 1, c); }
+  else wtext(label, x + w / 2, ty, inside ? '0' : 'w', inside ? 0 : 1, 1);
+  if (inside && Input.mouseHit) { Input.mouseHit = false; Audio_.sfx('confirm'); return true; }
+  return false;
+}
 function wgSlotGrid(arr, x, y, cols, n, from) {
   for (let k = 0; k < n; k++) {
     const i = from + k, sx = x + (k % cols) * 19, sy = y + Math.floor(k / cols) * 19, inside = Input.mx >= sx && Input.mx < sx + 18 && Input.my >= sy && Input.my < sy + 18;
     wgSlot(sx, sy, arr[i], inside || (arr === WGS.inv && i === WGS.sel && false));
-    if (inside) { if (Input.mouseHit) wgSlotClick(arr, i); if (arr[i]) WGS.tip = WGI[arr[i].id].name; if (Input.rHit && !WGS.cur && arr[i] && arr[i].n > 1) { const h = Math.ceil(arr[i].n / 2); WGS.cur = { id: arr[i].id, n: h }; arr[i].n -= h; } }
+    if (inside) { if (Input.mouseHit) { if (wgShift() && !WGS.cur && arr[i]) wgShiftMove(arr, i); else wgSlotClick(arr, i); } if (arr[i]) WGS.tip = WGI[arr[i].id].name; if (Input.rHit && !WGS.cur && arr[i] && arr[i].n > 1) { const h = Math.ceil(arr[i].n / 2); WGS.cur = { id: arr[i].id, n: h }; arr[i].n -= h; } }
   }
 }
 function wgDrawInv() {
   dim(0.6); WGS.tip = '';
   const x0 = 24, y0 = 18; panel(x0 - 8, y0 - 8, 348, 192);
   wtext('BACKPACK', x0, y0 - 2, 'Y', 1);
+  if (wgSmallBtn('SORT', x0 + 132, y0 - 4, 38)) wgSortPack();
   wgSlotGrid(WGS.inv, x0, y0 + 10, 9, 9, 0);
   wgSlotGrid(WGS.inv, x0, y0 + 36, 9, 27, 9);
   // armour
@@ -170,14 +208,20 @@ function wgDrawInv() {
     wtext(tr(WGI[r.out].name) + (r.n > 1 ? ' X' + r.n : ''), rx + 20, y + 3, can ? (inside ? '0' : 'w') : 'm', 0);
     let cx = rx + 20; for (const k2 in r.in) { const have = wgInvCount(WGS.inv, k2) >= r.in[k2]; ctx.globalAlpha = have ? 1 : 0.55; ctx.drawImage(wgIcon(k2), cx, y + 10); ctx.globalAlpha = 1; wtext(String(r.in[k2]), cx + 15, y + 17, have ? (inside ? '0' : 'h') : 'R', 2, 2); cx += 22; }
     if (inside) WGS.tip = Object.keys(r.in).map(k2 => r.in[k2] + ' ' + tr(WGI[k2].name)).join(', ');
-    if (inside && can && Input.mouseHit) {
-      for (const k2 in r.in) wgInvTake(WGS.inv, k2, r.in[k2]);
-      const left = wgInvAdd(WGS.inv, r.out, r.n); if (left) wgDrop(WGS.p.x, WGS.p.y, r.out, left);
-      Audio_.sfx(r.at === 'anvil' ? 'anvil' : 'confirm'); wgToast('MADE ' + WGI[r.out].name);
+    if (inside && can && Input.mouseHit) { // shift-click makes up to five at once
+      let made = 0;
+      for (let t = wgShift() ? 5 : 1; t > 0 && wgCanCraft(WGS.inv, r); t--) {
+        for (const k2 in r.in) wgInvTake(WGS.inv, k2, r.in[k2]);
+        const left = wgInvAdd(WGS.inv, r.out, r.n); if (left) wgDrop(WGS.p.x, WGS.p.y, r.out, left);
+        made += r.n;
+      }
+      Audio_.sfx(r.at === 'anvil' ? 'anvil' : 'confirm'); wgToast('MADE ' + WGI[r.out].name + (made > r.n ? ' X' + made : ''));
     }
   }
   wgField('', WGU.rq, rx + 90, y0 - 6, 60);
-  wtext((ui.scroll + 1) + '-' + Math.min(list.length, ui.scroll + rows) + ' OF ' + list.length + '   WHEEL SCROLLS', rx, y0 + 158, 'L', 0);
+  if (list.length) wtext((ui.scroll + 1) + '-' + Math.min(list.length, ui.scroll + rows) + ' OF ' + list.length, rx, y0 + 158, 'L', 0);
+  if (wgSmallBtn('up', rx + 118, y0 + 155, 15)) ui.scroll = Math.max(0, ui.scroll - 1);
+  if (wgSmallBtn('dn', rx + 135, y0 + 155, 15)) ui.scroll = Math.min(Math.max(0, list.length - rows), ui.scroll + 1);
   if (WGS.cur) { ctx.drawImage(wgIcon(WGS.cur.id), Input.mx - 8, Input.my - 8); if (WGS.cur.n > 1) wtext(String(WGS.cur.n), Input.mx + 8, Input.my + 2, 'w', 2, 2); }
   else if (WGS.tip) wtext(WGS.tip, Input.mx + 8, Input.my - 12, 'w', 2, 0);
   if (pressed(wgKey('bag'), 'Escape') && WGS.cur) { wgInvAdd(WGS.inv, WGS.cur.id, WGS.cur.n); WGS.cur = null; }
@@ -187,7 +231,12 @@ function wgDrawChest() {
   const ch = WGS.chest, arr = wgCont(WGS.world, ch.dim, ch.tx, ch.ty, true);
   for (let i = 0; i < 27; i++) if (arr[i] === undefined) arr[i] = null;
   const x0 = 96, y0 = 22; panel(x0 - 8, y0 - 8, 204, 188);
-  wtext('CHEST', x0, y0 - 2, 'Y', 1); wgSlotGrid(arr, x0, y0 + 10, 9, 27, 0);
+  wtext('CHEST', x0, y0 - 2, 'Y', 1);
+  let moved = false;
+  if (wgSmallBtn('TAKE ALL', x0 + 60, y0 - 4, 54)) { for (let i = 0; i < 27; i++) wgMoveStack(arr, i, WGS.inv, WG_PACK); moved = true; }
+  if (wgSmallBtn('STORE ALL', x0 + 118, y0 - 4, 54)) { for (let i = 9; i < 36; i++) wgMoveStack(WGS.inv, i, arr, WG_BOX); moved = true; } // the hotbar stays in hand
+  if (moved && WGN.role) wgNetChest(ch.dim, ch.tx, ch.ty, arr);
+  wgSlotGrid(arr, x0, y0 + 10, 9, 27, 0);
   wtext('BACKPACK', x0, y0 + 74, 'Y', 1);
   wgSlotGrid(WGS.inv, x0, y0 + 86, 9, 27, 9); wgSlotGrid(WGS.inv, x0, y0 + 144, 9, 9, 0);
   WGS.world && (wgChunkAt(WGS.world, ch.dim, ch.tx, ch.ty).mod = true);

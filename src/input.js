@@ -108,16 +108,14 @@ function endInputFrame() {
   FRAME_IN.wheel += Input.wheel;
   Input.mouseHit = false; Input.rHit = false; Input.wheel = 0;
 }
-// Runs a draw with this frame's input replayed; what it uses up stays used up for the next update.
+// Runs a draw with exactly the input this frame's updates saw, so each press reaches the draw once: input
+// that came in after the last update waits for the next frame (a frame with no update, common on a fast
+// screen, draws with none), never twice.
 function withFrameInput(fn) {
   const pend = Input.hit, pm = Input.mouseHit, pr = Input.rHit, pw = Input.wheel;
-  Input.hit = Object.assign(Object.create(null), FRAME_IN.hit, pend);
-  Input.mouseHit = FRAME_IN.mouseHit || pm; Input.rHit = FRAME_IN.rHit || pr; Input.wheel = FRAME_IN.wheel + pw;
-  try { fn(); } finally {
-    for (const k in pend) if (!Input.hit[k]) delete pend[k];
-    const m = Input.mouseHit, r = Input.rHit, w = Input.wheel;
-    Input.hit = pend; Input.mouseHit = pm && m; Input.rHit = pr && r; Input.wheel = w ? pw : 0;
-  }
+  Input.hit = Object.assign(Object.create(null), FRAME_IN.hit);
+  Input.mouseHit = FRAME_IN.mouseHit; Input.rHit = FRAME_IN.rHit; Input.wheel = FRAME_IN.wheel;
+  try { fn(); } finally { Input.hit = pend; Input.mouseHit = pm; Input.rHit = pr; Input.wheel = pw; }
 }
 function dropFrameInput() {
   for (const k in FRAME_IN.hit) delete FRAME_IN.hit[k];

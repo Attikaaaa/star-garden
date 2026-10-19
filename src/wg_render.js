@@ -89,7 +89,8 @@ function wgDrawObj(id, tx, ty, sx, sy) {
   }
   let st = 0;
   const m = wgMetaAt(w, dim, tx, ty);
-  const sp = list[o.kind === 'crop' ? Math.min(m, list.length - 1) : hash(tx, ty, 3) % list.length], c = sp.c;
+  // crops show their stage; flames, water and bubbles (anim) flicker at a calm 3 frames a second, out of step with each other
+  const sp = list[o.kind === 'crop' ? Math.min(m, list.length - 1) : o.anim ? (Math.floor(t * 3) + hash(tx, ty, 3)) % list.length : hash(tx, ty, 3) % list.length], c = sp.c;
   const mine = WGS.mine && WGS.mine.tx === tx && WGS.mine.ty === ty && WGS.mine.shake > 0 ? Math.round(Math.sin(t * 60) * 1) : 0;
   if (o.kind === 'tree' || o.kind === 'rock' && c.height > 12) shadow(sx + 8, sy + 14, o.kind === 'tree' ? (c.width > 30 ? 20 : 14) : 14);
   const x = sx + sp.ox + mine, y = sy + sp.oy;

@@ -8,14 +8,20 @@ const LANGS = [['en', 'ENGLISH']];
 const LANG = {};
 function addLang(id, name, table) {
   LANGS.push([id, name]);
-  const wild = [];
+  LANG[id] = { table, wild: [] };
+  langWild(id);
+}
+// Compiles a language's '*' patterns; a file that adds to a table later (lang_hu_wg.js) calls it again.
+function langWild(id) {
+  const L = LANG[id], table = L.table, wild = [];
   for (const k in table) if (k.includes('*')) {
     const re = new RegExp('^' + k.replace(/[.?+^$()[\]{}|\\/]/g, '\\$&').replace(/\*/g, '(.+?)').replace(/#/g, '(\\d+)') + '$');
     wild.push([re, table[k], k.match(/[*#]/g), k.replace(/[*#]/g, '').length]);
   }
   // the most specific pattern first: 'DEFEAT # FOES WITH THE *' before 'DEFEAT # *'
   wild.sort((a, b) => b[3] - a[3]);
-  LANG[id] = { table, wild };
+  L.wild = wild;
+  if (typeof _trCache !== 'undefined') _trCache.clear();
 }
 const langId = () => (typeof Save !== 'undefined' && LANG[Save.settings.lang] ? Save.settings.lang : 'en');
 const _trCache = new Map();
