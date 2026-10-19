@@ -178,5 +178,8 @@
   Object.assign(LANG.hu.table, { // the paths pack
     'GRAVEL PATH': 'KAVICSOS ÚT', 'COBBLESTONES': 'MACSKAKŐ', 'STEPPING STONES': 'LÉPŐKÖVEK', 'BOARDWALK': 'DESZKAJÁRDA',
     'QUICKER TO WALK ON': 'GYORSABBAN LEHET RAJTA JÁRNI', 'ALSO OVER SHALLOW WATER': 'SEKÉLY VÍZ FÖLÉ IS' });
+  Object.assign(LANG.hu.table, { // the garden rest pack
+    'GARDEN SWING': 'KERTI HINTA', 'BATHTUB': 'FÜRDŐKÁD', 'BIRD BATH': 'MADÁRITATÓ', 'SQUEAKY CLEAN': 'RAGYOGÓ TISZTA',
+    'TAKE A WARM BATH': 'VEGYÉL EGY MELEG FÜRDŐT', 'HEALS TWICE AS FAST': 'KÉTSZER OLYAN GYORSAN GYÓGYÍT', 'LITTLE BIRDS COME TO SPLASH': 'KISMADARAK JÖNNEK PANCSOLNI' });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
