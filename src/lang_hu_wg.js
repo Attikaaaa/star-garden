@@ -218,5 +218,8 @@
   Object.assign(LANG.hu.table, { // the wardrobe
     'WARDROBE': 'RUHÁSSZEKRÉNY', 'NEW LOOK': 'ÚJ STÍLUS', 'CHANGE YOUR LOOK AT A WARDROBE': 'VÁLTOZTASS KINÉZETET A RUHÁSSZEKRÉNYNÉL',
     'LOOKING GOOD!': 'JÓL NÉZEL KI!', 'USE IT TO CHANGE YOUR LOOK': 'HASZNÁLD, ÉS ÚJ KINÉZETET VÁLASZTHATSZ' });
+  Object.assign(LANG.hu.table, {
+    'OVER THE RAINBOW': 'A SZIVÁRVÁNY FELETT', 'SEE A RAINBOW AFTER THE RAIN': 'LÁSS SZIVÁRVÁNYT ESŐ UTÁN',
+  });
   langWild('hu'); // this file's '*' strings ('NEAR: *', 'MADE *') join the patterns
 })();
