@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.53', lines: ['WILDGROVE: MESSAGES IN BOTTLES', 'BOTTLES WASH UP ON THE BEACH', 'USE ONE TO READ THE NOTE INSIDE', 'AND MAKE A SHIP IN A BOTTLE'] },
   { v: '1.16.52', lines: ['WILDGROVE: ICE SKATES', 'HOLD THEM ON ICE: QUICK AND SURE', 'LET GO AND GLIDE ON', 'YOUR LINES SWIRL ACROSS THE ICE'] },
   { v: '1.16.51', lines: ['WILDGROVE: ICE FISHING AND A SNOW GLOBE', 'USE THE ROD ON ICE TO CUT A HOLE', 'ICEFIN BITE MORE THROUGH THE ICE', 'SHAKE A SNOW GLOBE AND WATCH IT SNOW'] },
   { v: '1.16.50', lines: ['WILDGROVE: FOUR NEW HATS', 'A PARTY HAT, A WITCH HAT, A SAILOR CAP', 'AND A FROG HAT, OF COURSE', 'WEAR TEN TO BECOME A MAD HATTER'] },
