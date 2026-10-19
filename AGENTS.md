@@ -38,7 +38,7 @@ the `og:` / `twitter:` URLs in `index.html` must stay absolute. It is an install
 | `input.js` | keyboard, mouse, controller (`pollPad`), touch sticks (`pollTouch`), `IS_TOUCH`, haptics (`haptic`, `hapticAll`), `goFullscreen` |
 | `data.js` | `ITEMS`, `LANDS`, the Star Road (`ROAD`, `roadPath`, `roadLand`), `LAYOUTS` (room layouts), `BOSS_LAYOUT`, `UPGRADES`, `WANDS`, `POTIONS`, `DIFFS` |
 | `level.js` | floor generation, tile collision, flow field, cached static room layer, doors, the tile renderer for lands without scenery (`renderRoomPlain`), land mechanic hooks (`LAND_MECH`; `rebuildMech` reruns a land's `build` for a co-op client's or a resumed run's room), page turns. Layout names (`LAND_LAYOUTS`, `LAY_RULE`) are global: keep them unique across lands |
-| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well, the Snowglobe, the Sun Temple, the Moon Garden, the Lantern Woods, the Glow Deep, the Story Library) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
+| `scenery.js` | how a room of the lands in `SCN_LANDS` (meadow, shore, crystal, the Star Well, the Snowglobe, the Sun Temple, the Moon Garden, the Lantern Woods, the Glow Deep, the Story Library, the Ember Forge) looks, baked from its seed: ground, decals, pits, rock groups, the top wall's face and lamps, tall pieces, the boss ring, the static room layer (`renderRoomStatic`, which hands other lands to `renderRoomPlain`), the Shore's high-tide water over its pools (`shallowLayer`); tall grass; the title scene |
 | `entities.js` | players (input, movement, combat, down/revive, robes, seat colours: `SEATS`, `seatCol`, the ring at their feet and your arrow, `seatMark`), wand shots, bolts, belt / potions, turrets, pickups, particles, props, combo, Starfall, warp |
 | `enemies.js` | enemy bullets, enemy and boss AI, elites, golden slime, drawing |
 | `fx.js` | diamond wipe (`wipe`), ambient life per land (`AMB`), animated pits, the light mask (`lightAdd` / `drawLight` / `lightAt`), the page-turn drawing |
@@ -162,7 +162,8 @@ The step-by-step method, the tool reference and a contact-sheet snippet are in `
   stands alone. Every per-land table (`SCN_GROUND`, `SCN_DECALS`, `CAP`, `PIT`, `RIDGE`,
   `FACE_GROW`, `FACE_THINGS`, `OBSTACLES`, `BREAKABLES`, `TALL`, `RING`, `GRASS_BITS`...)
   needs an entry for a new land with scenery. `FACE_GROW` can give the face its own `wall`,
-  a `spill` over its top (snow) and `drip`s hanging from it. A land's `THEMES[t].paint(g,
+  a `spill` over its top (snow) and `drip`s hanging from it; `FACE_KEEP[t]` keeps stretches
+  of the face clear of hung things (the forge's wall pipe). A land's `THEMES[t].paint(g,
   room, true)` draws its floor marks over the scenery (the `true`: skip any full-floor
   texture). Tiles that change often stay out of the baked base: `SCN_TILE[t]` says what the
   base sees (a frozen pond is still water) and `SCN_OVER[t](g, room)` draws the change on the

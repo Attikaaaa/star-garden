@@ -79,7 +79,13 @@ THEMES.forge.paint = function (g, room) {
   for (let i = 0; i < room.tiles.length; i++) {
     const x = (i % COLS) * 16, y = OY + ((i / COLS) | 0) * 16;
     if (room.cool && room.cool.has(i)) {
-      f(x, y, 16, 16, 'b'); f(x, y, 16, 1, '0'); f(x, y + 1, 16, 1, 't');
+      // one pool: an edge only where the water ends
+      const C = (j) => room.cool.has(j);
+      f(x, y, 16, 16, 'b');
+      if (!C(i - COLS)) { f(x, y, 16, 1, '0'); f(x, y + 1, 16, 1, 't'); }
+      if (!C(i + COLS)) f(x, y + 15, 16, 1, '0');
+      if (!C(i - 1)) f(x, y, 1, 16, '0');
+      if (!C(i + 1)) f(x + 15, y, 1, 16, '0');
       const h = hash(i, 9, room.seed);
       f(x + 2 + h % 6, y + 5 + (h >> 3) % 3, 4, 1, 'B'); f(x + 7 + (h >> 5) % 5, y + 11, 3, 1, 'B');
       continue;
@@ -1027,3 +1033,91 @@ function drawQuench(o, x, y) {
   // steam
   if (f % 3 === 0) rect(x - 8 + (f * 5) % 16, y - 14 - (f % 4), 1, 1, 'L');
 }
+// ---------- Scenery (scenery.js) ----------
+// The forge as a room: riveted plum iron plates for a floor (the runes are cut into them), soot
+// and nuts lying about, a dark iron cap over cherry brick, tools and gauges on the wall (clear of
+// the wall pipe, FACE_KEEP), lava with a cooling crust, brick ridges, a furnace, steam pipes,
+// ingots and quench buckets. The breakables stay oil barrels, so a barrel always looks like one.
+(function forgeArt() {
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  // a brick furnace (a 2x2 giant): an iron chimney, a dome of brick, a glowing mouth
+  A('gi_furnace', grid(40, 48).fill((x, y) => {
+    if (y >= 1 && y <= 12 && x >= 16 && x <= 23) return y === 3 ? 'm' : x === 16 ? 'd' : x === 23 ? 'x' : 'X';
+    if (y >= 43 && y <= 45) return x >= 1 && x <= 38 ? (y === 43 ? 'd' : x === 38 ? 'x' : 'X') : null;
+    const dx = (x + 0.5 - 20) / 18, dy = (y + 0.5 - 25) / 14;
+    if (x < 2 || x > 37 || y < 11 || y > 42 || (y < 25 && dx * dx + dy * dy > 1)) return null;
+    // the mouth: an arch of soot round a glow, hotter toward the middle
+    const mx = (x + 0.5 - 20) / 7, my = (y + 0.5 - 37) / 8;
+    if (y >= 30 && mx * mx + Math.min(0, my) ** 2 <= 1) {
+      const d = Math.abs(mx) + Math.max(0, -my) * 0.6;
+      return d > 0.82 ? 'x' : d > 0.6 ? 'r' : d > 0.35 ? 'o' : y > 38 ? 'O' : 'y';
+    }
+    const row = Math.floor((y - 11) / 4), joint = (x + (row & 1) * 4) % 8 === 0;
+    if ((y - 11) % 4 === 3 || joint) return 'n';
+    return dx + dy * 0.8 < -0.55 ? 'R' : dx + dy * 0.8 > 0.75 ? 'p' : 'r';
+  }).rows());
+  // a steam pipe standing on the floor (a 1x2 post): a gauge on top, a red valve wheel, flanges
+  A('gi_fpipe', grid(18, 46).fill((x, y) => {
+    const g = Math.hypot(x + 0.5 - 9, y + 0.5 - 7);
+    if (g < 4.6) return g < 3.4 ? ((x === 9 && y >= 5 && y <= 7) || (y === 5 && x === 10) ? 'r' : x + y > 17 ? 'l' : 'L') : x + y < 15 ? 'm' : 'd';
+    const w = Math.hypot(x + 0.5 - 9, y + 0.5 - 20);
+    if (w >= 3.2 && w < 4.6) return x + y < 28 ? 'R' : 'r';
+    if (w < 3.2 && (x === 9 || y === 20)) return 'r';
+    const fl = (y >= 12 && y <= 13) || (y >= 30 && y <= 31) || (y >= 41 && y <= 44);
+    if (fl && x >= 4 && x <= 13) return y === 12 || y === 30 || y === 41 ? 'm' : x === 13 ? 'x' : 'd';
+    if (y >= 12 && y <= 44 && x >= 6 && x <= 11) return x === 6 ? 'm' : x === 11 ? 'x' : x === 7 ? 'd' : 'X';
+    return null;
+  }).rows());
+  // a stack of iron ingots, a quench bucket of water
+  A('ob_ingots', [
+    '................',
+    '.....lllll......',
+    '....lmmmmmd.....',
+    '....dddddddd....',
+    '..lllll.lllll...',
+    '.lmmmmmdlmmmmmd.',
+    '.ddddddddddddddd',
+    '..lllllllllll...',
+    '.lmmmmmmmmmmmmd.',
+    '.dddddddddddddd.',
+    '................']);
+  A('ob_bucket', [
+    '................',
+    '...XXXXXXXXXX...',
+    '..XcCCcccccccX..',
+    '..XBccccccccBX..',
+    '...XBBBBBBBBX...',
+    '...NnNnNnNnnu...',
+    '...XXXXXXXXXX...',
+    '...NnNnNnNnnu...',
+    '...NnNnNnNnnu...',
+    '...XXXXXXXXXX...',
+    '....NnNnNnnu....',
+    '................']);
+  // on the wall: a pressure gauge, a hammer and tongs on a rail
+  A('fc_gauge', [
+    '...........',
+    '...ddddd...',
+    '..mLLLLLd..',
+    '.mLLLLrLLd.',
+    '.mLLLrLLLx.',
+    '.mLLLLLLlx.',
+    '..mLLLLlx..',
+    '...xxxxx...',
+    '....xXx....',
+    '...........']);
+  A('fc_tools', [
+    '.............',
+    '.XXXXXXXXXXX.',
+    '..X......X...',
+    '.mmm....X.X..',
+    '.mmmd...X.X..',
+    '..n.....X.X..',
+    '..n.....X.X..',
+    '..n.....X.X..',
+    '..n....X...X.',
+    '..u....X...X.',
+    '.............']);
+})();
+// the wall pipe's lamps (drawn over the face) keep these stretches clear of hung things
+FACE_KEEP.forge = [[36, 118], [266, 348]];
