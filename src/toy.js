@@ -111,13 +111,14 @@ function chev(x, y, d, key) {
 }
 
 // ---------- The floor ----------
-// Floorboards two to a tile with staggered joints, a rug in quiet rooms, belts and piano keys.
-THEMES.toy.paint = function (g, room) {
-  const f = (x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); };
+// Floorboards two to a tile with staggered joints, a rug in quiet rooms, belts, piano keys and the
+// record, through a fill f(x, y, w, h, key). The scenery draws its own boards (scn) and bakes the
+// rest into the room's base (SCN_BASE), so the blocks stand on them.
+function toyFloor(f, room, scn) {
   for (let r = 2; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
     const i = r * COLS + c, x = c * 16, y = OY + r * 16;
     if (room.tiles[i] === T_PIT) continue;
-    for (let h = 0; h < 2; h++) {
+    if (!scn) for (let h = 0; h < 2; h++) {
       const by = y + h * 8, j = r * 2 + h;
       f(x, by, 16, 8, 'N'); f(x, by, 16, 1, 'e'); f(x, by + 7, 16, 1, 'n');
       if ((c + j * 2) % 3 === 0) f(x, by, 1, 8, 'n');
@@ -155,7 +156,8 @@ THEMES.toy.paint = function (g, room) {
   } else if (!room.belt && room.type !== 'boss' && room.type !== 'warden' && room.type !== 'arena') {
     // a rug: a yellow border round a blue diamond weave
     for (let r = 5; r <= 8; r++) for (let c = 7; c <= 16; c++) {
-      if (room.tiles[r * COLS + c] !== T_FLOOR) continue;
+      const t = room.tiles[r * COLS + c];
+      if (t !== T_FLOOR && t !== T_BRK) continue;
       const x = c * 16, y = OY + r * 16;
       f(x, y, 16, 16, 'b');
       for (let yy = 0; yy < 16; yy++) for (let xx = 0; xx < 16; xx++) if ((xx + yy) % 8 === 0 || (xx - yy + 16) % 8 === 0) f(x + xx, y + yy, 1, 1, 'B');
@@ -165,7 +167,14 @@ THEMES.toy.paint = function (g, room) {
       if (c === 16) { f(x + 12, y, 1, 16, 'o'); f(x + 13, y, 3, 16, 'y'); }
     }
   }
+}
+THEMES.toy.paint = function (g, room, scn) {
+  if (!scn) toyFloor((x, y, w, h, k) => { g.fillStyle = PAL[k]; g.fillRect(x, y, w, h); }, room, false);
 };
+SCN_BASE.toy = (b, room) => toyFloor((x, y, w, h, k) => {
+  const c = p32(k);
+  for (let j = 0; j < h; j++) b.px.fill(c, (y + j) * VW + x, (y + j) * VW + x + w);
+}, room, true);
 
 // ---------- Crayon lines ----------
 // A 'zap' marker with c: 'crayon' (h: seconds it is only a drawing); zapHit skips the harmless part.
@@ -1176,3 +1185,92 @@ function ttDraw(ox, oy, room) {
   const q = Math.floor(b / 8) % 4, a = -Math.PI / 2 + q * Math.PI / 2, x = Math.round(x0 + W / 2 + Math.cos(a) * (W / 2 - 2)), y = Math.round(y0 + W / 2 + Math.sin(a) * (W / 2 - 2));
   rect(x - 2, y - 2, 4, 4, '0'); rect(x - 1, y - 1, 2, 2, 'y');
 }
+// ---------- Scenery (scenery.js) ----------
+// The attic as a room: floorboards, dust and buttons, plank eaves, striped wallpaper with notes
+// over a skirting board (the metronome's spot kept clear, FACE_KEEP), a round window and a
+// crayon drawing, holes in the boards, rows of ABC blocks, standing dominoes, a rocking horse,
+// a tower of big blocks and a stacking-ring toy. The rug, the piano keys, the record and the
+// belts go into the base (toyFloor), under the blocks.
+(function toyArt() {
+  const A = (name, rows, opts) => def(name, autoOutline(rows), opts);
+  // a standing domino (a 1x2 post): ivory, a dark line across, pips (top, bottom)
+  const PIPS = { 2: [[1, 0], [0, 2]], 3: [[2, 0], [1, 1], [0, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] };
+  const domino = (a, b) => grid(16, 40).fill((x, y) => {
+    if (x < 2 || x > 13 || y < 2 || y > 37) return null;
+    if (y <= 4) return x === 13 ? 'l' : 'w';
+    if (x === 13) return 'm';
+    if (y === 21 || y === 22) return x === 2 ? 'l' : 'm';
+    for (const [n, y0] of [[a, 7], [b, 24]]) for (const [i, j] of PIPS[n]) {
+      const px = 3 + i * 3 + 1, py = y0 + j * 4;
+      if (x >= px && x <= px + 1 && y >= py && y <= py + 1) return x === px && y === py ? 'X' : 'x';
+    }
+    return x === 2 ? 'w' : y === 37 ? 'l' : 'L';
+  }).rows();
+  A('gi_domino', domino(3, 5));
+  A('gi_domino2', domino(6, 2));
+  // a rocking horse (a 2x2 giant): a dappled white horse on red rockers
+  let hz = sculpt(40, 40, [
+    { e: [9, 18, 2.5, 6], ramp: 'unnN' },
+    { e: [20, 19, 11, 6], ramp: 'mlLw' },
+    { r: [26, 7, 6, 13, 2], ramp: 'mlLw' },
+    { e: [32, 8, 5.5, 3.5], ramp: 'mlLw' },
+    { r: [16, 12, 9, 4, 1], ramp: 'prRq' },
+  ]);
+  hz = stamp(hz, 30, 2, '0.\n00\nl0');
+  hz = stamp(hz, 34, 6, '0');
+  hz = stamp(hz, 25, 5, 'n.\nNn\nNn\nNn\nNn\nNn\nNn\n.n');
+  hz = stamp(hz, 14, 20, 'm..m');
+  const legs = grid(40, 40).fill((x, y) => {
+    const yc = 33 - Math.pow((x + 0.5 - 20) / 17, 2) * 5;
+    if (x >= 3 && x <= 36 && y >= Math.round(yc) && y <= Math.round(yc) + 2) return y === Math.round(yc) ? 'R' : 'r';
+    if (y >= 23 && y < Math.round(yc) && [11, 15, 25, 29].includes(x)) return 'l';
+    if (y >= 23 && y < Math.round(yc) && [12, 16, 26, 30].includes(x)) return 'm';
+    return null;
+  }).rows();
+  def('gi_horse', stamp(autoOutline(legs), 0, 0, hz));
+  // a tower of big ABC blocks (a 2x2 giant)
+  const BIG = { A: ['.####.', '##..##', '##..##', '######', '##..##', '##..##'], B: ['#####.', '##..##', '#####.', '##..##', '##..##', '#####.'], C: ['.#####', '##....', '##....', '##....', '##....', '.#####'] };
+  const block = (x0, y0, k, L) => (x, y) => {
+    const i = x - x0, j = y - y0;
+    if (i < 0 || i > 17 || j < 0 || j > 21) return null;
+    if (j < 4) return i === 17 ? 'a' : j === 0 || i === 0 ? 'w' : 'A';
+    if (i === 17) return 'e';
+    if (i === 0 || j === 4) return 'A';
+    if (i === 1 || i === 16 || j === 5 || j === 21) return k[1];
+    const g = BIG[L][j - 9];
+    if (g && i >= 6 && i <= 11 && g[i - 6] === '#') return k[0];
+    return j === 20 ? 'e' : 'a';
+  };
+  const b1 = block(2, 18, ['r', 'R'], 'A'), b2 = block(20, 18, ['b', 'B'], 'B'), b3 = block(11, 0, ['g', 'G'], 'C');
+  A('gi_blocks', grid(40, 41).fill((x, y) => b3(x, y) || b1(x, y) || b2(x, y)).rows());
+  // a stacking-ring toy
+  A('ob_rings', grid(16, 20).fill((x, y) => {
+    const R = [[16, 6, 'rR'], [13, 5, 'oO'], [10, 4, 'yY'], [7, 3.5, 'GH'], [4, 3, 'Bc']];
+    if (y >= 17 && y <= 18) return x >= 2 && x <= 13 ? (y === 17 ? 'N' : 'n') : null;
+    if (y >= 1 && y <= 2 && x >= 7 && x <= 8) return x === 7 && y === 1 ? 'q' : 'P';
+    for (const [yy, hw, k] of R) if (y >= yy - 2 && y <= yy && Math.abs(x + 0.5 - 8) <= hw) return y === yy - 2 || x + 0.5 - 8 < -hw + 1.5 ? k[1] : k[0];
+    if (y >= 3 && y <= 16 && x >= 7 && x <= 8) return x === 7 ? 'N' : 'n';
+    return null;
+  }).rows());
+  // on the wall: a round attic window, a crayon drawing pinned up
+  A('fc_awin', grid(13, 13).fill((x, y) => {
+    const d = Math.hypot(x + 0.5 - 6.5, y + 0.5 - 6.5);
+    if (d > 6) return null;
+    if (d > 4.6) return x + y < 12 ? 'N' : 'n';
+    if (x === 6 || y === 6) return 'n';
+    return x + y < 8 ? 'C' : x + y < 12 ? 'c' : 'B';
+  }).rows());
+  A('fc_drawing', [
+    '...........',
+    '.....r.....',
+    '.wwwwwwwww.',
+    '.wwwwrwwww.',
+    '.wwwrrrwww.',
+    '.wwrrrrrww.',
+    '.wwwBwBwww.',
+    '.wwwBwBwHw.',
+    '.wGGGGGGGw.',
+    '.wwwwwwwwL.',
+    '...........']);
+})();
+FACE_KEEP.toy = [[106, 134]]; // the metronome
