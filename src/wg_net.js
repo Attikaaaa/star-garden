@@ -197,6 +197,7 @@ function wgnLeaveGame() { WGS.net = false; WGS.world = null; WGS.remote = []; WG
 function wgnMobs(list) {
   const old = new Map(WGS.mobs.map(m => [m.id, m])), out = [];
   for (const a of list) {
+    if (!WG_MOBS[a[1]]) continue; // a creature this version does not know yet (a newer host): left out, never a crash
     let m = old.get(a[0]);
     if (!m) { m = { id: a[0], type: a[1], x: a[2], y: a[3], fr: 0, ft: 0, hurt: 0, flip: false, dim: WGS.dim, hp: a[6] }; }
     m.type = a[1]; m.tx = a[2]; m.ty = a[3]; m.flip = !!a[4]; m.fr = a[5]; m.hp = a[6]; m.hurt = a[7] / 10; m.dim = a[8]; out.push(m);
