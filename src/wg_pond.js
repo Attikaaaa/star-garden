@@ -82,7 +82,7 @@ wgDrawAmbient = function (cx0, cy0) {
   _wgAmbPond(cx0, cy0);
   if (WGS.dim !== 'o' || !wgOpt().amb || wgNight(WGS.clock) > 0.3 || wgSeason() === 3) return;
   const w = WGS.world, t = WGS.t, C = 160, gx0 = Math.floor((cx0 - 40) / C), gy0 = Math.floor((cy0 - 40) / C), gx1 = Math.floor((cx0 + SCR.w + 40) / C), gy1 = Math.floor((cy0 + SCR.h + 40) / C);
-  if (WGDK.size > 400) WGDK.clear();
+  if (WGDK.size > 400 || WGDK.w !== w) { WGDK.clear(); WGDK.w = w; } // another world has its own ponds
   for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
     const key = gx * 65536 + gy; let spot = WGDK.get(key);
     if (spot === undefined) {
@@ -92,7 +92,7 @@ wgDrawAmbient = function (cx0, cy0) {
       WGDK.set(key, spot);
     }
     if (!spot) continue;
-    const [ax, ay, ph, n] = spot;
+    const [ax, ay, ph, n] = spot; if (GROUND[wgGround(w, 'o', Math.floor(ax / 16), Math.floor(ay / 16))].liq !== 'water') continue; // the pond was filled in
     for (let i = n; i >= 0; i--) { // ducklings first, so their mother is drawn over the one behind her
       const a = ph + t * 0.22 + Math.sin(t * 0.11 + ph) * 0.6 - i * 0.3, x = Math.round(ax + Math.cos(a) * 26 - cx0), y = Math.round(ay + Math.sin(a) * 14 - cy0);
       if (x < -20 || y < -20 || x > SCR.w + 20 || y > SCR.h + 20) continue;

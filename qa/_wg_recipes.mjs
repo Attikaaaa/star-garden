@@ -4,7 +4,7 @@ import { open, waitFor } from './lib.mjs';
 const g = await open({ w: 1152, h: 648 });
 await waitFor(g.ev, 'typeof enterWG === "function"', 15000);
 const r = await g.ev(`(() => {
-  const got = new Set(['bucket_water', 'snowball', 'milk'].concat(typeof WG_FISH !== 'undefined' ? WG_FISH : ['fish'], typeof WG_BFLY !== 'undefined' ? WG_BFLY.map(b => 'bfly_' + b[0]).concat('firefly') : [])), bad = []; // a bucket dipped in water; a snowball scooped from snow; every fish (wgCatch); the bugs (wgSwingNet)
+  const got = new Set(['bucket_water', 'snowball', 'milk'].concat(typeof WG_FISH !== 'undefined' ? WG_FISH : ['fish'], typeof WG_BFLY !== 'undefined' ? WG_BFLY.map(b => 'bfly_' + b[0]).concat('firefly') : [], typeof WGPL !== 'undefined' ? ['dragonfly'] : [])), bad = []; // a bucket dipped in water; a snowball scooped from snow; every fish (wgCatch); the bugs (wgSwingNet) and dragonflies (wg_pondlife's net)
   for (const o of OBJ) if (o) { for (const d of o.drops || []) got.add(d[0]); if (o.ripe) got.add(o.ripe); }
   for (const k in WG_MOBS) for (const d of WG_MOBS[k].drops || []) got.add(d[0]);
   for (const t of WG_TRADES) got.add(t[2]);

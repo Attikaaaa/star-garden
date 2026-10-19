@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.28', lines: ['WILDGROVE: POND LIFE', 'FISH GLIDE UNDER DEEP WATER', 'DRAGONFLIES OVER THE SHALLOWS IN SUMMER', 'CATCH ONE WITH THE BUG NET AND FRAME IT'] },
   { v: '1.16.27', lines: ['WILDGROVE: HATS!', 'A STRAW HAT, A FLOWER CROWN, A BEANIE', 'A TOP HAT AND A GOLD CROWN', 'FRIENDS SEE WHICH HAT IS YOURS'] },
   { v: '1.16.26', lines: ['WILDGROVE: THE TREES KEEP THE SEASONS', 'APPLE BLOSSOM IN SPRING', 'RED, ORANGE AND GOLD IN AUTUMN', 'SNOW ON THE TREETOPS IN WINTER'] },
   { v: '1.16.25', lines: ['WILDGROVE: COWS IN THE MEADOWS', 'MILK THEM WITH A BUCKET', 'A CHURN MAKES BUTTER AND CHEESE', 'TOAST, SOUP, ICE CREAM AND A SHAKE'] },
