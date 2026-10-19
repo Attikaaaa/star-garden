@@ -62,6 +62,7 @@ function drawModal() {
 // ---------- What the title screen has to say (once each) ----------
 // NEWS: what changed in each version, shown once to returning players.
 const NEWS = [
+  { v: '1.16.35', lines: ['WILDGROVE: PUDDLES AND MARSHMALLOWS', 'PUDDLES FILL IN THE RAIN, SO SPLASH AWAY', 'TOAST MARSHMALLOWS AT A CAMPFIRE', 'PULL THEM OUT WHEN THEY ARE GOLDEN'] },
   { v: '1.16.34', lines: ['WILDGROVE: SKY LANTERNS', 'LET ONE GO AT NIGHT AND MAKE A WISH', 'FRIENDS SEE YOUR LANTERNS RISE'] },
   { v: '1.16.33', lines: ['WILDGROVE: RAINBOWS', 'WHEN A DAYTIME RAIN STOPS, LOOK UP', 'A NEW STAR: OVER THE RAINBOW'] },
   { v: '1.16.32', lines: ['WILDGROVE: A WARDROBE', 'CHANGE YOUR SKIN, HAIR AND TUNIC ANY TIME', 'FRIENDS SEE YOUR NEW LOOK'] },
