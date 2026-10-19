@@ -5,6 +5,7 @@
 // positions are shared; everybody keeps their own backpack (the host remembers it for the next visit).
 const WGN = { role: null, code: '', pub: false, peers: [], relays: [], q: [], link: null, status: '', err: '', pid: 0, list: [], listing: false, applying: false, sendT: 0, mobT: 0, annT: 0, clkT: 0, chat: [], max: 6 };
 const WGN_PROTO = 1, WGN_TOPIC = 'wildgrove/' + WGN_PROTO + '/', WGN_PUB = 'wildgrove/' + WGN_PROTO + '/public';
+const wgnKite = (k) => (k >= 1 && k <= 3 ? k | 0 : 0); // a friend's kite colour, never anything else
 const wgnOn = () => !!WGN.role;
 function wgnSend(L, msg, unreliable) {
   if (!L) return;
@@ -66,7 +67,7 @@ function wgnHostMsg(L, m) {
     wgToast(L.name + ' JOINED!'); wgSfx('select'); wgnAll({ t: 'chat', who: '', msg: L.name + ' JOINED' }, L); WGN.chat.push({ who: '', msg: L.name + ' JOINED', t: 8 });
   } else if (m.t === 'offer') wgnOffer(L, m);
   else if (L.pid < 0) return;
-  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: m.kt | 0, inv: 0 }); }
+  else if (m.t === 'p') { Object.assign(L, { x: m.x, y: m.y, face: m.face, moving: m.mv, walkT: m.wt, dim: m.dim, hp: m.hp, swing: m.sw, held: m.held, kite: wgnKite(m.kt), inv: 0 }); }
   else if (m.t === 'tile') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; wgnAll(Object.assign({}, m, { t: 'set' }), L); }
   else if (m.t === 'chunkreq') { const ch = wgChunk(w, m.d, m.cx, m.cy); wgnSend(L, { t: 'chunk', d: m.d, cx: m.cx, cy: m.cy, pk: ch.mod ? wgPackChunk(ch) : null }); }
   else if (m.t === 'hit') { const mob = WGS.mobs.find(q => q.id === m.id); if (mob && !mob.dead) { WGS.lootTo = L.pid; wgHurtMob(mob, Math.min(40, +m.dmg || 1), L.x, L.y); WGS.lootTo = 0; if (mob.hp > 0) mob.fear = 3; } }
@@ -171,7 +172,7 @@ function wgnClientMsg(L, m) {
   if (!L.open) return;
   L.heard = performance.now();
   const w = WGS.world;
-  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], kite: a[11] | 0, inv: 0 })); }
+  if (m.t === 'ps') { WGS.remote = m.l.filter(a => a[0] !== WGN.pid).map(a => ({ pid: a[0], x: a[1], y: a[2], face: a[3], moving: a[4], walkT: a[5], dim: a[6], hp: a[7], name: a[8], look: a[9], swing: a[10], kite: wgnKite(a[11]), inv: 0 })); }
   else if (m.t === 'mobs') { if (WGS.dim === WGN.hd) wgnMobs(m.l); }
   else if (m.t === 'set') { WGN.applying = true; wgnApplyTile(m); WGN.applying = false; }
   else if (m.t === 'chunk') { const ch = wgChunk(w, m.d, m.cx, m.cy); if (m.pk) { WGN.applying = true; wgReadChunk(ch, m.pk); ch.artDirty = true; WGN.applying = false; for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const n = wgChunk(w, m.d, m.cx + dx, m.cy + dy, false); if (n) n.artDirty = true; } } }

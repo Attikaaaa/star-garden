@@ -46,7 +46,7 @@ wgDrawAmbient = function (cx0, cy0) {
   if (!WGS.p || !wgKiteSky()) { WGKT.clear(); return; }
   const live = new Set(), mine = wgKiteHeld();
   if (mine && !WGS.p.hidden) { wgKiteDraw(-1, WGS.p, mine, cx0, cy0); live.add(-1); }
-  for (const q of WGS.remote || []) if (q.kite && q.dim === WGS.dim) { wgKiteDraw(q.pid, q, q.kite, cx0, cy0); live.add(q.pid); }
+  for (const q of WGS.remote || []) if (WG_KITES[q.kite - 1] && q.dim === WGS.dim) { wgKiteDraw(q.pid, q, q.kite, cx0, cy0); live.add(q.pid); }
   for (const k of WGKT.keys()) if (!live.has(k)) WGKT.delete(k); // a kite put away starts from the hand next time
 };
 function wgKiteDraw(id, p, kind, cx0, cy0) {
